@@ -1,0 +1,1 @@
+export { GiaoDienGiaoVienLayout } from './GiaoDienGiaoVienLayout';

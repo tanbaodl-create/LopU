@@ -1,0 +1,1 @@
+export { GiaoDienHocSinhLayout } from './GiaoDienHocSinhLayout';
