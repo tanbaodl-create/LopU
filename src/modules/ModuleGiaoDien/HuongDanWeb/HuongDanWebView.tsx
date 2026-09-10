@@ -79,13 +79,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'LopHoc',
-        name: 'LopHoc (Lớp học & Bài giảng)',
+        name: 'LopHoc (Lớp học & GPS Lớp Học)',
         folderPath: 'src/modules/ModuleHocSinh/LopHoc',
-        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đã làm sạch toàn bộ dữ liệu demo, sẵn sàng triển khai hệ thống thật lên Vercel/GitHub.',
-        purpose: 'Học tập & Tự học',
+        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, tích hợp nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định và Vệ tinh, nộp bài tập và cập nhật tiến độ học tập cá nhân.',
+        purpose: 'Học tập & GPS lớp học',
         viewId: 'learning-classes',
         icon: BookOpen,
-        tags: ['Bài học', 'Tiến độ', 'Nộp bài', 'Sạch dữ liệu demo', 'Sẵn sàng Vercel'],
+        tags: ['Bài học', 'lấy tọa độ GPS', 'Bản đồ Mặc định & Vệ tinh', 'Tiến độ', 'Sẵn sàng Vercel'],
       },
       {
         id: 'SoDoLop',
@@ -192,13 +192,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyNguoiDung',
-        name: 'QuanLyNguoiDung (Google Auth, Duyệt vai trò, 14 Trường Thông Tin & Tọa độ GPS)',
+        name: 'QuanLyNguoiDung (Google Auth, Duyệt vai trò, 14 Trường Thông Tin & GPS)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Đã xóa sạch 13 tài khoản demo (chỉ giữ vĩnh viễn 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore. Hỗ trợ chọn nhiều Vai Trò & Chức Danh trong lớp. Tích hợp Import/Export Excel (.xlsx) 14 trường, Bộ lọc đa tiêu chí (Lớp, Môn, Vai trò, Chức danh, GPS) và Kiểm tra định dạng Regex (SĐT, Email, GPS). Component UserProfileModal.tsx độc lập.',
+        description: 'Đã xóa sạch 13 tài khoản demo (chỉ giữ vĩnh viễn 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore (đổi tên trường 7 thành "7. GPS"). Nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định & Vệ tinh để xác nhận tọa độ chính xác. Hỗ trợ chọn nhiều Vai Trò & Chức Danh trong lớp, Import/Export Excel (.xlsx) 14 trường.',
         purpose: 'Quản lý tài khoản 14 trường & GPS',
         viewId: 'settings-users',
         icon: UserCog,
-        tags: ['14 Trường Firestore', 'Import/Export Excel', 'Nhiều Vai Trò & Chức Danh', 'Bộ Lọc Đa Tiêu Chí', 'Validation Regex', 'Google Maps GPS'],
+        tags: ['14 Trường Firestore', 'Trường 7. GPS', 'lấy tọa độ GPS', 'Bản đồ Mặc định & Vệ tinh', 'Import/Export Excel'],
       },
       {
         id: 'BaoCaoGiamSat',

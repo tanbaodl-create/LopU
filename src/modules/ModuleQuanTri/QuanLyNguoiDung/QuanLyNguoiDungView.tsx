@@ -105,6 +105,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
   const [selectedLat, setSelectedLat] = useState<number>(21.028511);
   const [selectedLng, setSelectedLng] = useState<number>(105.854444);
   const [selectedAddress, setSelectedAddress] = useState<string>('Hà Nội, Việt Nam');
+  const [mapType, setMapType] = useState<'roadmap' | 'satellite'>('roadmap');
 
   // Mở rộng hiển thị trực tiếp dòng & Modal Xem/Sửa trọn bộ 14 trường thông tin
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
@@ -378,7 +379,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
       '4. Nơi Công Tác/Học Tập': u.workplace || '',
       '5. Google Email': u.email,
       '6. Vai Trò': u.roles && u.roles.length > 0 ? u.roles.join(', ') : u.role || 'guest',
-      '7. Tọa Độ GPS': u.gps || '',
+      '7. GPS': u.gps || '',
       '8. Số Điện Thoại': u.phone || '',
       '9. Địa Chỉ Nhà': u.homeAddress || '',
       '10. Các Lớp Dạy/Học': u.classIds?.join(', ') || '',
@@ -404,7 +405,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
         '4. Nơi Công Tác/Học Tập': 'THPT Chuyên',
         '5. Google Email': 'nguyenvanan@lopu.edu.vn',
         '6. Vai Trò': 'teacher, manager',
-        '7. Tọa Độ GPS': '21.028511, 105.854444',
+        '7. GPS': '21.028511, 105.854444',
         '8. Số Điện Thoại': '0901111222',
         '9. Địa Chỉ Nhà': '123 Đường Lê Lợi, Hà Nội',
         '10. Các Lớp Dạy/Học': '10A1, 10A2',
@@ -420,7 +421,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
         '4. Nơi Công Tác/Học Tập': 'Lớp 10A1',
         '5. Google Email': 'khang.le@student.lopu.edu.vn',
         '6. Vai Trò': 'student',
-        '7. Tọa Độ GPS': '21.030000, 105.850000',
+        '7. GPS': '21.030000, 105.850000',
         '8. Số Điện Thoại': '0903333444',
         '9. Địa Chỉ Nhà': '45 Phố Huế, Hà Nội',
         '10. Các Lớp Dạy/Học': '10A1',
@@ -468,7 +469,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
         const rolesArr = roleStr.split(',').map(r => r.trim() as UserRole).filter(Boolean);
         const primaryRole = rolesArr[0] || 'student';
 
-        const gps = String(row['7. Tọa Độ GPS'] || row['Tọa Độ GPS'] || '').trim();
+        const gps = String(row['7. GPS'] || row['7. Tọa Độ GPS'] || row['Tọa Độ GPS'] || row['GPS'] || '').trim();
         const phone = String(row['8. Số Điện Thoại'] || row['Số Điện Thoại'] || row['SĐT'] || '').trim();
         const homeAddress = String(row['9. Địa Chỉ Nhà'] || row['Địa Chỉ Nhà'] || '').trim();
 
@@ -905,7 +906,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
                 <th className="py-3 px-4">Tên & Biệt Danh</th>
                 <th className="py-3 px-4">Google Email</th>
                 <th className="py-3 px-4">Các Vai Trò System</th>
-                <th className="py-3 px-4">Tọa Độ GPS</th>
+                <th className="py-3 px-4">GPS</th>
                 <th className="py-3 px-4">Chức Danh Trong Lớp</th>
                 <th className="py-3 px-4 text-center">Chi tiết 14 Trường & Thao Tác</th>
               </tr>
@@ -1189,7 +1190,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
                                 <span className="font-bold text-indigo-700 uppercase">{rolesList.join(', ')}</span>
                               </div>
                               <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                                <span className="text-slate-400 block text-[10px] font-bold uppercase">7. Tọa Độ GPS</span>
+                                <span className="text-slate-400 block text-[10px] font-bold uppercase">7. GPS</span>
                                 <span className="font-mono text-slate-700">{u.gps || 'Chưa có GPS'}</span>
                               </div>
                               <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
@@ -1286,67 +1287,105 @@ export const QuanLyNguoiDungView: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex items-center gap-1.5 flex-wrap text-xs">
-              <span className="text-slate-500 font-medium">Chọn nhanh:</span>
-              <button
-                type="button"
-                onClick={() => handleSearchQuickPlace('Hà Nội (Thủ đô)', 21.028511, 105.854444)}
-                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-              >
-                Hà Nội
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSearchQuickPlace('TP. Hồ Chí Minh', 10.776889, 106.700806)}
-                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-              >
-                TP.HCM
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSearchQuickPlace('Đà Nẵng', 16.047079, 108.20623)}
-                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-              >
-                Đà Nẵng
-              </button>
+            {/* Tùy chọn lớp bản đồ: Mặc định vs Vệ tinh */}
+            <div className="flex items-center justify-between gap-2 flex-wrap text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700">Tùy chọn lớp bản đồ:</span>
+                <button
+                  type="button"
+                  onClick={() => setMapType('roadmap')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    mapType === 'roadmap'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  🗺️ Mặc định (Roadmap)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMapType('satellite')}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    mapType === 'satellite'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  🛰️ Vệ tinh (Satellite)
+                </button>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <span className="text-slate-500 font-medium">Chọn nhanh:</span>
+                <button
+                  type="button"
+                  onClick={() => handleSearchQuickPlace('Hà Nội (Thủ đô)', 21.028511, 105.854444)}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer border border-slate-200"
+                >
+                  Hà Nội
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSearchQuickPlace('TP. Hồ Chí Minh', 10.776889, 106.700806)}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer border border-slate-200"
+                >
+                  TP.HCM
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSearchQuickPlace('Đà Nẵng', 16.047079, 108.20623)}
+                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer border border-slate-200"
+                >
+                  Đà Nẵng
+                </button>
+              </div>
             </div>
 
             <div
               onClick={handleMapClick}
-              className="relative w-full h-64 bg-slate-100 rounded-xl overflow-hidden border-2 border-indigo-200 shadow-inner cursor-crosshair select-none"
+              className={`relative w-full h-72 rounded-xl overflow-hidden border-2 border-indigo-200 shadow-inner cursor-crosshair select-none ${
+                mapType === 'satellite' ? 'bg-slate-900' : 'bg-slate-100'
+              }`}
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 via-sky-50 to-blue-100 opacity-90">
-                <div className="w-full h-full grid grid-cols-6 grid-rows-4 opacity-20 pointer-events-none">
-                  {Array.from({ length: 24 }).map((_, i) => (
-                    <div key={i} className="border border-slate-400" />
-                  ))}
-                </div>
-              </div>
+              {/* Embedded Interactive Google Map with Map Type */}
+              <iframe
+                title="Google Maps Location Picker"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                scrolling="no"
+                marginHeight={0}
+                marginWidth={0}
+                src={`https://maps.google.com/maps?q=${selectedLat},${selectedLng}&t=${
+                  mapType === 'satellite' ? 'k' : 'm'
+                }&z=14&ie=UTF8&iwloc=&output=embed`}
+                className="w-full h-full pointer-events-none opacity-85"
+              />
 
               <div
                 className="absolute transform -translate-x-1/2 -translate-y-full transition-all duration-200 pointer-events-none"
                 style={{
-                  left: `${Math.min(95, Math.max(5, ((selectedLng - 102.1) / 7.4) * 100))}%`,
-                  top: `${Math.min(95, Math.max(5, ((23.3 - selectedLat) / 14.8) * 100))}%`,
+                  left: '50%',
+                  top: '50%',
                 }}
               >
                 <div className="flex flex-col items-center animate-bounce">
-                  <div className="px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-mono font-bold whitespace-nowrap shadow-md">
-                    {selectedLat.toFixed(4)}, {selectedLng.toFixed(4)}
+                  <div className="px-2.5 py-1 rounded-md bg-slate-900/90 text-white text-[11px] font-mono font-bold whitespace-nowrap shadow-lg border border-slate-700">
+                    {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
                   </div>
-                  <MapPin className="w-8 h-8 text-rose-600 fill-rose-500 drop-shadow-md" />
+                  <MapPin className="w-9 h-9 text-rose-500 fill-rose-600 drop-shadow-lg" />
                 </div>
               </div>
 
               <a
-                href={`https://www.google.com/maps?q=${selectedLat},${selectedLng}`}
+                href={`https://www.google.com/maps?q=${selectedLat},${selectedLng}&t=${mapType === 'satellite' ? 'k' : 'm'}`}
                 target="_blank"
                 rel="noreferrer"
                 onClick={e => e.stopPropagation()}
-                className="absolute top-2 right-2 bg-white/90 hover:bg-white px-2.5 py-1 rounded-md text-[10px] font-bold text-indigo-700 border border-indigo-200 flex items-center gap-1 shadow-xs"
+                className="absolute top-2 right-2 bg-white/95 hover:bg-white px-3 py-1.5 rounded-lg text-[11px] font-bold text-indigo-700 border border-indigo-200 flex items-center gap-1.5 shadow-md cursor-pointer"
               >
-                <ExternalLink className="w-3 h-3" />
-                <span>Mở Google Maps</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>Mở Google Maps ({mapType === 'satellite' ? 'Vệ tinh' : 'Mặc định'})</span>
               </a>
             </div>
 

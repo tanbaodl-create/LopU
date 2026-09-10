@@ -269,9 +269,32 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block font-bold text-slate-700 mb-0.5 uppercase">
-                7. Tọa Độ GPS (Regex lat, lng)
-              </label>
+              <div className="flex items-center justify-between mb-0.5">
+                <label className="block font-bold text-slate-700 uppercase">
+                  7. GPS
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        pos => {
+                          const coords = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+                          setFormData({ ...formData, gps: coords });
+                        },
+                        () => {
+                          alert('Không thể truy cập GPS thiết bị. Bạn có thể mở bản đồ từ màn hình Quản lý người dùng.');
+                        }
+                      );
+                    } else {
+                      alert('Trình duyệt không hỗ trợ Geolocation.');
+                    }
+                  }}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded cursor-pointer"
+                >
+                  Lấy tọa độ GPS
+                </button>
+              </div>
               <input
                 type="text"
                 value={formData.gps || ''}
