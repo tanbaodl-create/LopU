@@ -295,8 +295,11 @@ export const QuanLyNguoiDungView: React.FC = () => {
     };
     await saveUser(updated);
     setUsers(users.map(u => (u.id === gpsModalUser.id ? updated : u)));
+    if (detailModalUser && detailModalUser.id === gpsModalUser.id) {
+      setDetailModalUser(updated);
+    }
     setGpsModalUser(null);
-    setNotification(`Người dùng "${updated.name}" đã xác nhận lưu tọa độ GPS: [${coordsStr}] thành công!`);
+    setNotification(`Hệ thống đã lấy thành công tọa độ GPS tại vị trí chọn trên bản đồ: [${coordsStr}] cho "${updated.name}"!`);
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -1639,6 +1642,11 @@ export const QuanLyNguoiDungView: React.FC = () => {
           await loadData();
           setNotification(`Đã cập nhật chuẩn hóa 14 trường thông tin cho "${updatedUser.name}".`);
           setTimeout(() => setNotification(null), 4000);
+        }}
+        onOpenGpsModal={() => {
+          if (detailModalUser) {
+            handleOpenGpsModal(detailModalUser);
+          }
         }}
       />
     </div>

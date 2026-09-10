@@ -194,7 +194,7 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'QuanLyNguoiDung',
         name: 'QuanLyNguoiDung (Google Auth, Duyệt vai trò, 14 Trường Thông Tin & GPS)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Đã xóa sạch 13 tài khoản demo (chỉ giữ vĩnh viễn 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore (đổi tên trường 7 thành "7. GPS"). Nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định & Vệ tinh để xác nhận tọa độ chính xác. Hỗ trợ chọn nhiều Vai Trò & Chức Danh trong lớp, Import/Export Excel (.xlsx) 14 trường.',
+        description: 'Đã xóa sạch 13 tài khoản demo (chỉ giữ vĩnh viễn 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore (đổi tên trường 7 thành "7. GPS"). Nút "lấy tọa độ GPS" mở trang Google Maps cho phép người dùng nhấp chọn trực tiếp trên bản đồ (tùy chọn lớp Mặc định & Vệ tinh) và xác nhận để tự động lấy tọa độ vị trí vừa chọn.',
         purpose: 'Quản lý tài khoản 14 trường & GPS',
         viewId: 'settings-users',
         icon: UserCog,

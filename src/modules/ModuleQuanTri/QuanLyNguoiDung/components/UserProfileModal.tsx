@@ -7,6 +7,7 @@ interface UserProfileModalProps {
   user: ExtendedUserProfile | null;
   onClose: () => void;
   onSave: (updatedUser: ExtendedUserProfile) => Promise<void>;
+  onOpenGpsModal?: () => void;
 }
 
 const AVAILABLE_ROLES: { id: UserRole; label: string }[] = [
@@ -35,7 +36,7 @@ const AVAILABLE_TITLES: { id: string; label: string }[] = [
   { id: 'Ban Cán Sự Môn', label: 'Ban Cán Sự Môn' },
 ];
 
-export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClose, onSave }) => {
+export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClose, onSave, onOpenGpsModal }) => {
   const [formData, setFormData] = useState<ExtendedUserProfile | null>(user);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -276,7 +277,9 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
                 <button
                   type="button"
                   onClick={() => {
-                    if (navigator.geolocation) {
+                    if (onOpenGpsModal) {
+                      onOpenGpsModal();
+                    } else if (navigator.geolocation) {
                       navigator.geolocation.getCurrentPosition(
                         pos => {
                           const coords = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
