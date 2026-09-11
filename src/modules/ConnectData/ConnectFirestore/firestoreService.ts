@@ -5,7 +5,7 @@ import {
   setDoc,
   deleteDoc,
 } from 'firebase/firestore';
-import { db, isFirebaseConfigured } from '../../../config/firebase';
+import { db, auth, isFirebaseConfigured } from '../../../config/firebase';
 import {
   ClassItem,
   UserProfile,
@@ -31,6 +31,39 @@ const STORAGE_KEYS = {
   SEATING: 'lopu_firestore_seating_v1',
   PIN_REQUESTS: 'lopu_firestore_pin_requests_v1',
 };
+
+// Error handling helper according to Firebase skill
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+  };
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null): void {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth?.currentUser?.uid || null,
+      email: auth?.currentUser?.email || null,
+    },
+    operationType,
+    path,
+  };
+  console.warn('Firestore Operation Notice (Fallback to Local Storage):', JSON.stringify(errInfo));
+}
 
 // Local storage helpers for reactive fallback
 function getLocalItem<T>(key: string, fallback: T): T {
@@ -148,7 +181,7 @@ export async function saveClass(classItem: ClassItem): Promise<void> {
     try {
       await setDoc(doc(db, 'classes', classItem.id), classItem, { merge: true });
     } catch (err) {
-      console.error('Firestore saveClass error:', err);
+      handleFirestoreError(err, OperationType.WRITE, `classes/${classItem.id}`);
     }
   }
 }
@@ -162,7 +195,7 @@ export async function deleteClass(classId: string): Promise<void> {
     try {
       await deleteDoc(doc(db, 'classes', classId));
     } catch (err) {
-      console.error('Firestore deleteClass error:', err);
+      handleFirestoreError(err, OperationType.DELETE, `classes/${classId}`);
     }
   }
 }
@@ -198,7 +231,7 @@ export async function saveUser(user: UserProfile): Promise<void> {
     try {
       await setDoc(doc(db, 'users', user.id), user, { merge: true });
     } catch (err) {
-      console.error('Firestore saveUser error:', err);
+      handleFirestoreError(err, OperationType.WRITE, `users/${user.id}`);
     }
   }
 }
@@ -221,7 +254,7 @@ export async function deleteUser(userId: string): Promise<void> {
     try {
       await deleteDoc(doc(db, 'users', userId));
     } catch (err) {
-      console.error('Firestore deleteUser error:', err);
+      handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
     }
   }
 }
@@ -289,7 +322,7 @@ export async function updateProgress(item: StudentProgress): Promise<void> {
     try {
       await setDoc(doc(db, 'progress', item.id), item, { merge: true });
     } catch (err) {
-      console.error('Firestore updateProgress error:', err);
+      handleFirestoreError(err, OperationType.WRITE, `progress/${item.id}`);
     }
   }
 }

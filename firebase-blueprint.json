@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Thông tin 14 trường của người dùng",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string" },
+        "gps": { "type": "string" }
+      }
+    },
+    "ClassItem": {
+      "title": "ClassItem",
+      "description": "Lớp học và danh sách học sinh",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "code": { "type": "string" }
+      }
+    },
+    "StudentProgress": {
+      "title": "StudentProgress",
+      "description": "Tiến độ học tập của học sinh",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "classId": { "type": "string" },
+        "studentId": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Danh sách người dùng hệ thống"
+    },
+    "/classes/{classId}": {
+      "schema": "ClassItem",
+      "description": "Danh sách lớp học"
+    },
+    "/progress/{progressId}": {
+      "schema": "StudentProgress",
+      "description": "Tiến độ bài học"
+    }
+  }
+}

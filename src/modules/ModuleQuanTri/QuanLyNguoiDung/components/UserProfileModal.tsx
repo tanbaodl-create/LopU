@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Sparkles, CheckSquare, Square, AlertCircle } from 'lucide-react';
 import { UserRole } from '../../../../services/storageTypes';
 import { ExtendedUserProfile } from '../QuanLyNguoiDungView';
+import { GpsPickerModal } from '../../../../components/GpsPickerModal';
 
 interface UserProfileModalProps {
   user: ExtendedUserProfile | null;
@@ -40,6 +41,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
   const [formData, setFormData] = useState<ExtendedUserProfile | null>(user);
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [showGpsPicker, setShowGpsPicker] = useState(false);
 
   useEffect(() => {
     setFormData(user);
@@ -276,24 +278,8 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
                 </label>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (onOpenGpsModal) {
-                      onOpenGpsModal();
-                    } else if (navigator.geolocation) {
-                      navigator.geolocation.getCurrentPosition(
-                        pos => {
-                          const coords = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
-                          setFormData({ ...formData, gps: coords });
-                        },
-                        () => {
-                          alert('Không thể truy cập GPS thiết bị. Bạn có thể mở bản đồ từ màn hình Quản lý người dùng.');
-                        }
-                      );
-                    } else {
-                      alert('Trình duyệt không hỗ trợ Geolocation.');
-                    }
-                  }}
-                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded cursor-pointer"
+                  onClick={() => setShowGpsPicker(true)}
+                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
                 >
                   Lấy tọa độ GPS
                 </button>
@@ -440,6 +426,28 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
           </div>
         </form>
       </div>
+
+      {showGpsPicker && (
+        <GpsPickerModal
+          title="Google Maps — Chọn Tọa Độ GPS Cho Hồ Sơ"
+          userNameOrContext={formData.name}
+          initialLat={
+            formData.gps
+              ? parseFloat(formData.gps.split(',')[0]) || 21.028511
+              : 21.028511
+          }
+          initialLng={
+            formData.gps
+              ? parseFloat(formData.gps.split(',')[1]) || 105.854444
+              : 105.854444
+          }
+          onClose={() => setShowGpsPicker(false)}
+          onConfirm={(coordsStr) => {
+            setFormData({ ...formData, gps: coordsStr });
+            setShowGpsPicker(false);
+          }}
+        />
+      )}
     </div>
   );
 };

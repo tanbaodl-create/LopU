@@ -43,6 +43,7 @@ import {
   importUsersWithDeduplication,
 } from '../../ConnectData/ConnectFirestore';
 import { UserProfileModal } from './components/UserProfileModal';
+import { GpsPickerModal } from '../../../components/GpsPickerModal';
 
 export interface ExtendedUserProfile extends UserProfile {
   nickname?: string;
@@ -1248,183 +1249,41 @@ export const QuanLyNguoiDungView: React.FC = () => {
         </div>
       </div>
 
-      {/* MODAL GOOGLE MAPS CHỌN TỌA ĐỘ GPS */}
+      {/* MODAL GOOGLE MAPS TƯƠNG TÁC LẤY TỌA ĐỘ GPS */}
       {gpsModalUser && (
-        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center">
-                  <MapPin className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900">
-                    Google Maps — Chọn Tọa Độ GPS Cho Tài Khoản
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Người dùng: <strong className="text-slate-800">{gpsModalUser.name}</strong>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setGpsModalUser(null)}
-                className="text-slate-400 hover:text-slate-600 font-bold cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl text-xs text-indigo-900 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Navigation className="w-4 h-4 text-indigo-600 shrink-0" />
-                <span>
-                  <strong>Hướng dẫn:</strong> Kích vào bất kỳ chỗ nào trên bản đồ để ghim vị trí và lấy tọa độ GPS.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={handleGetDeviceLocation}
-                className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] shrink-0 cursor-pointer shadow-xs"
-              >
-                Lấy GPS máy
-              </button>
-            </div>
-
-            {/* Tùy chọn lớp bản đồ: Mặc định vs Vệ tinh */}
-            <div className="flex items-center justify-between gap-2 flex-wrap text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-slate-700">Tùy chọn lớp bản đồ:</span>
-                <button
-                  type="button"
-                  onClick={() => setMapType('roadmap')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    mapType === 'roadmap'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                  }`}
-                >
-                  🗺️ Mặc định (Roadmap)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMapType('satellite')}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    mapType === 'satellite'
-                      ? 'bg-indigo-600 text-white shadow-xs'
-                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                  }`}
-                >
-                  🛰️ Vệ tinh (Satellite)
-                </button>
-              </div>
-
-              <div className="flex items-center gap-1.5">
-                <span className="text-slate-500 font-medium">Chọn nhanh:</span>
-                <button
-                  type="button"
-                  onClick={() => handleSearchQuickPlace('Hà Nội (Thủ đô)', 21.028511, 105.854444)}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer border border-slate-200"
-                >
-                  Hà Nội
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSearchQuickPlace('TP. Hồ Chí Minh', 10.776889, 106.700806)}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer border border-slate-200"
-                >
-                  TP.HCM
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSearchQuickPlace('Đà Nẵng', 16.047079, 108.20623)}
-                  className="px-2 py-0.5 rounded bg-white hover:bg-slate-100 text-slate-700 font-semibold cursor-pointer border border-slate-200"
-                >
-                  Đà Nẵng
-                </button>
-              </div>
-            </div>
-
-            <div
-              onClick={handleMapClick}
-              className={`relative w-full h-72 rounded-xl overflow-hidden border-2 border-indigo-200 shadow-inner cursor-crosshair select-none ${
-                mapType === 'satellite' ? 'bg-slate-900' : 'bg-slate-100'
-              }`}
-            >
-              {/* Embedded Interactive Google Map with Map Type */}
-              <iframe
-                title="Google Maps Location Picker"
-                width="100%"
-                height="100%"
-                frameBorder="0"
-                scrolling="no"
-                marginHeight={0}
-                marginWidth={0}
-                src={`https://maps.google.com/maps?q=${selectedLat},${selectedLng}&t=${
-                  mapType === 'satellite' ? 'k' : 'm'
-                }&z=14&ie=UTF8&iwloc=&output=embed`}
-                className="w-full h-full pointer-events-none opacity-85"
-              />
-
-              <div
-                className="absolute transform -translate-x-1/2 -translate-y-full transition-all duration-200 pointer-events-none"
-                style={{
-                  left: '50%',
-                  top: '50%',
-                }}
-              >
-                <div className="flex flex-col items-center animate-bounce">
-                  <div className="px-2.5 py-1 rounded-md bg-slate-900/90 text-white text-[11px] font-mono font-bold whitespace-nowrap shadow-lg border border-slate-700">
-                    {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
-                  </div>
-                  <MapPin className="w-9 h-9 text-rose-500 fill-rose-600 drop-shadow-lg" />
-                </div>
-              </div>
-
-              <a
-                href={`https://www.google.com/maps?q=${selectedLat},${selectedLng}&t=${mapType === 'satellite' ? 'k' : 'm'}`}
-                target="_blank"
-                rel="noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="absolute top-2 right-2 bg-white/95 hover:bg-white px-3 py-1.5 rounded-lg text-[11px] font-bold text-indigo-700 border border-indigo-200 flex items-center gap-1.5 shadow-md cursor-pointer"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Mở Google Maps ({mapType === 'satellite' ? 'Vệ tinh' : 'Mặc định'})</span>
-              </a>
-            </div>
-
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1 text-xs">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="font-bold text-slate-700">Tọa độ GPS đã chọn:</span>
-                <span className="font-mono font-black text-indigo-700 bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                  {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
-                </span>
-              </div>
-              <div className="text-[11px] text-slate-500">
-                Vị trí: <strong>{selectedAddress}</strong>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setGpsModalUser(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                id="btn-confirm-gps-coords"
-                onClick={handleConfirmGps}
-                className="px-5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
-              >
-                <Check className="w-4 h-4" />
-                <span>Xác nhận lấy tọa độ GPS</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <GpsPickerModal
+          title="Google Maps — Chọn Tọa Độ GPS Cho Tài Khoản"
+          userNameOrContext={gpsModalUser.name}
+          initialLat={
+            gpsModalUser.gps
+              ? parseFloat(gpsModalUser.gps.split(',')[0]) || 21.028511
+              : 21.028511
+          }
+          initialLng={
+            gpsModalUser.gps
+              ? parseFloat(gpsModalUser.gps.split(',')[1]) || 105.854444
+              : 105.854444
+          }
+          onClose={() => setGpsModalUser(null)}
+          onConfirm={async (coordsStr) => {
+            const updated: ExtendedUserProfile = {
+              ...gpsModalUser,
+              gps: coordsStr,
+            };
+            await saveUser(updated);
+            setUsers(users.map(u => (u.id === gpsModalUser.id ? updated : u)));
+            if (detailModalUser && detailModalUser.id === gpsModalUser.id) {
+              setDetailModalUser(updated);
+            }
+            setGpsModalUser(null);
+            setNotification(
+              `Hệ thống đã lấy thành công tọa độ GPS tại vị trí chọn trên bản đồ: [${coordsStr}] cho "${updated.name}"!`
+            );
+            setTimeout(() => setNotification(null), 4000);
+          }}
+        />
       )}
+
 
       {/* Manual Add User Modal */}
       {showAddModal && (
@@ -1642,11 +1501,6 @@ export const QuanLyNguoiDungView: React.FC = () => {
           await loadData();
           setNotification(`Đã cập nhật chuẩn hóa 14 trường thông tin cho "${updatedUser.name}".`);
           setTimeout(() => setNotification(null), 4000);
-        }}
-        onOpenGpsModal={() => {
-          if (detailModalUser) {
-            handleOpenGpsModal(detailModalUser);
-          }
         }}
       />
     </div>

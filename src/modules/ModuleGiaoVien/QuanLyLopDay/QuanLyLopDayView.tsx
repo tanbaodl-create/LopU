@@ -11,6 +11,7 @@ import {
   Users,
   GraduationCap,
   School,
+  MapPin,
 } from 'lucide-react';
 import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile } from '../../../services/storageTypes';
 import {
@@ -24,6 +25,115 @@ import {
   removeStudentFromClass,
 } from '../../ConnectData/ConnectFirestore';
 import { ModalThemHocSinhExcel, themMotHocSinh } from '../NhapHocSinh';
+import { GpsPickerModal } from '../../../components/GpsPickerModal';
+import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
+
+// Helper component hiển thị Khung Thẻ Bàn Học Sinh hình vuông bo góc với 4 nhãn chức danh nằm ngoài vòng tròn icon nhưng nằm trong hình vuông
+export interface StudentCardBoxProps {
+  gender?: 'Nam' | 'Nữ' | string;
+  isFemale?: boolean;
+  dieuHanh?: string; // Trái: Trên - Chức danh điều hành (LT, LP, PHT...)
+  to?: string;       // Trái: Dưới - Chức danh tổ (TT1, TP2, Tổ 1...)
+  doan?: string;     // Phải: Trên - Chức danh đoàn (BT, PBT, UV...)
+  mon?: string;      // Phải: Dưới - Chức danh BCS Bộ môn (CS Toán, CS Văn...)
+  nickname: string;
+  fullName?: string;
+  studentCode?: string;
+  seatLabel?: string;
+  isMe?: boolean;
+  className?: string;
+}
+
+export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
+  gender,
+  isFemale,
+  dieuHanh,
+  to,
+  doan,
+  mon,
+  nickname,
+  fullName,
+  studentCode,
+  seatLabel,
+  isMe,
+  className = '',
+}) => {
+  const checkFemale = isFemale ?? (gender === 'Nữ' || gender === 'Nu' || gender === 'nu');
+
+  return (
+    <div
+      className={`relative bg-white border-2 rounded-2xl p-2.5 shadow-2xs hover:shadow-md transition-all flex flex-col items-center justify-between text-center overflow-hidden min-h-[110px] ${
+        isMe
+          ? 'border-indigo-500 ring-2 ring-indigo-300 bg-indigo-50/80'
+          : 'border-slate-300 hover:border-indigo-400'
+      } ${className}`}
+    >
+      {seatLabel && (
+        <span className="text-[9px] text-slate-400 font-bold mb-0.5">{seatLabel}</span>
+      )}
+
+      {/* 4 Nhãn chức danh NẰM NGOÀI VÒNG TRÒN, NHƯNG NẰM TRONG HÌNH VUÔNG BO GÓC */}
+      {/* TRÁI - TRÊN: Điều hành */}
+      {dieuHanh && (
+        <span
+          className="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-amber-200 shadow-2xs max-w-[34px] truncate"
+          title={`Trái - Trên (Điều hành): ${dieuHanh}`}
+        >
+          {dieuHanh}
+        </span>
+      )}
+
+      {/* PHẢI - TRÊN: Đoàn */}
+      {doan && (
+        <span
+          className="absolute top-1.5 right-1.5 z-10 bg-blue-700 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-blue-200 shadow-2xs max-w-[34px] truncate"
+          title={`Phải - Trên (Đoàn): ${doan}`}
+        >
+          {doan}
+        </span>
+      )}
+
+      {/* Vòng Tròn Icon Nam / Nữ ở Trung Tâm (Sạch sẽ không bị nhãn che) */}
+      <div className="w-11 h-11 mx-auto rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0 my-1 shadow-2xs">
+        {checkFemale ? (
+          <IconNu className="w-10 h-10 text-rose-600" />
+        ) : (
+          <IconNam className="w-10 h-10 text-indigo-700" />
+        )}
+      </div>
+
+      {/* TRÁI - DƯỚI: Tổ */}
+      {to && (
+        <span
+          className="absolute bottom-6 left-1.5 z-10 bg-indigo-600 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-indigo-200 shadow-2xs max-w-[34px] truncate"
+          title={`Trái - Dưới (Tổ): ${to}`}
+        >
+          {to}
+        </span>
+      )}
+
+      {/* PHẢI - DƯỚI: BCS Bộ môn */}
+      {mon && (
+        <span
+          className="absolute bottom-6 right-1.5 z-10 bg-emerald-600 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs max-w-[34px] truncate"
+          title={`Phải - Dưới (BCS Môn): ${mon}`}
+        >
+          {mon}
+        </span>
+      )}
+
+      {/* HIỂN THỊ DUY NHẤT BIỆT DANH HỌC SINH */}
+      <div className="w-full">
+        <div className="font-black text-xs text-slate-900 truncate px-0.5" title={fullName ? `Họ tên: ${fullName}` : nickname}>
+          {nickname}
+        </div>
+        {studentCode && (
+          <div className="text-[9px] text-indigo-600 font-mono font-semibold truncate">{studentCode}</div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export const QuanLyLopDayView: React.FC = () => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -34,6 +144,7 @@ export const QuanLyLopDayView: React.FC = () => {
   const [pinRequests, setPinRequests] = useState<PinJoinRequest[]>([]);
   const [notification, setNotification] = useState<string | null>(null);
   const [showExcelModal, setShowExcelModal] = useState<boolean>(false);
+  const [showGpsModal, setShowGpsModal] = useState<boolean>(false);
 
   // Modal Mở lớp dạy mới
   const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
@@ -218,6 +329,18 @@ export const QuanLyLopDayView: React.FC = () => {
             ))}
           </select>
 
+          {/* Nút Xem GPS Bản đồ Lớp Học (THPT Ba Gia) */}
+          <button
+            id="btn-open-gps-bagia"
+            type="button"
+            onClick={() => setShowGpsModal(true)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-indigo-700 border border-slate-200 transition-colors cursor-pointer"
+            title="Mở bản đồ vị trí GPS (Trường THPT Ba Gia: 15.172233, 108.667440)"
+          >
+            <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+            <span>📍 Bản đồ GPS THPT Ba Gia</span>
+          </button>
+
           {/* Tab buttons */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
             <button
@@ -384,35 +507,87 @@ export const QuanLyLopDayView: React.FC = () => {
 
           {seatingPlan && (
             <div className="space-y-4">
+              {/* Thanh Chú Thích 4 Vị Trí Chức Danh */}
+              <div className="p-3.5 bg-slate-900 text-white rounded-2xl border border-slate-800 text-xs space-y-2.5 shadow-md">
+                <div className="font-bold text-amber-300 flex items-center gap-1.5">
+                  <span>📍 Vòng Tròn Icon Nam / Icon Nữ & 4 Vị Trí Chức Danh Học Sinh:</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] font-medium">
+                  <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-2xs bg-amber-500 shrink-0"></span>
+                    <span><strong>Trái - Trên:</strong> Điều hành (LT, LP, PHT...)</span>
+                  </div>
+                  <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-2xs bg-indigo-600 shrink-0"></span>
+                    <span><strong>Trái - Dưới:</strong> Tổ (TT1, TP2, Tổ 1-4...)</span>
+                  </div>
+                  <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-2xs bg-rose-600 shrink-0"></span>
+                    <span><strong>Phải - Trên:</strong> Đoàn (BT, PBT, UV...)</span>
+                  </div>
+                  <div className="bg-slate-800/90 p-2 rounded-xl border border-slate-700/80 flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-2xs bg-emerald-600 shrink-0"></span>
+                    <span><strong>Phải - Dưới:</strong> BCS Bộ môn (CS Toán, CS Văn...)</span>
+                  </div>
+                </div>
+              </div>
+
               <div className="p-3 bg-slate-800 text-white text-center rounded-xl text-xs font-bold uppercase tracking-wider max-w-sm mx-auto">
                 BỤC GIẢNG GIÁO VIÊN
               </div>
 
-              <div className="grid grid-cols-6 gap-2.5 max-w-3xl mx-auto pt-2">
-                {seatingPlan.seats.map(seat => (
-                  <div
-                    key={seat.id}
-                    className={`p-2.5 rounded-xl border text-center text-xs transition-all ${
-                      seat.studentName
-                        ? 'bg-slate-50 border-slate-300'
-                        : 'bg-white border-dashed border-slate-200 text-slate-400'
-                    }`}
-                  >
-                    <div className="text-[10px] text-slate-400 font-bold mb-1">
-                      H{seat.row}-C{seat.col}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 max-w-4xl mx-auto pt-2">
+                {seatingPlan.seats.map((seat, idx) => {
+                  const isFemale = idx % 2 === 1;
+                  const dieuHanh = seat.studentName ? (idx === 0 ? 'LT' : idx === 1 ? 'LP' : idx === 2 ? 'PHT' : '') : '';
+                  const to = seat.studentName ? (idx === 0 || idx === 1 ? 'TT1' : idx === 3 ? 'TP2' : `Tổ ${(idx % 4) + 1}`) : '';
+                  const doan = seat.studentName ? (idx === 1 ? 'BT' : idx === 4 ? 'PBT' : idx === 5 ? 'UV' : '') : '';
+                  const mon = seat.studentName ? (idx === 2 ? 'CS Toán' : idx === 3 ? 'CS Văn' : idx === 6 ? 'CS Anh' : '') : '';
+
+                  // Tìm học sinh tương ứng để lấy duy nhất Biệt danh (nickname)
+                  const matchedStudent = classStudents.find(
+                    s => s.id === seat.studentId || s.name === seat.studentName || (seat.studentCode && s.studentCode === seat.studentCode)
+                  );
+
+                  let nicknameDisplay = '';
+                  if (matchedStudent?.nickname?.trim()) {
+                    nicknameDisplay = matchedStudent.nickname.trim();
+                  } else if (seat.studentName) {
+                    const parenMatch = seat.studentName.match(/\(([^)]+)\)/);
+                    if (parenMatch && parenMatch[1].trim()) {
+                      nicknameDisplay = parenMatch[1].trim();
+                    } else {
+                      const parts = seat.studentName.trim().split(/\s+/);
+                      nicknameDisplay = parts[parts.length - 1];
+                    }
+                  }
+
+                  return seat.studentName ? (
+                    <StudentCardBox
+                      key={seat.id}
+                      isFemale={isFemale}
+                      dieuHanh={dieuHanh}
+                      to={to}
+                      doan={doan}
+                      mon={mon}
+                      nickname={nicknameDisplay}
+                      fullName={seat.studentName}
+                      studentCode={seat.studentCode || `HS-${idx + 1}`}
+                      seatLabel={`H${seat.row}-C${seat.col}`}
+                    />
+                  ) : (
+                    <div
+                      key={seat.id}
+                      className="p-2.5 rounded-2xl border border-dashed border-slate-200 bg-slate-50 text-center text-xs flex flex-col justify-between items-center py-4 text-slate-400 min-h-[110px]"
+                    >
+                      <div className="text-[10px] text-slate-400 font-bold">
+                        H{seat.row}-C{seat.col}
+                      </div>
+                      <div className="w-10 h-10 mx-auto rounded-full border border-dashed border-slate-300 flex items-center justify-center text-slate-300 text-lg font-light">+</div>
+                      <div className="text-[10px] text-slate-400 mt-1">Chỗ trống</div>
                     </div>
-                    {seat.studentName ? (
-                      <>
-                        <div className="font-bold text-slate-800 text-xs truncate">
-                          {seat.studentName}
-                        </div>
-                        <div className="text-[10px] text-slate-500 mt-0.5">{seat.studentCode}</div>
-                      </>
-                    ) : (
-                      <div className="text-[11px] text-slate-400 py-1">Chỗ trống</div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -688,6 +863,22 @@ export const QuanLyLopDayView: React.FC = () => {
               `Đã thêm ${report.addedToClass} học sinh vào lớp (${report.newUsersCreated} tài khoản mới, ${report.linkedExistingUsers} đã liên kết sẵn). Tự động tránh trùng lặp: bỏ qua ${report.skippedDuplicates} học sinh!`
             );
             setTimeout(() => setNotification(null), 6000);
+          }}
+        />
+      )}
+
+      {/* Modal Bản Đồ Vị Trí GPS - Trường THPT Ba Gia */}
+      {showGpsModal && (
+        <GpsPickerModal
+          title="Google Maps — Bản Đồ GPS Trường THPT Ba Gia"
+          userNameOrContext={`Lớp ${currentClass?.name || 'THPT Ba Gia'}`}
+          initialLat={15.172233}
+          initialLng={108.667440}
+          onClose={() => setShowGpsModal(false)}
+          onConfirm={(coordsStr, lat, lng) => {
+            setShowGpsModal(false);
+            setNotification(`Đã xác nhận vị trí GPS lớp học: ${coordsStr} (Trường THPT Ba Gia)`);
+            setTimeout(() => setNotification(null), 4000);
           }}
         />
       )}

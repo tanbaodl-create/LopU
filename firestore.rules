@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // User Profiles collection
+    match /users/{userId} {
+      allow read, write: if true;
+    }
+    
+    // Classes collection
+    match /classes/{classId} {
+      allow read, write: if true;
+    }
+    
+    // Student Progress collection
+    match /progress/{progressId} {
+      allow read, write: if true;
+    }
+    
+    // Seating Plans collection
+    match /seating_plans/{planId} {
+      allow read, write: if true;
+    }
+
+    // Default deny for all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

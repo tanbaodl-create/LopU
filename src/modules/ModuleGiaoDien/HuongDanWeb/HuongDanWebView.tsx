@@ -89,13 +89,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'SoDoLop',
-        name: 'SoDoLop (Sơ đồ lớp & Drag & Drop Chỗ Ngồi)',
+        name: 'SoDoLop (Sơ đồ lớp A4 Dọc, Mặc định 3 ghế/bàn, Đặt tên Tổ & Đồng bộ Phân tổ Lớp)',
         folderPath: 'src/modules/ModuleHocSinh/SoDoLop',
-        description: 'Bản đồ vị trí chỗ ngồi 4 dãy x 5 bàn; hỗ trợ nhập chuỗi học sinh dạng [Họ tên; Biệt danh; Giới tính; Tổ/nhóm; Vai trò; Chức danh], tính năng Kéo Thả (Drag & Drop) trực quan xếp chỗ ngồi và đồng bộ tức thì lên Google Drive & Firestore.',
-        purpose: 'Vị trí học tập Drag & Drop',
+        description: 'Sơ đồ vị trí chỗ ngồi khổ A4 Dọc với mặc định 3 ghế/bàn (cho phép tùy chỉnh linh hoạt 2-6 ghế/bàn); hỗ trợ chọn tên Tổ từ danh sách phân tổ có sẵn trong dữ liệu lớp hoặc nhập tên ngoài; khi chọn từ phân tổ lớp thì hệ thống tự động đồng bộ vị trí danh sách thành viên tương ứng vào khu vực bàn của Tổ đó; trang bị Thanh Nổi Chọn Học Sinh (Floating Drawer) với 2 dropdown lọc (Tổ n/Cả lớp & Trạng thái chỗ), nút Đồng Bộ Phân Tổ 1-click, kéo thả linh hoạt và In A4 Dọc chuyên nghiệp.',
+        purpose: 'Sơ đồ lớp A4 Dọc mặc định 3 ghế/bàn & Tự động đồng bộ vị trí theo Phân tổ Lớp',
         viewId: 'learning-seating',
         icon: LayoutGrid,
-        tags: ['Kéo thả Drag & Drop', 'Drive & Firestore sync', 'Parse thông tin HS', 'Sơ đồ lớp'],
+        tags: ['Mặc định 3 ghế/bàn', 'Chọn tên từ phân tổ', 'Đồng bộ vị trí Tổ', 'Floating Drawer 2 Dropdown', 'Drag & Drop', 'In A4 Dọc'],
       },
       {
         id: 'ThoiKhoaBieu',
@@ -138,11 +138,11 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'QuanLyLopDay',
         name: 'QuanLyLopDay (Quản lý lớp dạy & Học sinh)',
         folderPath: 'src/modules/ModuleGiaoVien/QuanLyLopDay',
-        description: 'Giáo viên mở lớp dạy mới, đồng bộ Tên và Biệt danh học sinh vào app khi đăng nhập lần đầu và được duyệt vai trò chính thức (GV/Trợ giảng/HS/PH), hiển thị tọa độ GPS, sắp xếp vị trí chỗ ngồi và duyệt yêu cầu mã PIN.',
+        description: 'Giáo viên mở lớp dạy mới, đồng bộ Tên và Biệt danh học sinh khi đăng nhập, tích hợp Bản đồ GPS vị trí mặc định THPT Ba Gia (15.172233, 108.667440), sơ đồ lớp hiển thị 4 chức danh đè trực tiếp lên vòng tròn IconNam/IconNu (Trái-Trên: Điều hành, Trái-Dưới: Tổ, Phải-Trên: Đoàn, Phải-Dưới: BCS Bộ môn) và hiển thị duy nhất Biệt danh học sinh bên dưới.',
         purpose: 'Nghiệp vụ lớp học & GPS học sinh',
         viewId: 'teaching-management',
         icon: CheckCircle2,
-        tags: ['Mở lớp dạy', 'Tên & Biệt danh', 'Tọa độ GPS', 'Google Account', 'Sơ đồ lớp'],
+        tags: ['IconNam & IconNu', '4 Góc Chức Danh', 'Mở lớp dạy', 'Bản đồ GPS THPT Ba Gia', 'Sơ đồ lớp'],
       },
       {
         id: 'NhapHocSinh',
@@ -167,11 +167,11 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'TaiLieuCaNhan',
         name: 'TaiLieuCaNhan (Tài liệu dạy học Drive 4 cấp)',
         folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Giáo viên tạo các bộ tài liệu dạy học lưu tự động trên Google Drive cá nhân theo cấu trúc chuẩn 4 cấp độ: Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề. Đã xóa sạch tài liệu demo mẫu, sẵn sàng soạn bài thật.',
+        description: 'Giáo viên tạo các bộ tài liệu dạy học lưu tự động trên Google Drive cá nhân theo cấu trúc chuẩn 4 cấp độ: Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề. Tích hợp mẫu sơ đồ chỗ ngồi phân biệt IconNam & IconNu.',
         purpose: 'Kho tài nguyên giáo án Drive',
         viewId: 'teaching-documents',
         icon: FolderLock,
-        tags: ['Chương-Bài-Vấn đề-Chuyên đề', 'Sạch dữ liệu demo', 'Google Drive 4 cấp', 'Phát hành lớp'],
+        tags: ['IconNam & IconNu', 'Chương-Bài-Vấn đề-Chuyên đề', 'Google Drive 4 cấp', 'Phát hành lớp'],
       },
     ],
   },
@@ -194,7 +194,7 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'QuanLyNguoiDung',
         name: 'QuanLyNguoiDung (Google Auth, Duyệt vai trò, 14 Trường Thông Tin & GPS)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Đã xóa sạch 13 tài khoản demo (chỉ giữ vĩnh viễn 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore (đổi tên trường 7 thành "7. GPS"). Nút "lấy tọa độ GPS" mở trang Google Maps cho phép người dùng nhấp chọn trực tiếp trên bản đồ (tùy chọn lớp Mặc định & Vệ tinh) và xác nhận để tự động lấy tọa độ vị trí vừa chọn.',
+        description: 'Đã xóa sạch 13 tài khoản demo (chỉ giữ vĩnh viễn 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore (đổi tên trường 7 thành "7. GPS"). Nút "lấy tọa độ GPS" trong cửa sổ Hồ Sơ Chi Tiết — 14 Trường Thông Tin được tích hợp mở trực tiếp bản đồ Leaflet Full-Screen đè lên trên, sau khi chọn & xác nhận sẽ tự động quay lại điền tọa độ GPS vào trường 7 tức thì.',
         purpose: 'Quản lý tài khoản 14 trường & GPS',
         viewId: 'settings-users',
         icon: UserCog,
@@ -322,7 +322,7 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'ConnectFirestore',
         name: 'ConnectFirestore (Firebase & Khóa chính Google)',
         folderPath: 'src/modules/ConnectData/ConnectFirestore',
-        description: 'Hệ thống Firestore thời gian thực với khóa chính là tài khoản Google (Email/UID), phân quyền RBAC 8 vai trò, bảo vệ tài khoản Superadmin và chống trùng lặp tài khoản.',
+        description: 'Hệ thống Firestore thời gian thực với sơ đồ blueprint (`firebase-blueprint.json`), quy tắc bảo mật `firestore.rules`, khóa chính là tài khoản Google (Email/UID), xử lý ngoại lệ theo chuẩn FirestoreErrorInfo với cơ chế phản hồi tự động Offline-First qua LocalStorage.',
         purpose: 'Cơ sở dữ liệu tập trung',
         icon: Database,
         tags: ['Google Key', 'RBAC 8 vai trò', 'Superadmin Lock', 'Offline-First'],
@@ -962,6 +962,76 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ onNavigateToVi
           }}
         />
       )}
+
+      {/* Box Hướng Dẫn Cấu Hình Vercel & Firebase Authorized Domains */}
+      <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-2xl p-5 border border-indigo-700/50 space-y-4 shadow-lg">
+        <div className="flex items-center justify-between pb-3 border-b border-indigo-800/60">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-indigo-600/30 text-indigo-300 rounded-xl border border-indigo-500/40">
+              <ShieldCheck className="w-5 h-5 text-indigo-400" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">
+                Hướng Dẫn Cấu Hình Vercel & Ủy Quyền Tên Miền (Authorized Domains)
+              </h4>
+              <p className="text-xs text-indigo-200 mt-0.5">
+                Đảm bảo ứng dụng chạy mượt mà trên tên miền Vercel (ví dụ: <code className="text-amber-300 font-mono">lopu2.vercel.app</code>)
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-700/50">
+            Cấu hình Deploy
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+          {/* Cấu hình 1: Thêm Biến Môi Trường Vercel */}
+          <div className="bg-slate-950/70 p-4 rounded-xl border border-indigo-900/60 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-indigo-300">
+              <KeyRound className="w-4 h-4 text-amber-400" />
+              <span>1. Thêm Biến Môi Trường Trên Vercel</span>
+            </div>
+            <p className="text-slate-300 leading-relaxed text-[11px]">
+              Vào <strong>Vercel Dashboard</strong> ➔ Chọn Project <strong>lopu2</strong> ➔ <strong>Settings</strong> ➔ <strong>Environment Variables</strong>. Thêm các biến sau:
+            </p>
+            <div className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 font-mono text-[10px] text-amber-200 space-y-1">
+              <div>VITE_FIREBASE_API_KEY=AIzaSy...</div>
+              <div>VITE_FIREBASE_AUTH_DOMAIN=...firebaseapp.com</div>
+              <div>VITE_FIREBASE_PROJECT_ID=...</div>
+              <div>VITE_FIREBASE_STORAGE_BUCKET=...appspot.com</div>
+              <div>VITE_FIREBASE_MESSAGING_SENDER_ID=...</div>
+              <div>VITE_FIREBASE_APP_ID=1:...:web:...</div>
+            </div>
+            <p className="text-[11px] text-slate-400 italic">
+              💡 Lưu ý: Chọn đầy đủ 3 môi trường: <strong>Production</strong>, <strong>Preview</strong>, và <strong>Development</strong> trước khi bấm Save.
+            </p>
+          </div>
+
+          {/* Cấu hình 2: Ủy quyền Tên miền Firebase Authorized Domains */}
+          <div className="bg-slate-950/70 p-4 rounded-xl border border-indigo-900/60 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-indigo-300">
+              <Network className="w-4 h-4 text-emerald-400" />
+              <span>2. Cấu Hình Authorized Domains (Firebase Console)</span>
+            </div>
+            <p className="text-slate-300 leading-relaxed text-[11px]">
+              Khắc phục lỗi Đăng nhập Google/Firebase (lỗi <code>auth/unauthorized-domain</code>) khi chạy trên tên miền Vercel mới:
+            </p>
+            <ol className="list-decimal list-inside space-y-1 text-slate-300 text-[11px] leading-relaxed font-medium">
+              <li>Truy cập <strong>Firebase Console</strong> (<code>console.firebase.google.com</code>).</li>
+              <li>Chọn Dự án Firebase của ứng dụng.</li>
+              <li>Vào menu <strong>Build</strong> ➔ <strong>Authentication</strong>.</li>
+              <li>Chọn tab <strong>Settings</strong> ➔ Mục <strong>Authorized domains</strong>.</li>
+              <li>Bấm <strong>Add domain</strong> và dán các tên miền Vercel:
+                <div className="bg-slate-900 px-2 py-1 rounded text-emerald-300 font-mono text-[10px] mt-1 space-y-0.5">
+                  <div>• lopu2.vercel.app</div>
+                  <div>• lopuweb-36hscdsho-tanbaodl-4690s-projects.vercel.app</div>
+                </div>
+              </li>
+              <li>Bấm <strong>Save</strong> để hoàn tất.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
 
       {/* Box Tóm Tắt Quy Chuẩn Kiến Trúc */}
       <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

@@ -14,6 +14,7 @@ import {
 import { TeacherDocument, ClassItem } from '../../../services/storageTypes';
 import { getClasses } from '../../ConnectData/ConnectFirestore';
 import { saveTeachingMaterialHierarchyToDrive } from '../../ConnectData/ConnectDrive/googleDriveService';
+import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 
 export const TaiLieuCaNhanView: React.FC = () => {
   const [documents, setDocuments] = useState<TeacherDocument[]>([]);
@@ -235,6 +236,51 @@ export const TaiLieuCaNhanView: React.FC = () => {
           />
         </div>
       </div>
+
+      {/* Card Mẫu Sơ Đồ Lớp Tích Hợp IconNam & IconNu */}
+      {(categoryFilter === 'all' || categoryFilter === 'seating_chart') && (
+        <div className="bg-gradient-to-r from-indigo-900 via-slate-900 to-indigo-950 text-white p-5 rounded-2xl border border-indigo-700/60 shadow-md space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-indigo-800/80">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white text-[10px] font-extrabold uppercase">
+                Mẫu Sơ Đồ Chuẩn
+              </span>
+              <h3 className="text-sm font-bold text-white">
+                Sơ Đồ Lớp Học Drag & Drop Sử Dụng IconNam & IconNu
+              </h3>
+            </div>
+            <span className="text-[11px] text-indigo-200 font-mono">
+              Chương 1 / Bài 1 / Vấn đề 1 / Chuyên đề: Bố trí chỗ ngồi
+            </span>
+          </div>
+
+          <p className="text-xs text-slate-300 leading-relaxed">
+            Hệ thống hỗ trợ tự động phân biệt icon học sinh nam (<strong>IconNam</strong> - tóc ngắn cổ áo) và học sinh nữ (<strong>IconNu</strong> - tóc dài nơ cổ) trên toàn bộ sơ đồ lớp học:
+          </p>
+
+          <div className="flex flex-wrap items-center gap-4 p-3 bg-slate-950/80 rounded-xl border border-indigo-800/50 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
+                <IconNam className="w-7 h-7 text-indigo-400" />
+              </div>
+              <div>
+                <strong className="block text-white text-[11px]">IconNam</strong>
+                <span className="text-[10px] text-slate-400">Học sinh Nam</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 border-l border-slate-800 pl-4">
+              <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center">
+                <IconNu className="w-7 h-7 text-pink-400" />
+              </div>
+              <div>
+                <strong className="block text-white text-[11px]">IconNu</strong>
+                <span className="text-[10px] text-slate-400">Học sinh Nữ</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Documents Grid */}
       {filteredDocs.length === 0 ? (
