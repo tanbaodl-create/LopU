@@ -8,9 +8,11 @@ import {
   Copy,
   UserCheck,
   ShieldAlert,
+  Cloud,
 } from 'lucide-react';
 import { ClassItem, UserProfile } from '../../../services/storageTypes';
 import { getClasses, saveClass, getUsers } from '../../ConnectData/ConnectFirestore';
+import { getDriveConnectionState } from '../../ConnectData/ConnectDrive';
 
 export const PhanQuyenLopHocView: React.FC = () => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -19,8 +21,10 @@ export const PhanQuyenLopHocView: React.FC = () => {
   const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
   const [notification, setNotification] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [driveConn, setDriveConn] = useState(getDriveConnectionState());
 
   useEffect(() => {
+    setDriveConn(getDriveConnectionState());
     async function load() {
       const list = await getClasses();
       setClasses(list);
@@ -131,6 +135,25 @@ export const PhanQuyenLopHocView: React.FC = () => {
             <span className="px-2 py-0.5 rounded bg-teal-600 text-white">Địa</span>
             <span className="px-2 py-0.5 rounded bg-cyan-600 text-white">KTPL</span>
           </div>
+        </div>
+      </div>
+
+      {/* Google Drive Permissions & Connection Status */}
+      <div className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs ${
+        driveConn.isConnected && driveConn.isRealConfigured
+          ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+          : 'bg-amber-50 border-amber-200 text-amber-800'
+      }`}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-1.5 font-bold">
+            <Cloud className="w-4 h-4 shrink-0" />
+            <span>QUYỀN GHI GOOGLE DRIVE: {driveConn.isConnected && driveConn.isRealConfigured ? 'ĐÃ LIÊN KẾT THÀNH CÔNG' : 'CHẾ ĐỘ THỬ NGHIỆM (SANDBOX)'}</span>
+          </div>
+          <p className="text-[11px] leading-relaxed opacity-90">
+            {driveConn.isConnected && driveConn.isRealConfigured
+              ? `Tài khoản giáo viên hiện tại (${driveConn.email}) có đầy đủ quyền tạo cấu trúc thư mục myApp\\LopU\\SoDoLop và ghi dữ liệu sơ đồ thực tế vào Google Drive.`
+              : 'Ứng dụng chưa liên kết hoặc chưa được cấp quyền ghi thực tế từ Google Drive API của bạn. Do đó, hệ thống đang lưu tạm sơ đồ vào Sandbox bộ nhớ của trình duyệt. Hãy bấm biểu tượng đám mây ở Header để liên kết Google Drive thật.'}
+          </p>
         </div>
       </div>
 

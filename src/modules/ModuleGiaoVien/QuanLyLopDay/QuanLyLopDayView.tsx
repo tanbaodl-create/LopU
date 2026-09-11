@@ -12,6 +12,7 @@ import {
   GraduationCap,
   School,
   MapPin,
+  ArrowRightLeft,
 } from 'lucide-react';
 import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile } from '../../../services/storageTypes';
 import {
@@ -72,11 +73,11 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
         <span className="text-[9px] text-slate-400 font-bold mb-0.5">{seatLabel}</span>
       )}
 
-      {/* 4 Nhãn chức danh NẰM NGOÀI VÒNG TRÒN, NHƯNG NẰM TRONG HÌNH VUÔNG BO GÓC */}
+      {/* 4 Nhãn chức danh CHỈ GHI CHỮ, KHÔNG ĐÓNG KHUNG */}
       {/* TRÁI - TRÊN: Điều hành */}
       {dieuHanh && (
         <span
-          className="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-amber-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute top-1 left-1.5 z-10 font-extrabold text-[10px] leading-none text-amber-700 pointer-events-none"
           title={`Trái - Trên (Điều hành): ${dieuHanh}`}
         >
           {dieuHanh}
@@ -86,7 +87,7 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
       {/* PHẢI - TRÊN: Đoàn */}
       {doan && (
         <span
-          className="absolute top-1.5 right-1.5 z-10 bg-blue-700 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-blue-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute top-1 right-1.5 z-10 font-extrabold text-[10px] leading-none text-blue-700 pointer-events-none"
           title={`Phải - Trên (Đoàn): ${doan}`}
         >
           {doan}
@@ -105,7 +106,7 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
       {/* TRÁI - DƯỚI: Tổ */}
       {to && (
         <span
-          className="absolute bottom-6 left-1.5 z-10 bg-indigo-600 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-indigo-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute bottom-5 left-1.5 z-10 font-extrabold text-[10px] leading-none text-indigo-700 pointer-events-none"
           title={`Trái - Dưới (Tổ): ${to}`}
         >
           {to}
@@ -115,7 +116,7 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
       {/* PHẢI - DƯỚI: BCS Bộ môn */}
       {mon && (
         <span
-          className="absolute bottom-6 right-1.5 z-10 bg-emerald-600 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute bottom-5 right-1.5 z-10 font-extrabold text-[10px] leading-none text-emerald-700 pointer-events-none"
           title={`Phải - Dưới (BCS Môn): ${mon}`}
         >
           {mon}
@@ -160,6 +161,12 @@ export const QuanLyLopDayView: React.FC = () => {
   const [studentEmail, setStudentEmail] = useState<string>('');
   const [studentCode, setStudentCode] = useState<string>('');
   const [studentPhone, setStudentPhone] = useState<string>('');
+
+  // Sửa tên lớp & Đổi vị trí Cửa ⇄ Bàn GV
+  const [doorOnLeft, setDoorOnLeft] = useState<boolean>(true);
+  const [editingClassName, setEditingClassName] = useState<string>('');
+  const [teacherNameState, setTeacherNameState] = useState<string>('Thầy Nguyễn Văn An');
+  const [teacherPhoneState, setTeacherPhoneState] = useState<string>('0912.345.678');
 
   const loadAllData = async () => {
     const list = await getClasses();
@@ -279,6 +286,31 @@ export const QuanLyLopDayView: React.FC = () => {
   };
 
   const currentClass = classes.find(c => c.id === selectedClassId) || classes[0];
+
+  useEffect(() => {
+    if (currentClass) {
+      setEditingClassName(currentClass.name);
+      setTeacherNameState(currentClass.teacherName || 'Thầy Nguyễn Văn An');
+    }
+  }, [selectedClassId, classes]);
+
+  const handleUpdateClassName = (newName: string) => {
+    setEditingClassName(newName);
+    if (currentClass) {
+      currentClass.name = newName;
+      setClasses([...classes]);
+      saveClass(currentClass);
+    }
+  };
+
+  const handleUpdateTeacherName = (newName: string) => {
+    setTeacherNameState(newName);
+    if (currentClass) {
+      currentClass.teacherName = newName;
+      setClasses([...classes]);
+      saveClass(currentClass);
+    }
+  };
 
   return (
     <div id="teaching-management-view" className="space-y-6">
@@ -486,23 +518,34 @@ export const QuanLyLopDayView: React.FC = () => {
       {/* TAB 2: SEATING PLAN CUSTOMIZATION */}
       {activeTab === 'seating' && (
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
-          <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+          <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
             <div>
               <h3 className="text-sm font-bold text-slate-900">
-                Sơ Đồ Vị Trí Chỗ Ngồi Lớp {currentClass?.name}
+                Sơ Đồ Vị Trí Chỗ Ngồi Lớp {editingClassName || currentClass?.name}
               </h3>
               <p className="text-xs text-slate-500">
                 Phân bổ vị trí chỗ ngồi trực quan cho học sinh trong phòng học
               </p>
             </div>
-            <button
-              id="btn-save-seating-plan"
-              onClick={handleSaveSeating}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Lưu Sơ Đồ Lớp</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDoorOnLeft(prev => !prev)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors cursor-pointer shadow-2xs"
+                title="Bấm để đổi vị trí Cửa ra vào với Bàn giáo viên"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-amber-700" />
+                <span>Đổi Cửa ⇄ Bàn GV</span>
+              </button>
+              <button
+                id="btn-save-seating-plan"
+                onClick={handleSaveSeating}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Lưu Sơ Đồ Lớp</span>
+              </button>
+            </div>
           </div>
 
           {seatingPlan && (
@@ -532,8 +575,64 @@ export const QuanLyLopDayView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-800 text-white text-center rounded-xl text-xs font-bold uppercase tracking-wider max-w-sm mx-auto">
-                BỤC GIẢNG GIÁO VIÊN
+              {/* KHUNG TIÊU ĐỀ: CỬA RA VÀO - BẢNG - BÀN GIÁO VIÊN */}
+              <div className="flex items-center justify-between gap-2 max-w-2xl mx-auto my-2">
+                {(() => {
+                  const DoorBlock = (
+                    <div key="door" className="py-2 px-3 rounded-xl bg-slate-100 border border-slate-300 text-slate-800 text-center font-black text-xs uppercase shadow-2xs shrink-0">
+                      🚪 CỬA RA VÀO
+                    </div>
+                  );
+
+                  const TeacherBlock = (
+                    <div key="teacher" className="py-2 px-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-center font-black text-xs uppercase shadow-2xs shrink-0">
+                      <div>💼 BÀN GIÁO VIÊN</div>
+                      <div className="flex flex-col items-center justify-center gap-0.5 text-[10px] text-amber-900 font-bold normal-case mt-0.5">
+                        <div className="flex items-center gap-0.5">
+                          <span>GVCN:</span>
+                          <input
+                            type="text"
+                            value={teacherNameState}
+                            onChange={e => handleUpdateTeacherName(e.target.value)}
+                            className="w-22 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
+                            title="Bấm để sửa tên GVCN"
+                          />
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <span>SĐT:</span>
+                          <input
+                            type="text"
+                            value={teacherPhoneState}
+                            onChange={e => setTeacherPhoneState(e.target.value)}
+                            className="w-22 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
+                            title="Bấm để sửa SĐT GVCN"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+
+                  const BoardBlock = (
+                    <div key="board" className="flex-1 text-center py-2 px-3 rounded-xl bg-slate-50 border-2 border-dashed border-slate-300 text-slate-800 font-black text-xs uppercase shadow-2xs">
+                      <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                        <span>LỚP</span>
+                        <input
+                          type="text"
+                          value={editingClassName}
+                          onChange={e => handleUpdateClassName(e.target.value)}
+                          className="w-20 bg-white border border-indigo-300 rounded px-1 py-0.5 text-xs font-black text-indigo-950 text-center uppercase focus:outline-hidden"
+                          title="Bấm để chỉnh sửa tên lớp"
+                        />
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-bold normal-case mt-0.5 space-y-0.5">
+                        <div>GVCN: {teacherNameState}</div>
+                        <div>SĐT: {teacherPhoneState}</div>
+                      </div>
+                    </div>
+                  );
+
+                  return doorOnLeft ? [DoorBlock, BoardBlock, TeacherBlock] : [TeacherBlock, BoardBlock, DoorBlock];
+                })()}
               </div>
 
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 max-w-4xl mx-auto pt-2">

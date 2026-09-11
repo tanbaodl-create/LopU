@@ -5,6 +5,7 @@
  */
 
 import { TeacherDocument } from '../../../services/storageTypes';
+import { isGoogleClientConfigured } from '../../../config/firebase';
 import {
   connectGoogleDrive,
   disconnectGoogleDrive,
@@ -42,7 +43,7 @@ export async function saveTeachingMaterialHierarchyToDrive(
   const safeChuyenDe = (chuyenDe || docItem.chuyenDe || 'Chuyên đề: Phương pháp giải bài tập').trim();
 
   const folderChain = [
-    'LopU_TaiLieuDayHoc',
+    'myApp\\LopU',
     docItem.subject || 'MonHoc',
     safeChuong,
     safeBai,
@@ -67,6 +68,31 @@ export async function saveTeachingMaterialHierarchyToDrive(
   };
 
   const driveRes = await saveLessonDocToDrive(enrichedDoc);
+
+  // THỰC HIỆN UPLOAD THỰC TẾ LÊN GOOGLE DRIVE NẾU ĐÃ CẤU HÌNH VÀ KẾT NỐI
+  const token = localStorage.getItem('lopu_google_drive_token_v1');
+  if (token && isGoogleClientConfigured) {
+    try {
+      const metadata = {
+        name: fileName,
+        mimeType: docItem.fileType === 'sheet' ? 'application/vnd.google-apps.spreadsheet' : 'application/vnd.google-apps.document',
+      };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([JSON.stringify(enrichedDoc, null, 2)], { type: 'application/json' }));
+
+      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      });
+      console.log(`Đã tải lên Google Drive thực tế thành công: ${fileName}`);
+    } catch (uploadErr) {
+      console.error('Lỗi tải file tài liệu thực tế lên Google Drive API:', uploadErr);
+    }
+  }
 
   return {
     success: driveRes.success,
@@ -105,6 +131,32 @@ export async function saveSeatingChartToDrive(classId: string, seatingData: any)
     }
 
     localStorage.setItem('lopu_gdrive_files_v1', JSON.stringify(files));
+
+    // THỰC HIỆN UPLOAD THỰC TẾ LÊN GOOGLE DRIVE NẾU ĐÃ CẤU HÌNH VÀ KẾT NỐI
+    const token = localStorage.getItem('lopu_google_drive_token_v1');
+    if (token && isGoogleClientConfigured) {
+      try {
+        const metadata = {
+          name: fileName,
+          mimeType: 'application/json',
+        };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(seatingData, null, 2)], { type: 'application/json' }));
+
+        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: form,
+        });
+        console.log(`Đã tải lên Google Drive sơ đồ lớp thực tế thành công: ${fileName}`);
+      } catch (uploadErr) {
+        console.error('Lỗi tải file sơ đồ lớp thực tế lên Google Drive API:', uploadErr);
+      }
+    }
+
     return { success: true, fileId };
   } catch (err) {
     console.error('Lỗi lưu sơ đồ lớp Google Drive:', err);

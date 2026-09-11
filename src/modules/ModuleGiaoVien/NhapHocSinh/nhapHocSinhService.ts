@@ -88,3 +88,18 @@ export async function kiemTraGoogleAccountTonTai(email: string): Promise<UserPro
   const found = users.find(u => u.email.trim().toLowerCase() === email.trim().toLowerCase());
   return found || null;
 }
+
+/**
+ * Chuẩn hóa danh sách chức danh học sinh khi nạp từ Excel, hỗ trợ đầy đủ các chức danh bao gồm VTM (Văn Thể Mỹ)
+ */
+export function chuanHoaChucDanhHocSinh(titles: string[]): string[] {
+  const allowedTitles = [
+    'LT', 'PHT', 'TQ', 'CĐ', 'CD', 'PLĐ', 'VTM',
+    'BT', 'PBT', 'UV',
+    'TT', 'TP',
+    'TOÁN', 'LÝ', 'HÓA', 'SINH', 'TIN', 'ANH', 'VĂN', 'SỬ', 'ĐỊA', 'KTPL', 'TOAN', 'LY', 'HOA'
+  ];
+  return titles
+    .map(t => t.trim().toUpperCase())
+    .filter(t => t && t !== 'STUDENT' && t !== 'THÀNH VIÊN' && allowedTitles.includes(t));
+}

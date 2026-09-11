@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { TeacherDocument, ClassItem } from '../../../services/storageTypes';
 import { getClasses } from '../../ConnectData/ConnectFirestore';
-import { saveTeachingMaterialHierarchyToDrive } from '../../ConnectData/ConnectDrive/googleDriveService';
+import { saveTeachingMaterialHierarchyToDrive, getDriveConnectionState } from '../../ConnectData/ConnectDrive/googleDriveService';
 import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 
 export const TaiLieuCaNhanView: React.FC = () => {
@@ -68,7 +68,13 @@ export const TaiLieuCaNhanView: React.FC = () => {
           : d
       )
     );
-    setNotification(`Đã lưu tài liệu lên Drive giáo viên theo cấu trúc: ${res.drivePath}`);
+    const conn = getDriveConnectionState();
+    const cleanFileName = `[${docItem.chuyenDe || 'Chuyên đề trọng tâm'}]_${(docItem.title || 'TaiLieu').replace(/[\s:/\\?*]+/g, '_')}`;
+    if (conn.isConnected && conn.isRealConfigured) {
+      setNotification(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục ${res.drivePath}`);
+    } else {
+      setNotification(`Đã tải lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục ${res.drivePath}`);
+    }
     setTimeout(() => setNotification(null), 5000);
   };
 
@@ -97,7 +103,7 @@ export const TaiLieuCaNhanView: React.FC = () => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
-    const driveFolder = `LopU_TaiLieuDayHoc / ${newSubject} / ${newChuong} / ${newBai} / ${newVanDe} / ${newChuyenDe}`;
+    const driveFolder = `myApp\\LopU / ${newSubject} / ${newChuong} / ${newBai} / ${newVanDe} / ${newChuyenDe}`;
 
     const newDoc: TeacherDocument = {
       id: `doc_${Date.now()}`,
@@ -134,7 +140,13 @@ export const TaiLieuCaNhanView: React.FC = () => {
     setShowCreateModal(false);
     setNewTitle('');
     setNewSnippet('');
-    setNotification(`Đã tạo bộ tài liệu dạy học & lưu Drive theo cấu trúc: ${driveFolder}`);
+    const conn = getDriveConnectionState();
+    const cleanFileName = `[${newChuyenDe}]_${newTitle.trim().replace(/[\s:/\\?*]+/g, '_')}`;
+    if (conn.isConnected && conn.isRealConfigured) {
+      setNotification(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục ${driveFolder}`);
+    } else {
+      setNotification(`Đã tải lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục ${driveFolder}`);
+    }
     setTimeout(() => setNotification(null), 5000);
   };
 

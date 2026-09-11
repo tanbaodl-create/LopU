@@ -23,10 +23,21 @@ import {
   CheckCircle2,
   Edit3,
   Filter,
+  Download,
 } from 'lucide-react';
+import { toPng } from 'html-to-image';
 import { ClassItem, ClassSeatingPlan } from '../../../services/storageTypes';
 import { getClasses } from '../../ConnectData/ConnectFirestore';
-import { savePersonalSeatingPlanToDrive, saveSeatingChartToDrive } from '../../ConnectData/ConnectDrive';
+import {
+  savePersonalSeatingPlanToDrive,
+  saveSeatingChartToDrive,
+  listAppFilesFromDrive,
+  downloadFileJson,
+  getDriveConnectionState,
+  DriveStoredFile,
+} from '../../ConnectData/ConnectDrive';
+import { read, utils, write } from 'xlsx';
+import ExcelJS from 'exceljs';
 
 // Icon Học Sinh Nữ (IconNu) - Chú thích Nơ cổ áo & Tóc dài chuẩn sơ đồ lớp
 export const IconNu: React.FC<{ className?: string }> = ({ className = 'w-7 h-7' }) => (
@@ -59,13 +70,14 @@ export interface StudentCardBoxProps {
   gender?: 'Nam' | 'Nữ' | string;
   isFemale?: boolean;
   dieuHanh?: string; // Trái - Trên: Điều hành (LT, LP, PHT...)
-  to?: string;       // Trái - Dưới: Tổ (TT1, TP2, Tổ 1...)
+  to?: string;       // Trái - Dưới: Tổ (TT, TP...)
   doan?: string;     // Phải - Trên: Đoàn (BT, PBT, UV...)
   mon?: string;      // Phải - Dưới: BCS Bộ môn (CS Toán, CS Văn...)
   nickname: string;
   fullName?: string;
   isMe?: boolean;
   className?: string;
+  rotate180?: boolean; // Quay 180 độ tại chỗ cho Góc nhìn xuống
 }
 
 export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
@@ -79,22 +91,25 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
   fullName,
   isMe,
   className = '',
+  rotate180 = false,
 }) => {
   const checkFemale = isFemale ?? (gender === 'Nữ' || gender === 'Nu' || gender === 'nu');
 
   return (
     <div
-      className={`relative bg-white border-2 rounded-2xl p-2.5 shadow-2xs hover:shadow-md transition-all flex flex-col items-center justify-between text-center overflow-hidden min-h-[105px] min-w-[100px] max-w-[130px] flex-1 ${
+      className={`relative bg-white border-2 rounded-2xl p-2.5 shadow-2xs hover:shadow-md transition-all flex flex-col items-center justify-between text-center overflow-hidden min-h-[105px] min-w-[100px] max-w-[130px] flex-1 print:border-2 print:border-slate-800 print:bg-white print:shadow-none print:p-2 ${
+        rotate180 ? 'rotate-180' : ''
+      } ${
         isMe
           ? 'border-indigo-500 ring-2 ring-indigo-300 bg-indigo-50/80'
           : 'border-slate-300 hover:border-indigo-400'
       } ${className}`}
     >
-      {/* 4 Nhãn chức danh NẰM NGOÀI VÒNG TRÒN, NHƯNG NẰM TRONG HÌNH VUÔNG BO GÓC */}
+      {/* 4 Nhãn chức danh CHỈ GHI CHỮ KÝ HIỆU, BỎ VIỀN ĐÓNG KHUNG TRÁNH TRÀN Ô KHI TẢI PNG */}
       {/* TRÁI - TRÊN: Điều hành */}
       {dieuHanh && (
         <span
-          className="absolute top-1.5 left-1.5 z-10 bg-amber-500 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-amber-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute top-1 left-1.5 z-10 font-extrabold text-[8px] leading-none text-amber-800 pointer-events-none print:text-black truncate max-w-[42px]"
           title={`Điều hành: ${dieuHanh}`}
         >
           {dieuHanh}
@@ -104,7 +119,7 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
       {/* PHẢI - TRÊN: Đoàn */}
       {doan && (
         <span
-          className="absolute top-1.5 right-1.5 z-10 bg-blue-700 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-blue-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute top-1 right-1.5 z-10 font-extrabold text-[8px] leading-none text-blue-800 pointer-events-none print:text-black truncate max-w-[42px]"
           title={`Đoàn: ${doan}`}
         >
           {doan}
@@ -112,18 +127,18 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
       )}
 
       {/* Vòng Tròn Icon Nam / Nữ ở Trung Tâm (Sạch sẽ không bị nhãn che) */}
-      <div className="w-11 h-11 mx-auto rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0 my-1 shadow-2xs">
+      <div className="w-11 h-11 mx-auto rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0 my-1 shadow-2xs print:bg-white print:border-slate-800">
         {checkFemale ? (
-          <IconNu className="w-10 h-10 text-rose-600" />
+          <IconNu className="w-10 h-10 text-rose-600 print:text-black" />
         ) : (
-          <IconNam className="w-10 h-10 text-indigo-700" />
+          <IconNam className="w-10 h-10 text-indigo-700 print:text-black" />
         )}
       </div>
 
       {/* TRÁI - DƯỚI: Tổ */}
       {to && (
         <span
-          className="absolute bottom-6 left-1.5 z-10 bg-indigo-600 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-indigo-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute bottom-5 left-1.5 z-10 font-extrabold text-[8px] leading-none text-indigo-800 pointer-events-none print:text-black truncate max-w-[42px]"
           title={`Tổ: ${to}`}
         >
           {to}
@@ -133,7 +148,7 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
       {/* PHẢI - DƯỚI: BCS Bộ môn */}
       {mon && (
         <span
-          className="absolute bottom-6 right-1.5 z-10 bg-emerald-600 text-white font-black text-[9px] leading-tight px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs max-w-[34px] truncate"
+          className="absolute bottom-5 right-1.5 z-10 font-extrabold text-[8px] leading-none text-emerald-800 pointer-events-none print:text-black truncate max-w-[42px]"
           title={`BCS Môn: ${mon}`}
         >
           {mon}
@@ -142,7 +157,7 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
 
       {/* HIỂN THỊ DUY NHẤT BIỆT DANH HỌC SINH */}
       <div className="w-full">
-        <div className="font-black text-xs text-slate-900 truncate px-0.5" title={fullName ? `Họ tên: ${fullName}` : nickname}>
+        <div className="font-black text-xs text-slate-900 print:text-black truncate px-0.5" title={fullName ? `Họ tên: ${fullName}` : nickname}>
           {nickname}
         </div>
       </div>
@@ -168,16 +183,37 @@ export interface StudentCardData {
   titles: string[];
 }
 
-// Cấu hình 4 Tổ & Số Bàn liên tiếp (Mặc định)
+export interface SoDoLopSaveData {
+  headerInfo: {
+    department: string;
+    schoolName: string;
+    className: string;
+    academicYear: string;
+    applyWeek: string;
+    teacherName: string;
+    teacherPhone: string;
+  };
+  seatsPerDesk: number;
+  customDeskSeats: Record<string, number>;
+  applyWeekNum: number;
+  viewPerspective: 'up' | 'down';
+  paperOrientation: 'landscape' | 'portrait';
+  doorOnLeft: boolean;
+  teamsConfig: { id: string; name: string; desks: number[]; rowLabel: string }[];
+  students: StudentCardData[];
+  rawStudentsText: string;
+}
+
+// Cấu hình 4 Tổ & Số Bàn liên tiếp (Đổi vị trí Tổ 2 và Tổ 3: Dãy 2 bàn 1-3 là Tổ 3)
 export const DEFAULT_TEAMS_CONFIG = [
-  { id: 'team_1', name: 'Tổ 1', desks: [1, 2, 3], rowLabel: 'Dãy 1 - Phía Trên' },
-  { id: 'team_2', name: 'Tổ 2', desks: [1, 2, 3], rowLabel: 'Dãy 2 - Phía Trên' },
-  { id: 'team_3', name: 'Tổ 3', desks: [4, 5, 6], rowLabel: 'Dãy 1 - Phía Dưới' },
-  { id: 'team_4', name: 'Tổ 4', desks: [4, 5, 6], rowLabel: 'Dãy 2 - Phía Dưới' },
+  { id: 'team_1', name: 'Tổ 1', desks: [1, 2, 3], rowLabel: 'Dãy 1 - Bàn 1 đến 3' },
+  { id: 'team_3', name: 'Tổ 3', desks: [1, 2, 3], rowLabel: 'Dãy 2 - Bàn 1 đến 3' },
+  { id: 'team_2', name: 'Tổ 2', desks: [4, 5, 6], rowLabel: 'Dãy 1 - Bàn 4 đến 6' },
+  { id: 'team_4', name: 'Tổ 4', desks: [4, 5, 6], rowLabel: 'Dãy 2 - Bàn 4 đến 6' },
 ];
 
 // Key badge mappings
-const EXEC_TITLES = ['LT', 'PHT', 'TQ', 'CD', 'PLĐ']; // Ban Điều Hành (Red/Yellow)
+const EXEC_TITLES = ['LT', 'PHT', 'TQ', 'CĐ', 'CD', 'PLĐ', 'VTM']; // Ban Điều Hành (Red/Yellow)
 const DOAN_TITLES = ['BT', 'PBT', 'UV'];            // Công tác Đoàn (Dark Blue)
 const TEAM_TITLES = ['TT', 'TP'];                   // Cán sự Tổ (Green)
 const SUBJECT_TITLES = ['TOÁN', 'LÝ', 'HÓA', 'SINH', 'TIN', 'ANH', 'VĂN', 'SỬ', 'ĐỊA', 'KTPL', 'TOAN', 'LY', 'HOA']; // Cán sự Bộ Môn (Orange/Purple)
@@ -192,26 +228,56 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   // Raw input string parser
   const [rawStudentsText, setRawStudentsText] = useState<string>(
-    'Nguyễn Văn An; AnGV; Nam; Tổ 1; LT.PLĐ; BT.TT.Toán\n' +
-    'Lê Minh Khang; KhangKhang; Nam; Tổ 1; student; PHT.UV.Lý\n' +
-    'Trần Thị Mai; MaiMai; Nữ; Tổ 1; student; TP.Hóa\n' +
-    'Phạm Hoàng Nam; NamNam; Nam; Tổ 1; student; TQ.Sinh\n' +
-    'Đỗ Thu Hà; HàHà; Nữ; Tổ 2; student; CD.Tin\n' +
-    'Vũ Quốc Tuấn; TuấnT; Nam; Tổ 2; student; Anh\n' +
-    'Nguyễn Thị Yến; YếnNhi; Nữ; Tổ 2; student; Văn\n' +
-    'Bùi Văn Hùng; HùngB; Nam; Tổ 3; student; Sử\n' +
-    'Lâm Thu Trang; TrangT; Nữ; Tổ 3; student; Địa\n' +
-    'Hoàng Minh Trí; TríM; Nam; Tổ 4; student; KTPL\n' +
-    'Phạm Thanh Hà; HàPhạm; Nữ; Tổ 4; student; PBT.TT\n' +
-    'Nguyễn Văn Bình; BìnhB; Nam; ; student; Thành viên\n' +
-    'Trần Thu Cúc; CúcT; Nữ; ; student; Thành viên'
+    'Nguyễn Văn An; AnGV; Nam; Tổ 1; LT, BT, TT, Toán\n' +
+    'Lê Minh Khang; KhangKhang; Nam; Tổ 1; PHT, UV, , Lý\n' +
+    'Trần Thị Mai; MaiMai; Nữ; Tổ 1; , , TP, Hóa\n' +
+    'Phạm Hoàng Nam; NamNam; Nam; Tổ 1; TQ, , , Sinh\n' +
+    'Đỗ Thu Hà; HàHà; Nữ; Tổ 2; CĐ, , , Tin\n' +
+    'Vũ Quốc Tuấn; TuấnT; Nam; Tổ 2; , , , Anh\n' +
+    'Nguyễn Thị Yến; YếnNhi; Nữ; Tổ 2; , , , Văn\n' +
+    'Bùi Văn Hùng; HùngB; Nam; Tổ 3; , , , Sử\n' +
+    'Lâm Thu Trang; TrangT; Nữ; Tổ 3; , , , Địa\n' +
+    'Hoàng Minh Trí; TríM; Nam; Tổ 4; , , , KTPL\n' +
+    'Phạm Thanh Hà; HàPhạm; Nữ; Tổ 4; , PBT, TT, \n' +
+    'Nguyễn Văn Bình; BìnhB; Nam; ; , , , \n' +
+    'Trần Thu Cúc; CúcT; Nữ; ; , , , '
   );
 
   const [students, setStudents] = useState<StudentCardData[]>([]);
   const [draggedStudentId, setDraggedStudentId] = useState<string | null>(null);
 
-  // Cấu hình số ghế trên mỗi bàn (Mặc định 3 ghế 1 bàn)
+  // Cấu hình số ghế chung trên mỗi bàn (Mặc định 3 ghế 1 bàn)
   const [seatsPerDesk, setSeatsPerDesk] = useState<number>(3);
+  // Cấu hình riêng số ghế cho TỪNG BÀN (Key: "TênTổ_MãBàn" -> số ghế)
+  const [customDeskSeats, setCustomDeskSeats] = useState<Record<string, number>>({});
+
+  // Áp dụng từ tuần k (k thay đổi được)
+  const [applyWeekNum, setApplyWeekNum] = useState<number>(12);
+  // Trạng thái đang xuất file PNG (để ẩn sạch các nút điều khiển, nhãn bàn, empty placeholder)
+  const [isExportingPNG, setIsExportingPNG] = useState<boolean>(false);
+
+  // States cho Google Drive files
+  const [driveFilesModalOpen, setDriveFilesModalOpen] = useState<boolean>(false);
+  const [driveFiles, setDriveFiles] = useState<DriveStoredFile[]>([]);
+
+  // Góc nhìn Sơ đồ lớp: 'up' = Góc nhìn lên (Từ phía HS lên bảng), 'down' = Góc nhìn xuống (Từ Bàn Giáo Viên)
+  const [viewPerspective, setViewPerspective] = useState<'up' | 'down'>('up');
+  // Khổ giấy A4: 'landscape' = A4 Ngang (Đề xuất), 'portrait' = A4 Dọc
+  const [paperOrientation, setPaperOrientation] = useState<'landscape' | 'portrait'>('landscape');
+  // Vị trí Cửa ra vào: true = bên trái (mặc định), false = bên phải (đổi vị trí với Bàn GV)
+  const [doorOnLeft, setDoorOnLeft] = useState<boolean>(true);
+
+  // Tính tên năm học tự động (Bắt đầu từ tháng 8 đến hết tháng 5 năm sau)
+  const getDynamicAcademicYear = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1; // 1 - 12
+    if (month >= 8) {
+      return `${year} - ${year + 1}`;
+    } else {
+      return `${year - 1} - ${year}`;
+    }
+  };
 
   // Danh sách các Tổ (Cho phép giáo viên đổi tên Tổ hoặc chọn từ phân tổ lớp)
   const [teamsConfig, setTeamsConfig] = useState(DEFAULT_TEAMS_CONFIG);
@@ -231,14 +297,14 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const [pickerTeamFilter, setPickerTeamFilter] = useState<string>('all');
 
   // Config Header
-  const [headerInfo] = useState({
+  const [headerInfo, setHeaderInfo] = useState({
     department: 'Sở GD&ĐT TP. Hồ Chí Minh',
     schoolName: 'THPT Chuyên Nguyễn Trãi',
     className: 'Lớp 10A1',
     academicYear: '2026 - 2027',
     applyWeek: 'Tuần 12 (Áp dụng từ 15/11)',
     teacherName: 'Đỗ Tấn Bảo',
-    teacherPhone: '0988.123.456',
+    teacherPhone: '039 447 9986',
   });
 
   useEffect(() => {
@@ -357,11 +423,34 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       const gender = parts[2] || (idx % 2 === 0 ? 'Nam' : 'Nữ');
       const teamRaw = parts[3] || '';
       
-      const rolesRaw = parts[4] || '';
-      const titlesRaw = parts[5] || '';
+      let roles: string[] = [];
+      let titles: string[] = [];
 
-      const roles = rolesRaw.split(/[.,]/).map(r => r.trim()).filter(Boolean);
-      const titles = titlesRaw.split(/[.,]/).map(t => t.trim()).filter(Boolean);
+      // Parse the new 4-field comma-separated roles format: Chức danh điều hành, chức danh đoàn, chức danh tổ, chức danh bộ môn
+      if (parts.length >= 5) {
+        const subParts = parts[4].split(',').map(s => s.trim());
+        const execTitle = subParts[0] || '';
+        const unionTitle = subParts[1] || '';
+        const teamTitle = subParts[2] || '';
+        const subjectTitle = subParts[3] || '';
+
+        if (execTitle) {
+          titles.push(execTitle);
+          roles.push(execTitle);
+        }
+        if (unionTitle) {
+          titles.push(unionTitle);
+          roles.push(unionTitle);
+        }
+        if (teamTitle) titles.push(teamTitle);
+        if (subjectTitle) titles.push(subjectTitle);
+      } else {
+        // Fallback for older format if parts[5] exists
+        const rolesRaw = parts[4] || '';
+        const titlesRaw = parts[5] || '';
+        roles = rolesRaw.split(/[.,]/).map(r => r.trim()).filter(Boolean);
+        titles = titlesRaw.split(/[.,]/).map(t => t.trim()).filter(Boolean);
+      }
 
       let team = teamRaw;
       let desk = 0;
@@ -587,34 +676,363 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
     setTimeout(() => setSyncMessage(null), 3000);
   };
 
-  // In Sơ Đồ Khổ Giấy A4 Dọc
-  const handlePrintA4 = () => {
-    window.print();
+  // Tải Sơ đồ lớp thành file ảnh PNG sắc nét (CHỈ TẢI KHUNG SƠ ĐỒ LỚP HỌC SẠCH SẼ)
+  const handleDownloadPNG = async () => {
+    const el = document.getElementById('seating-diagram-only') || document.getElementById('a4-seating-chart-container');
+    if (!el) {
+      window.print();
+      return;
+    }
+
+    try {
+      setSyncMessage('Đang chuẩn bị dữ liệu sơ đồ lớp sạch sẽ...');
+      setIsExportingPNG(true);
+
+      // Chờ React re-render DOM sang trạng thái sơ đồ sạch (không nút bấm, không nhãn rác)
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      setSyncMessage('Đang khởi tạo file PNG sơ đồ lớp sắc nét...');
+      const dataUrl = await toPng(el, {
+        quality: 0.98,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        skipFonts: true,
+        fontEmbedCSS: '',
+      });
+
+      const link = document.createElement('a');
+      const cleanClassName = headerInfo.className.replace(/\s+/g, '_');
+      link.download = `SoDoLop_${cleanClassName}_Tuan${applyWeekNum}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      setSyncMessage('Đã tải hình ảnh PNG sơ đồ lớp thành công!');
+    } catch (err) {
+      console.error('Lỗi khi xuất PNG:', err);
+      window.print();
+    } finally {
+      setIsExportingPNG(false);
+      setTimeout(() => setSyncMessage(null), 3000);
+    }
   };
 
-  const handleSaveToDrive = async () => {
-    const plan: ClassSeatingPlan = {
-      classId: selectedClassId,
-      className: headerInfo.className,
-      room: 'Phòng 204',
-      teacherName: headerInfo.teacherName,
-      academicYear: headerInfo.academicYear,
-      seats: students.map((s, idx) => ({
-        id: `seat_${s.id}`,
-        row: s.desk,
-        col: s.seatCol || (idx % seatsPerDesk) + 1,
-        studentId: s.id,
-        studentName: s.name,
-        studentCode: `${s.team || 'Chưa xếp'} • Bàn ${s.desk || 0}`,
-        status: 'present',
-        notes: `Biệt danh: ${s.nickname || 'Không'} | Chức danh: ${s.titles.join(', ')}`,
-      })),
-    };
+  const loadDataIntoState = (data: SoDoLopSaveData) => {
+    if (data.headerInfo) setHeaderInfo(data.headerInfo);
+    if (data.seatsPerDesk !== undefined) setSeatsPerDesk(data.seatsPerDesk);
+    if (data.customDeskSeats) setCustomDeskSeats(data.customDeskSeats);
+    if (data.applyWeekNum !== undefined) setApplyWeekNum(data.applyWeekNum);
+    if (data.viewPerspective) setViewPerspective(data.viewPerspective);
+    if (data.paperOrientation) setPaperOrientation(data.paperOrientation);
+    if (data.doorOnLeft !== undefined) setDoorOnLeft(data.doorOnLeft);
+    if (data.teamsConfig) setTeamsConfig(data.teamsConfig);
+    if (data.students) setStudents(data.students);
+    if (data.rawStudentsText) setRawStudentsText(data.rawStudentsText);
+  };
 
-    await saveSeatingChartToDrive(selectedClassId, plan);
-    await savePersonalSeatingPlanToDrive(plan);
-    setSyncMessage('Đã lưu Sơ đồ lớp & vị trí ngồi lên Google Drive!');
-    setTimeout(() => setSyncMessage(null), 3500);
+  const handleDownloadTemplate = async () => {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('DS_Mau_So_Do_Lop');
+
+      // Define columns with headers and widths
+      worksheet.columns = [
+        { header: 'STT', key: 'stt', width: 8 },
+        { header: 'Họ và tên', key: 'name', width: 25 },
+        { header: 'Nickname', key: 'nickname', width: 15 },
+        { header: 'Giới tính', key: 'gender', width: 15 },
+        { header: 'Phân tổ', key: 'team', width: 15 },
+        { header: 'Chức danh điều hành', key: 'exec_role', width: 20 },
+        { header: 'Chức danh đoàn', key: 'union_role', width: 18 },
+        { header: 'Chức danh tổ', key: 'team_role', width: 15 },
+        { header: 'Chức danh bộ môn', key: 'subject_role', width: 22 },
+      ];
+
+      // 5 illustrative sample rows with custom data showing valid options
+      const sampleRows = [
+        [1, 'Nguyễn Văn An', 'AnGV', 'Nam', 'Tổ 1', 'LT', 'BT', 'TT', 'Toán'],
+        [2, 'Lê Minh Khang', 'KhangKhang', 'Nam', 'Tổ 1', 'student', '', '', 'Lý'],
+        [3, 'Trần Thị Mai', 'MaiMai', 'Nữ', 'Tổ 2', 'student', 'UV', 'TP', 'Hóa'],
+        [4, 'Phạm Hoàng Nam', 'NamNam', 'Nam', 'Tổ 3', 'PHT', '', '', 'Sinh'],
+        [5, 'Đỗ Thu Hà', 'HàHà', 'Nữ', 'Tổ 4', 'student', 'PBT', '', 'Anh']
+      ];
+
+      sampleRows.forEach(row => {
+        worksheet.addRow(row);
+      });
+
+      // Style Header row
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { name: 'Arial', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4F46E5' } // Indigo color
+      };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Apply validations to rows 2 through 100
+      for (let i = 2; i <= 100; i++) {
+        // Col D: Giới tính
+        worksheet.getCell(`D${i}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"Nam,Nữ"'],
+          showErrorMessage: true,
+          errorTitle: 'Dữ liệu không hợp lệ',
+          error: 'Vui lòng chọn Giới tính trong danh sách: Nam, Nữ'
+        };
+
+        // Col E: Phân tổ
+        worksheet.getCell(`E${i}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"Tổ 1,Tổ 2,Tổ 3,Tổ 4"'],
+          showErrorMessage: false,
+        };
+
+        // Col F: Chức danh điều hành
+        worksheet.getCell(`F${i}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"LT,PHT,TQ,CĐ,PLĐ,VTM"'],
+          showErrorMessage: false,
+        };
+
+        // Col G: Chức danh đoàn
+        worksheet.getCell(`G${i}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"BT,PBT,UV"'],
+          showErrorMessage: false,
+        };
+
+        // Col H: Chức danh tổ
+        worksheet.getCell(`H${i}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"TT,TP"'],
+          showErrorMessage: false,
+        };
+
+        // Col I: Chức danh bộ môn
+        worksheet.getCell(`I${i}`).dataValidation = {
+          type: 'list',
+          allowBlank: true,
+          formulae: ['"Toán,Văn,Anh,Lý,Hóa,Sinh,Tin,Sử,Địa,KTPL,HĐHN,GDQP,GDTC,Nhạc,Vẽ,GDĐP"'],
+          showErrorMessage: false,
+        };
+      }
+
+      // Generate and trigger download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'Mau_Danh_Sach_Hoc_Sinh_So_Do_Lop.xlsx';
+      link.click();
+
+      setSyncMessage('Đã tải xuống file Excel danh sách mẫu có tích hợp danh sách chọn (Dropdown) thành công!');
+      setTimeout(() => setSyncMessage(null), 3500);
+    } catch (err) {
+      console.error(err);
+      alert('Đã xảy ra lỗi khi tạo file mẫu Excel.');
+    }
+  };
+
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = read(data, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = utils.sheet_to_json<any>(sheet);
+
+        if (jsonData.length === 0) {
+          alert('File Excel trống hoặc không hợp lệ.');
+          return;
+        }
+
+        // Convert rows to text structure: [Họ tên; Biệt danh; Giới tính; Tổ; Vai trò; Chức danh]
+        const lines = jsonData.map((row) => {
+          const name = (row['Họ và tên'] || row['Họ tên'] || row['Họ Tên'] || '').toString().trim();
+          const nickname = (row['Nickname'] || row['Biệt danh'] || '').toString().trim();
+          const gender = (row['Giới tính'] || '').toString().trim();
+          const team = (row['Phân tổ'] || row['Tổ'] || row['To'] || row['Nhóm'] || '').toString().trim();
+          
+          let execRole = (row['Chức danh điều hành'] || '').toString().trim();
+          let unionRole = (row['Chức danh đoàn'] || '').toString().trim();
+          let teamRole = (row['Chức danh tổ'] || '').toString().trim();
+          let subjectRole = (row['Chức danh bộ môn'] || '').toString().trim();
+
+          const cleanExec = (execRole.toLowerCase() === 'student' || execRole.toLowerCase() === 'thành viên') ? '' : execRole;
+          const cleanUnion = (unionRole.toLowerCase() === 'student' || unionRole.toLowerCase() === 'thành viên') ? '' : unionRole;
+          const cleanTeam = (teamRole.toLowerCase() === 'student' || teamRole.toLowerCase() === 'thành viên') ? '' : teamRole;
+          const cleanSubject = (subjectRole.toLowerCase() === 'student' || subjectRole.toLowerCase() === 'thành viên') ? '' : subjectRole;
+
+          // Standard comma-separated roles block: Chức danh điều hành, chức danh đoàn, chức danh tổ, chức danh bộ môn
+          const roleTitlePart = `${cleanExec}, ${cleanUnion}, ${cleanTeam}, ${cleanSubject}`;
+
+          return `${name}; ${nickname}; ${gender}; ${team}; ${roleTitlePart}`;
+        });
+
+        const newText = lines.join('\n');
+        setRawStudentsText(newText);
+        parseRawTextToStudents(newText);
+        setSyncMessage('Đã tải lên file Excel và chuẩn hóa dữ liệu học sinh thành công!');
+        setTimeout(() => setSyncMessage(null), 3500);
+      } catch (err) {
+        console.error(err);
+        alert('Đã xảy ra lỗi khi đọc file Excel. Vui lòng kiểm tra lại định dạng.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const handleUploadToDrive = async () => {
+    try {
+      const cleanClassName = headerInfo.className.replace(/^Lớp\s*/i, '').trim().replace(/\s+/g, '_');
+      const fileName = `SoDoLop_${cleanClassName}_Tuan${applyWeekNum}.json`;
+
+      const saveData: SoDoLopSaveData = {
+        headerInfo,
+        seatsPerDesk,
+        customDeskSeats,
+        applyWeekNum,
+        viewPerspective,
+        paperOrientation,
+        doorOnLeft,
+        teamsConfig,
+        students,
+        rawStudentsText,
+      };
+
+      // Save into our simulated list of Drive files
+      const storedRaw = localStorage.getItem('lopu_google_drive_files_v1') || '[]';
+      let files: DriveStoredFile[] = [];
+      try {
+        files = JSON.parse(storedRaw);
+      } catch (e) {
+        files = [];
+      }
+
+      const fileId = `gdrive_seat_${Date.now()}`;
+      const newFileItem: DriveStoredFile = {
+        id: fileId,
+        name: fileName,
+        mimeType: 'application/json',
+        category: 'personal_seating',
+        size: `${(JSON.stringify(saveData).length / 1024).toFixed(1)} KB`,
+        modifiedTime: new Date().toLocaleString('vi-VN'),
+        classId: selectedClassId,
+        content: saveData,
+      };
+
+      // Replace if same name, otherwise unshift
+      const existingIdx = files.findIndex(f => f.name === fileName);
+      if (existingIdx >= 0) {
+        newFileItem.id = files[existingIdx].id;
+        files[existingIdx] = newFileItem;
+      } else {
+        files.unshift(newFileItem);
+      }
+
+      localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
+
+      const conn = getDriveConnectionState();
+      const cleanFileName = fileName.replace('.json', '');
+      if (conn.isConnected && conn.isRealConfigured) {
+        try {
+          // Upload to real Drive using existing driveService API
+          const planLegacy: ClassSeatingPlan = {
+            classId: selectedClassId,
+            className: headerInfo.className,
+            room: 'Phòng 204',
+            teacherName: headerInfo.teacherName,
+            academicYear: headerInfo.academicYear,
+            seats: students.map((s, idx) => ({
+              id: `seat_${s.id}`,
+              row: s.desk,
+              col: s.seatCol || (idx % seatsPerDesk) + 1,
+              studentId: s.id,
+              studentName: s.name,
+              studentCode: `${s.team || 'Chưa xếp'} • Bàn ${s.desk || 0}`,
+              status: 'present',
+              notes: `Biệt danh: ${s.nickname || 'Không'} | Chức danh: ${s.titles.join(', ')}`,
+            })),
+          };
+          await saveSeatingChartToDrive(selectedClassId, planLegacy);
+          await savePersonalSeatingPlanToDrive(planLegacy);
+          setSyncMessage(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
+        } catch (realErr) {
+          console.warn('Real Drive upload failed, saved to sandbox:', realErr);
+          setSyncMessage(`Đã lưu file ${cleanFileName} vào bộ nhớ tạm Drive (Sandbox Mode)!`);
+        }
+      } else {
+        setSyncMessage(`Đã tải lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
+      }
+
+      setTimeout(() => setSyncMessage(null), 3500);
+    } catch (err) {
+      console.error(err);
+      alert('Đã xảy ra lỗi khi tải lên Drive.');
+    }
+  };
+
+  const handleOpenDriveFiles = async () => {
+    const storedRaw = localStorage.getItem('lopu_google_drive_files_v1') || '[]';
+    let files: DriveStoredFile[] = [];
+    try {
+      files = JSON.parse(storedRaw);
+    } catch (e) {
+      files = [];
+    }
+
+    const seatingFiles = files.filter(f => f.category === 'personal_seating' || f.name.startsWith('SoDoLop_'));
+    setDriveFiles(seatingFiles);
+    setDriveFilesModalOpen(true);
+  };
+
+  const handleApplyDriveFile = (file: DriveStoredFile) => {
+    try {
+      const data = file.content as SoDoLopSaveData;
+      loadDataIntoState(data);
+
+      // Trigger file download to computer
+      downloadFileJson(file);
+
+      setSyncMessage(`Đã nạp sơ đồ & Tải file ${file.name} về máy thành công!`);
+      setDriveFilesModalOpen(false);
+      setTimeout(() => setSyncMessage(null), 3500);
+    } catch (err) {
+      console.error(err);
+      alert('Đã xảy ra lỗi khi nạp dữ liệu từ file Drive.');
+    }
+  };
+
+  const handleDeleteDriveFile = (fileId: string) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa file này khỏi Drive không?')) return;
+
+    const storedRaw = localStorage.getItem('lopu_google_drive_files_v1') || '[]';
+    let files: DriveStoredFile[] = [];
+    try {
+      files = JSON.parse(storedRaw);
+    } catch (e) {
+      files = [];
+    }
+
+    const filtered = files.filter(f => f.id !== fileId);
+    localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(filtered));
+
+    setDriveFiles(prev => prev.filter(f => f.id !== fileId));
+    setSyncMessage('Đã xóa file trên Drive thành công!');
+    setTimeout(() => setSyncMessage(null), 2500);
   };
 
   // Lọc học sinh chưa xếp chỗ
@@ -671,7 +1089,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   }
 
   return (
-    <div id="learning-seating-view" className="space-y-6">
+    <div id="a4-seating-chart-container" className="space-y-6 bg-white p-2 rounded-2xl">
       {/* CSS In Ấn Khổ A4 Dọc */}
       <style>{`
         @media print {
@@ -716,21 +1134,9 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       )}
 
       {/* HEADER CỐ ĐỊNH BAN GIÁM HIỆU & KHUNG TRƯỜNG */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 print:p-2 print:border-b print:rounded-none">
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100 print:pb-2">
-          <div>
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-indigo-600 print:text-black">
-              {headerInfo.department}
-            </span>
-            <h1 className="text-xl font-black text-slate-900 tracking-tight print:text-lg">
-              {headerInfo.schoolName} — {headerInfo.className}
-            </h1>
-            <p className="text-xs text-slate-500 mt-0.5 print:text-slate-700">
-              Sơ đồ vị trí học sinh • Năm học {headerInfo.academicYear} • {headerInfo.applyWeek}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-3 print:hidden">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 print:hidden">
+        <div className="flex flex-wrap items-center justify-end gap-4 pb-4 border-b border-slate-100">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Cấu hình số ghế trên bàn */}
             <div className="flex items-center gap-2 bg-indigo-50/80 border border-indigo-200/80 px-3 py-1.5 rounded-xl shadow-2xs">
               <span className="text-[11px] font-black text-indigo-900 whitespace-nowrap">Số ghế/bàn:</span>
@@ -747,24 +1153,28 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
               </select>
             </div>
 
-            <div className="text-right text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">GVCN</span>
-              <strong className="text-xs font-extrabold text-slate-900">{headerInfo.teacherName}</strong>
-              <div className="flex items-center gap-1 text-[11px] text-slate-500 justify-end mt-0.5">
-                <Phone className="w-3 h-3 text-indigo-600" />
-                <span>{headerInfo.teacherPhone}</span>
+            <div className="text-right text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex flex-col gap-1.5 min-w-[140px]">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400">GVCN:</span>
+                <input
+                  type="text"
+                  value={headerInfo.teacherName}
+                  onChange={e => setHeaderInfo(prev => ({ ...prev, teacherName: e.target.value }))}
+                  className="w-24 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-bold text-slate-900 focus:outline-hidden"
+                  title="Sửa tên GVCN"
+                />
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400">SĐT:</span>
+                <input
+                  type="text"
+                  value={headerInfo.teacherPhone}
+                  onChange={e => setHeaderInfo(prev => ({ ...prev, teacherPhone: e.target.value }))}
+                  className="w-24 bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-bold text-slate-900 focus:outline-hidden"
+                  title="Sửa SĐT GVCN"
+                />
               </div>
             </div>
-
-            <button
-              id="btn-print-seating-a4"
-              onClick={handlePrintA4}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-xs cursor-pointer transition-colors"
-              title="In Sơ đồ lớp khổ A4 Dọc"
-            >
-              <Printer className="w-4 h-4 text-amber-400" />
-              <span>In A4 Dọc</span>
-            </button>
 
             <button
               id="btn-sync-all-teams"
@@ -777,12 +1187,23 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             </button>
 
             <button
-              id="btn-save-seating-drive"
-              onClick={handleSaveToDrive}
+              id="btn-upload-drive"
+              onClick={handleUploadToDrive}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer transition-colors"
+              title="Tải cấu trúc sơ đồ lớp lên Google Drive"
             >
               <Cloud className="w-4 h-4" />
-              <span>Lưu Drive</span>
+              <span>Tải lên Drive</span>
+            </button>
+
+            <button
+              id="btn-download-drive"
+              onClick={handleOpenDriveFiles}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs cursor-pointer transition-colors"
+              title="Xem danh sách file và tải về từ Drive"
+            >
+              <Download className="w-4 h-4" />
+              <span>Tải Drive về</span>
             </button>
 
             <button
@@ -802,12 +1223,37 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
               <Users className="w-4 h-4 text-indigo-600" />
-              Nhập Cấu Trúc Học Sinh [Họ tên; Biệt danh; Giới tính; Tổ; Vai trò; Chức danh]
+              Nhập Cấu Trúc Học Sinh [Họ tên; Biệt danh; Giới tính; Tổ; Điều hành, Đoàn, Tổ, Bộ môn]
             </label>
             <div className="flex items-center gap-2">
               <button
+                onClick={handleDownloadTemplate}
+                className="text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-3xs"
+                title="Tải xuống file Excel danh sách mẫu chuẩn"
+              >
+                <Download className="w-3 h-3" />
+                <span>Tải DS mẫu</span>
+              </button>
+
+              <label
+                htmlFor="excel-upload-input"
+                className="text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-3xs"
+                title="Tải lên file Excel danh sách học sinh"
+              >
+                <Download className="w-3 h-3 rotate-180" />
+                <span>Tải lên Excel</span>
+              </label>
+              <input
+                type="file"
+                id="excel-upload-input"
+                accept=".xlsx, .xls"
+                className="hidden"
+                onChange={handleExcelUpload}
+              />
+
+              <button
                 onClick={handleAutoAssignSeating}
-                className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer"
+                className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-3xs"
               >
                 <RefreshCw className="w-3 h-3" />
                 <span>Auto Xếp Nhanh ({unassignedStudents.length})</span>
@@ -824,16 +1270,79 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
           />
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-            <div className="flex items-center gap-3 text-xs font-bold text-slate-700 bg-slate-100/80 px-3 py-1.5 rounded-xl border border-slate-200">
-              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-extrabold">Ký Hiệu Sơ Đồ:</span>
-              <div className="flex items-center gap-1.5">
-                <IconNam className="w-4 h-4 text-indigo-700" />
-                <span className="text-[11px]">IconNam</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Chuyển Góc Nhìn (Lên / Xuống) */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <button
+                  onClick={() => setViewPerspective('up')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                    viewPerspective === 'up'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Góc nhìn lên: Từ phía học sinh nhìn lên Bảng / Bàn GV"
+                >
+                  👁️ Nhìn lên
+                </button>
+                <button
+                  onClick={() => setViewPerspective('down')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                    viewPerspective === 'down'
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Góc nhìn xuống: Từ Bàn Giáo Viên nhìn xuống lớp (Chữ xoay 180°)"
+                >
+                  👨‍🏫 Nhìn xuống
+                </button>
               </div>
-              <div className="flex items-center gap-1.5 border-l border-slate-300 pl-3">
-                <IconNu className="w-4 h-4 text-rose-600" />
-                <span className="text-[11px]">IconNu</span>
+
+              {/* Chuyển Khổ Giấy A4 (Ngang / Dọc) */}
+              <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-2xs">
+                <button
+                  onClick={() => setPaperOrientation('landscape')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                    paperOrientation === 'landscape'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Sơ đồ lớp khổ A4 Ngang (Rộng rãi, tối ưu)"
+                >
+                  📄 A4 Ngang
+                </button>
+                <button
+                  onClick={() => setPaperOrientation('portrait')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer transition-all ${
+                    paperOrientation === 'portrait'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                  title="Sơ đồ lớp khổ A4 Dọc"
+                >
+                  📄 A4 Dọc
+                </button>
               </div>
+
+              {/* Đổi vị trí Cửa ⇄ Bàn GV */}
+              <button
+                type="button"
+                onClick={() => setDoorOnLeft(prev => !prev)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 transition-colors cursor-pointer shadow-2xs"
+                title="Bấm để đổi vị trí Cửa ra vào với Bàn giáo viên (Trái ⇄ Phải)"
+              >
+                <ArrowRightLeft className="w-3.5 h-3.5 text-amber-700" />
+                <span>Đổi Cửa ⇄ Bàn GV</span>
+              </button>
+
+              <button
+                id="btn-download-png"
+                onClick={handleDownloadPNG}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-800 hover:bg-slate-900 text-white shadow-xs cursor-pointer transition-colors"
+                title="Tải Sơ đồ lớp thành file ảnh PNG"
+              >
+                <Download className="w-4 h-4 text-amber-400" />
+                <span>Tải PNG</span>
+              </button>
             </div>
 
             <button
@@ -848,123 +1357,211 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         </div>
       </div>
 
-      {/* BỤC GIẢNG & BẢNG PHẤN */}
-      <div className="max-w-md mx-auto">
-        <div className="py-2 px-6 rounded-xl bg-slate-800 text-white text-center shadow-xs print:bg-slate-900 print:text-white">
-          <span className="text-xs font-black uppercase tracking-widest text-slate-200">
-            BỤC GIẢNG & BẢNG PHẤN GIÁO VIÊN
-          </span>
-          <span className="block text-[10px] text-slate-400 mt-0.5 print:text-slate-300">
-            GVCN: {headerInfo.teacherName} • SĐT: {headerInfo.teacherPhone}
-          </span>
-        </div>
-        <div className="w-24 h-1 bg-indigo-500 mx-auto rounded-b-md" />
-      </div>
-
-      {/* CHÍNH: BỐ CỤC KHỔ A4 DỌC & THANH CHƯA XẾP CHỖ BÊN PHẢI */}
+      {/* CHÍNH: BỐ CỤC KHỔ A4 & THANH CHƯA XẾP CHỖ BÊN PHẢI */}
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
         
-        {/* LỀ TRÁI: KHUNG SƠ ĐỒ LỚP HỌC (3 CỘT LG) */}
-        <div className="lg:col-span-3 space-y-4">
-          
-          {/* BỐ CỤC CÁC TỔ & SỐ BÀN DỌC */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* VÙNG SƠ ĐỒ LỚP HỌC (CHỈ DUY NHẤT KHUNG NÀY ĐƯỢC XUẤT THÀNH FILE PNG) */}
+        <div
+          id="seating-diagram-only"
+          className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-4 ${
+            isExportingPNG ? 'lg:col-span-4 w-full' : 'lg:col-span-3'
+          }`}
+        >
+          {/* TIÊU ĐỀ SƠ ĐỒ LỚP, CỬA RA VÀO, BẢNG & BÀN GIÁO VIÊN (LUÔN CỐ ĐỊNH Ở TRÊN CÙNG) */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            {/* CỬA RA VÀO BLOCK */}
+            {(() => {
+              const DoorBlock = (
+                <div key="door-block" className="py-2.5 px-3.5 rounded-xl bg-slate-100 border-2 border-slate-300 text-slate-900 text-center font-black text-xs uppercase tracking-wider print:bg-white print:border-black print:text-black shadow-2xs shrink-0">
+                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                    🚪 CỬA RA VÀO
+                  </div>
+                </div>
+              );
+
+              const TeacherDeskBlock = (
+                <div key="teacher-block" className="py-2 px-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-center font-black text-xs uppercase tracking-wider print:bg-white print:border-black print:text-black shadow-2xs shrink-0">
+                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                    <div>💼 BÀN GIÁO VIÊN</div>
+                    {isExportingPNG ? (
+                      <div className="text-[10px] text-amber-900 font-bold normal-case mt-0.5 print:text-black flex flex-col gap-0.5">
+                        <div>GVCN: {headerInfo.teacherName}</div>
+                        <div>SĐT: {headerInfo.teacherPhone}</div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center justify-center gap-1.5 text-[10px] text-amber-900 font-bold normal-case mt-0.5">
+                        <div className="flex items-center gap-1">
+                          <span>GVCN:</span>
+                          <input
+                            type="text"
+                            value={headerInfo.teacherName}
+                            onChange={e => setHeaderInfo(prev => ({ ...prev, teacherName: e.target.value }))}
+                            className="w-24 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
+                            title="Bấm để sửa tên GVCN"
+                          />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span>SĐT:</span>
+                          <input
+                            type="text"
+                            value={headerInfo.teacherPhone}
+                            onChange={e => setHeaderInfo(prev => ({ ...prev, teacherPhone: e.target.value }))}
+                            className="w-24 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
+                            title="Bấm để sửa SĐT GVCN"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+
+              const BoardBlock = (
+                <div key="board-block" className="flex-1 max-w-md text-center px-1">
+                  <div className="py-2 px-3 rounded-xl bg-slate-50/90 border-2 border-dashed border-slate-300 text-slate-800 text-center shadow-2xs print:bg-white print:border-black">
+                    <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                      <div className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-0.5 print:text-black">
+                        ━━━ 📌 BẢNG ━━━
+                      </div>
+                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-900 print:text-black flex items-center justify-center gap-1.5 flex-wrap">
+                        {isExportingPNG ? (
+                          <span>LỚP {headerInfo.className.replace(/^Lớp\s*/i, '').trim().toUpperCase()} - NĂM HỌC {getDynamicAcademicYear()}</span>
+                        ) : (
+                          <div className="flex items-center gap-1">
+                            <span>LỚP</span>
+                            <input
+                              type="text"
+                              value={headerInfo.className.replace(/^Lớp\s*/i, '')}
+                              onChange={e => setHeaderInfo(prev => ({ ...prev, className: `Lớp ${e.target.value}` }))}
+                              className="w-20 bg-white border border-indigo-300 rounded px-1.5 py-0.5 text-xs font-black text-indigo-950 uppercase text-center focus:outline-hidden"
+                              title="Bấm để sửa tên Lớp"
+                            />
+                            <span>- NĂM HỌC {getDynamicAcademicYear()}</span>
+                          </div>
+                        )}
+                      </span>
+
+                      {/* Chổ tuần áp dụng */}
+                      <div className="mt-1 text-[11px] text-slate-600 font-extrabold flex items-center justify-center gap-1.5 print:text-black">
+                        <span>Áp dụng từ tuần</span>
+                        {isExportingPNG ? (
+                          <span className="font-black text-indigo-950 text-xs px-1">{applyWeekNum}</span>
+                        ) : (
+                          <input
+                            type="number"
+                            min={1}
+                            max={52}
+                            value={applyWeekNum}
+                            onChange={e => setApplyWeekNum(Math.max(1, parseInt(e.target.value) || 1))}
+                            className="w-11 bg-white border border-slate-300 rounded-md px-1 py-0.5 text-center font-black text-indigo-950 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 shadow-2xs print:border-none print:w-auto"
+                            title="Thay đổi số tuần áp dụng"
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+
+              return doorOnLeft ? [DoorBlock, BoardBlock, TeacherDeskBlock] : [TeacherDeskBlock, BoardBlock, DoorBlock];
+            })()}
+          </div>
+
+          {/* BỐ CỤC CÁC TỔ & SỐ BÀN (KHỔ A4 NGANG / DỌC) */}
+          <div className={`grid ${paperOrientation === 'landscape' ? 'grid-cols-1 md:grid-cols-2 gap-4' : 'grid-cols-1 gap-4'}`}>
             {teamsConfig.map(teamConf => {
               const teamName = teamConf.name;
               const teamStudents = students.filter(s => s.team.toLowerCase() === teamName.toLowerCase());
 
-              return (
-                <div
-                  key={teamConf.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 space-y-3 flex flex-col justify-between print:border-slate-300 print:shadow-none"
-                >
-                  {/* Tiêu đề Tổ (Có thể bấm đổi tên) + Nút Xếp Lại Tổ */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                    <div>
-                      {editingTeamId === teamConf.id ? (
-                        <div className="bg-indigo-50/90 border border-indigo-200 p-2.5 rounded-xl space-y-2 my-1 shadow-sm w-full max-w-xs">
-                          <div className="flex items-center justify-between text-[11px] font-black text-indigo-900">
-                            <span>ĐỔI TÊN {teamConf.name.toUpperCase()}:</span>
-                            <button
-                              onClick={() => setEditingTeamId(null)}
-                              className="text-slate-400 hover:text-slate-600 text-xs font-bold"
-                            >
-                              ✕
-                            </button>
-                          </div>
+              // Render Tiêu đề Tổ
+              const renderTeamHeaderUI = () => (
+                <div className={viewPerspective === 'down' ? 'pt-2 border-t border-slate-100' : 'pb-2 border-b border-slate-100'}>
+                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                  <div>
+                    {editingTeamId === teamConf.id ? (
+                      <div className="bg-indigo-50/90 border border-indigo-200 p-2.5 rounded-xl space-y-2 my-1 shadow-sm w-full max-w-xs">
+                        <div className="flex items-center justify-between text-[11px] font-black text-indigo-900">
+                          <span>ĐỔI TÊN {teamConf.name.toUpperCase()}:</span>
+                          <button
+                            onClick={() => setEditingTeamId(null)}
+                            className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                          >
+                            ✕
+                          </button>
+                        </div>
 
-                          {/* Chọn từ phân tổ dữ liệu học sinh */}
-                          {classDataTeams.length > 0 && (
-                            <div className="space-y-1">
-                              <label className="text-[10px] font-extrabold text-slate-600 block">
-                                Chọn từ phân tổ lớp:
-                              </label>
-                              <select
-                                onChange={e => {
-                                  if (e.target.value) {
-                                    setEditingTeamName(e.target.value);
-                                  }
-                                }}
-                                className="w-full text-xs font-bold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                              >
-                                <option value="">-- Danh sách phân tổ trong dữ liệu --</option>
-                                {classDataTeams.map(ct => (
-                                  <option key={ct} value={ct}>
-                                    📌 {ct} ({students.filter(s => s.team.toLowerCase() === ct.toLowerCase()).length} thành viên)
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-
-                          {/* Hoặc nhập tên ngoài */}
+                        {/* Chọn từ phân tổ dữ liệu học sinh */}
+                        {classDataTeams.length > 0 && (
                           <div className="space-y-1">
                             <label className="text-[10px] font-extrabold text-slate-600 block">
-                              Hoặc nhập tên ngoài:
+                              Chọn từ phân tổ lớp:
                             </label>
-                            <input
-                              type="text"
-                              value={editingTeamName}
-                              onChange={e => setEditingTeamName(e.target.value)}
-                              placeholder="Nhập tên tổ..."
-                              className="w-full text-xs font-extrabold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500"
-                              autoFocus
-                            />
+                            <select
+                              onChange={e => {
+                                if (e.target.value) {
+                                  setEditingTeamName(e.target.value);
+                                }
+                              }}
+                              className="w-full text-xs font-bold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                            >
+                              <option value="">-- Danh sách phân tổ trong dữ liệu --</option>
+                              {classDataTeams.map(ct => (
+                                <option key={ct} value={ct}>
+                                  📌 {ct} ({students.filter(s => s.team.toLowerCase() === ct.toLowerCase()).length} thành viên)
+                                </option>
+                              ))}
+                            </select>
                           </div>
+                        )}
 
-                          {/* Nút lưu & đồng bộ */}
-                          <div className="flex items-center gap-1.5 pt-1">
-                            <button
-                              onClick={() => handleSaveTeamNameAndSync(teamConf.id, teamConf.name, editingTeamName)}
-                              className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black cursor-pointer shadow-xs transition-colors"
-                            >
-                              Lưu & Đồng bộ
-                            </button>
-                            <button
-                              onClick={() => setEditingTeamId(null)}
-                              className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors"
-                            >
-                              Hủy
-                            </button>
-                          </div>
+                        {/* Hoặc nhập tên ngoài */}
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-extrabold text-slate-600 block">
+                            Hoặc nhập tên ngoài:
+                          </label>
+                          <input
+                            type="text"
+                            value={editingTeamName}
+                            onChange={e => setEditingTeamName(e.target.value)}
+                            placeholder="Nhập tên tổ..."
+                            className="w-full text-xs font-extrabold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                            autoFocus
+                          />
                         </div>
-                      ) : (
-                        <h3
-                          onClick={() => {
-                            setEditingTeamId(teamConf.id);
-                            setEditingTeamName(teamConf.name);
-                          }}
-                          className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 cursor-pointer hover:text-indigo-600 group"
-                          title="Bấm để chọn hoặc chỉnh sửa tên Tổ"
-                        >
-                          <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                          <span>{teamName}</span>
-                          <Edit3 className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 opacity-80 transition-opacity" />
-                        </h3>
-                      )}
-                      <span className="text-[10px] font-medium text-slate-400 block">{teamConf.rowLabel}</span>
-                    </div>
 
+                        {/* Nút lưu & đồng bộ */}
+                        <div className="flex items-center gap-1.5 pt-1">
+                          <button
+                            onClick={() => handleSaveTeamNameAndSync(teamConf.id, teamConf.name, editingTeamName)}
+                            className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black cursor-pointer shadow-xs transition-colors"
+                          >
+                            Lưu & Đồng bộ
+                          </button>
+                          <button
+                            onClick={() => setEditingTeamId(null)}
+                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                          >
+                            Hủy
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <h3
+                        onClick={() => {
+                          setEditingTeamId(teamConf.id);
+                          setEditingTeamName(teamConf.name);
+                        }}
+                        className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 cursor-pointer hover:text-indigo-600 group"
+                        title="Bấm để chọn hoặc chỉnh sửa tên Tổ"
+                      >
+                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                        <span>{teamName}</span>
+                        {!isExportingPNG && <Edit3 className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 opacity-80 transition-opacity" />}
+                      </h3>
+                    )}
+                  </div>
+
+                  {!isExportingPNG && (
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2 py-0.5 rounded-full">
                         {teamStudents.length} học sinh
@@ -979,26 +1576,61 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                         <span>Xếp lại</span>
                       </button>
                     </div>
-                  </div>
+                  )}
+                </div>
+              </div>
+              );
+
+              return (
+                <div
+                  key={teamConf.id}
+                  className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 space-y-3 flex flex-col justify-between print:border-slate-300 print:shadow-none"
+                >
+                  {/* Nhãn Tổ: Góc nhìn LÊN -> hiển thị trước các bàn */}
+                  {viewPerspective === 'up' && renderTeamHeaderUI()}
 
                   {/* CÁC BÀN CỦA TỔ */}
                   <div className="space-y-2.5 flex-1">
                     {teamConf.desks.map(deskNum => {
                       const deskStudents = teamStudents.filter(s => s.desk === deskNum);
+                      const deskKey = `${teamName}_${deskNum}`;
+                      const currentDeskSeats = customDeskSeats[deskKey] || seatsPerDesk;
 
                       return (
                         <div
                           key={`desk_${teamName}_${deskNum}`}
                           className="p-2 rounded-xl bg-amber-50/70 border-t-2 border-amber-300 space-y-1.5 shadow-2xs print:bg-white print:border-amber-400"
                         >
-                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase px-1">
-                            <span className="text-amber-900 font-extrabold">Bàn {deskNum}</span>
-                            <span className="text-slate-500 font-mono font-bold">{deskStudents.length}/{seatsPerDesk} ghế</span>
-                          </div>
+                          {!isExportingPNG && (
+                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase px-1 print:hidden">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-amber-900 font-extrabold">Bàn {deskNum}</span>
+                                <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-md px-1 py-0.5 shadow-2xs">
+                                  <span className="text-[9px] font-extrabold text-amber-900">Số ghế:</span>
+                                  <select
+                                    value={currentDeskSeats}
+                                    onChange={e => {
+                                      const val = parseInt(e.target.value);
+                                      setCustomDeskSeats(prev => ({ ...prev, [deskKey]: val }));
+                                    }}
+                                    className="bg-transparent text-amber-900 text-[10px] font-black focus:outline-hidden cursor-pointer"
+                                    title="Đổi số ghế của riêng bàn này"
+                                  >
+                                    <option value={2}>2</option>
+                                    <option value={3}>3</option>
+                                    <option value={4}>4</option>
+                                    <option value={5}>5</option>
+                                    <option value={6}>6</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <span className="text-slate-500 font-mono font-bold">{deskStudents.length}/{currentDeskSeats} ghế</span>
+                            </div>
+                          )}
 
                           {/* MỖI BÀN LÀ 1 HÀNG NGANG VỚI SỐ GHẾ ĐỘNG (2, 3, 4, 5, 6 GHẾ) */}
-                          <div className={`grid ${getDeskGridColsClass(seatsPerDesk)} gap-1.5 items-center`}>
-                            {Array.from({ length: seatsPerDesk }, (_, i) => i + 1).map(colNum => {
+                          <div className={`grid ${getDeskGridColsClass(currentDeskSeats)} gap-1.5 items-center`}>
+                            {Array.from({ length: currentDeskSeats }, (_, i) => i + 1).map(colNum => {
                               const student = deskStudents.find(
                                 s => s.seatCol === colNum || (!s.seatCol && deskStudents.indexOf(s) === colNum - 1)
                               );
@@ -1022,15 +1654,15 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                                 return (
                                   <div
                                     key={student.id}
-                                    draggable
+                                    draggable={!isExportingPNG}
                                     onDragStart={e => handleDragStart(e, student.id)}
-                                    onClick={() => handleSelectSeat(teamName, deskNum, colNum)}
-                                    className={`cursor-pointer transition-all w-full rounded-2xl p-0.5 ${
-                                      isSelected
+                                    onClick={() => !isExportingPNG && handleSelectSeat(teamName, deskNum, colNum)}
+                                    className={`w-full rounded-2xl p-0.5 ${!isExportingPNG ? 'cursor-pointer transition-all' : ''} ${
+                                      isSelected && !isExportingPNG
                                         ? 'ring-4 ring-indigo-600 shadow-md scale-105 bg-indigo-100/80 z-10'
-                                        : 'hover:ring-2 hover:ring-indigo-400'
+                                        : !isExportingPNG ? 'hover:ring-2 hover:ring-indigo-400' : ''
                                     }`}
-                                    title="Bấm để đổi học sinh hoặc hủy xếp chỗ"
+                                    title={!isExportingPNG ? "Bấm để đổi học sinh hoặc hủy xếp chỗ" : undefined}
                                   >
                                     <StudentCardBox
                                       isFemale={isFemale}
@@ -1041,12 +1673,23 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                                       nickname={student.nickname || student.name.trim().split(/\s+/).pop() || student.name}
                                       fullName={student.name}
                                       isMe={isMe}
+                                      rotate180={viewPerspective === 'down'}
                                     />
                                   </div>
                                 );
                               }
 
-                              // Nếu ghế trống: Bấm vào để mở Thanh Nổi hoặc Kéo thả vào
+                              // Nếu đang xuất PNG: trả về khung ghế trống sạch sẽ không chữ
+                              if (isExportingPNG) {
+                                return (
+                                  <div
+                                    key={`empty_${teamName}_${deskNum}_col_${colNum}`}
+                                    className="min-h-[92px] border-2 border-dashed border-amber-200/50 rounded-2xl bg-white/50"
+                                  />
+                                );
+                              }
+
+                              // Nếu ghế trống trong chế độ sửa: Bấm vào để mở Thanh Nổi hoặc Kéo thả vào
                               return (
                                 <div
                                   key={`empty_${teamName}_${deskNum}_col_${colNum}`}
@@ -1077,6 +1720,9 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                       );
                     })}
                   </div>
+
+                  {/* Nhãn Tổ: Góc nhìn XUỐNG -> hiển thị sau bàn cuối */}
+                  {viewPerspective === 'down' && renderTeamHeaderUI()}
                 </div>
               );
             })}
@@ -1084,8 +1730,9 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         </div>
 
         {/* LỀ PHẢI: DANH SÁCH HỌC SINH CHƯA XẾP CHỖ (STICKY SIDEBAR) */}
-        <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-4 sticky top-4 print:hidden">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+        {!isExportingPNG && (
+          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-4 sticky top-4 print:hidden">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
               <UserRound className="w-4 h-4 text-amber-600" />
               <span>Chưa Xếp Chỗ</span>
@@ -1191,6 +1838,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             </button>
           )}
         </div>
+      )}
 
       </div>
 
@@ -1398,6 +2046,89 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
               </button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Google Drive Files Picker Modal */}
+      {driveFilesModalOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-lg w-full overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-indigo-50/50">
+              <div className="flex items-center gap-2 text-indigo-900">
+                <Cloud className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-black text-sm uppercase tracking-wide">
+                  Google Drive • Sơ đồ lớp
+                </h3>
+              </div>
+              <button
+                onClick={() => setDriveFilesModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* List */}
+            <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
+              <p className="text-xs text-slate-500 font-medium">
+                Thư mục mặc định: <span className="font-bold text-slate-700">myApp\SoDoLop</span>. Chọn file JSON để nạp dữ liệu và tải về máy:
+              </p>
+
+              {driveFiles.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-2xl italic">
+                  Chưa có file sơ đồ lớp nào được lưu trên Drive.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {driveFiles.map(file => (
+                    <div
+                      key={file.id}
+                      className="p-3 bg-slate-50 hover:bg-indigo-50/50 border border-slate-100 hover:border-indigo-200 rounded-2xl flex items-center justify-between gap-3 transition-all shadow-2xs"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-extrabold text-xs text-slate-900 truncate" title={file.name}>
+                          {file.name}
+                        </div>
+                        <div className="flex items-center gap-2 text-[10px] text-slate-400 mt-0.5 font-semibold">
+                          <span>📅 {file.modifiedTime}</span>
+                          <span>•</span>
+                          <span>📦 {file.size}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => handleApplyDriveFile(file)}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black cursor-pointer shadow-3xs transition-colors flex items-center gap-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>Tải về & Nạp</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDriveFile(file.id)}
+                          className="p-1.5 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-rose-200"
+                          title="Xóa file này trên Drive"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                onClick={() => setDriveFilesModalOpen(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
