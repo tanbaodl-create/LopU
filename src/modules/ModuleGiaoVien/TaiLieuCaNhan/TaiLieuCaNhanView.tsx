@@ -103,6 +103,56 @@ export const TaiLieuCaNhanView: React.FC = () => {
     e.preventDefault();
     if (!newTitle.trim()) return;
 
+    // Kiểm tra trùng tên tài liệu
+    const isExisting = documents.find(
+      d => d.title.toLowerCase() === newTitle.trim().toLowerCase()
+    );
+
+    if (isExisting) {
+      const confirmOverwrite = window.confirm(
+        `Bộ tài liệu với tiêu đề "${newTitle.trim()}" đã tồn tại. Bạn có muốn ghi đè lên tài liệu cũ không?`
+      );
+      if (!confirmOverwrite) return;
+
+      const driveFolder = `myApp\\LopU / ${newSubject} / ${newChuong} / ${newBai} / ${newVanDe} / ${newChuyenDe}`;
+      const updatedDoc: TeacherDocument = {
+        ...isExisting,
+        subject: newSubject,
+        grade: newGrade,
+        chuong: newChuong.trim(),
+        bai: newBai.trim(),
+        vanDe: newVanDe.trim(),
+        chuyenDe: newChuyenDe.trim(),
+        driveFolderPath: driveFolder,
+        updatedAt: new Date().toISOString().slice(0, 10),
+        contentSnippet: newSnippet.trim() || 'Nội dung giáo án, bài tập tự luận và trắc nghiệm trọng tâm.',
+        driveSynced: true,
+      };
+
+      await saveTeachingMaterialHierarchyToDrive(
+        updatedDoc,
+        newChuong,
+        newBai,
+        newVanDe,
+        newChuyenDe
+      );
+
+      setDocuments(prev => prev.map(d => d.id === isExisting.id ? updatedDoc : d));
+      setShowCreateModal(false);
+      setNewTitle('');
+      setNewSnippet('');
+      
+      const conn = getDriveConnectionState();
+      const cleanFileName = `[${newChuyenDe}]_${newTitle.trim().replace(/[\s:/\\?*]+/g, '_')}`;
+      if (conn.isConnected && conn.isRealConfigured) {
+        setNotification(`Đã ghi đè & cập nhật lên Drive thành công: ${cleanFileName} tại thư mục ${driveFolder}`);
+      } else {
+        setNotification(`Đã ghi đè & cập nhật lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục ${driveFolder}`);
+      }
+      setTimeout(() => setNotification(null), 5000);
+      return;
+    }
+
     const driveFolder = `myApp\\LopU / ${newSubject} / ${newChuong} / ${newBai} / ${newVanDe} / ${newChuyenDe}`;
 
     const newDoc: TeacherDocument = {

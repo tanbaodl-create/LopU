@@ -97,67 +97,90 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
 
   return (
     <div
-      className={`relative bg-white border-2 rounded-2xl p-2.5 shadow-2xs hover:shadow-md transition-all flex flex-col items-center justify-between text-center overflow-hidden min-h-[105px] min-w-[100px] max-w-[130px] flex-1 print:border-2 print:border-slate-800 print:bg-white print:shadow-none print:p-2 ${
+      className={`relative bg-white border-2 rounded-2xl p-1.5 grid grid-cols-3 grid-rows-4 items-stretch text-center overflow-hidden min-h-[120px] h-[120px] min-w-[115px] max-w-[145px] flex-1 border-slate-950 hover:border-black print:border-2 print:border-black print:bg-white print:shadow-none print:p-2 ${
         rotate180 ? 'rotate-180' : ''
       } ${
         isMe
-          ? 'border-indigo-500 ring-2 ring-indigo-300 bg-indigo-50/80'
-          : 'border-slate-300 hover:border-indigo-400'
+          ? 'ring-2 ring-indigo-300 bg-indigo-50/80'
+          : ''
       } ${className}`}
     >
-      {/* 4 Nhãn chức danh CHỈ GHI CHỮ KÝ HIỆU, BỎ VIỀN ĐÓNG KHUNG TRÁNH TRÀN Ô KHI TẢI PNG */}
-      {/* TRÁI - TRÊN: Điều hành */}
-      {dieuHanh && (
-        <span
-          className="absolute top-1 left-1.5 z-10 font-extrabold text-[8px] leading-none text-amber-800 pointer-events-none print:text-black truncate max-w-[42px]"
-          title={`Điều hành: ${dieuHanh}`}
-        >
-          {dieuHanh}
-        </span>
-      )}
-
-      {/* PHẢI - TRÊN: Đoàn */}
-      {doan && (
-        <span
-          className="absolute top-1 right-1.5 z-10 font-extrabold text-[8px] leading-none text-blue-800 pointer-events-none print:text-black truncate max-w-[42px]"
-          title={`Đoàn: ${doan}`}
-        >
-          {doan}
-        </span>
-      )}
-
-      {/* Vòng Tròn Icon Nam / Nữ ở Trung Tâm (Sạch sẽ không bị nhãn che) */}
-      <div className="w-11 h-11 mx-auto rounded-full bg-slate-50 border border-slate-200 flex items-center justify-center shrink-0 my-1 shadow-2xs print:bg-white print:border-slate-800">
-        {checkFemale ? (
-          <IconNu className="w-10 h-10 text-rose-600 print:text-black" />
-        ) : (
-          <IconNam className="w-10 h-10 text-indigo-700 print:text-black" />
+      {/* 1. CHỨC DANH ĐIỀU HÀNH: hàng 1 cột 1, canh lề trái và lề giữa theo chiều dọc */}
+      <div className="row-start-1 col-start-1 flex items-center justify-start z-10">
+        {dieuHanh && (
+          <span
+            className="font-black text-black pointer-events-none print:text-black truncate max-w-[45px] text-left"
+            style={{ fontSize: '11pt' }}
+            title={`Điều hành: ${dieuHanh}`}
+          >
+            {dieuHanh}
+          </span>
         )}
       </div>
 
-      {/* TRÁI - DƯỚI: Tổ */}
-      {to && (
-        <span
-          className="absolute bottom-5 left-1.5 z-10 font-extrabold text-[8px] leading-none text-indigo-800 pointer-events-none print:text-black truncate max-w-[42px]"
-          title={`Tổ: ${to}`}
-        >
-          {to}
-        </span>
-      )}
+      {/* Hàng 1 Cột 2 (Trống) */}
+      <div className="row-start-1 col-start-2" />
 
-      {/* PHẢI - DƯỚI: BCS Bộ môn */}
-      {mon && (
-        <span
-          className="absolute bottom-5 right-1.5 z-10 font-extrabold text-[8px] leading-none text-emerald-800 pointer-events-none print:text-black truncate max-w-[42px]"
-          title={`BCS Môn: ${mon}`}
-        >
-          {mon}
-        </span>
-      )}
+      {/* 2. CHỨC DANH ĐOÀN: hàng 1 cột 3, canh lề phải và lề giữa theo chiều dọc */}
+      <div className="row-start-1 col-start-3 flex items-center justify-end z-10">
+        {doan && (
+          <span
+            className="font-black text-black pointer-events-none print:text-black truncate max-w-[45px] text-right"
+            style={{ fontSize: '11pt' }}
+            title={`Đoàn: ${doan}`}
+          >
+            {doan}
+          </span>
+        )}
+      </div>
 
-      {/* HIỂN THỊ DUY NHẤT BIỆT DANH HỌC SINH */}
-      <div className="w-full">
-        <div className="font-black text-xs text-slate-900 print:text-black truncate px-0.5" title={fullName ? `Họ tên: ${fullName}` : nickname}>
+      {/* 3. ICON GIỚI TÍNH: hàng 2 cột 2, canh lề giữa theo chiều dọc & ngang, đặt nền sau các chức danh */}
+      <div className="row-start-2 col-start-2 flex items-center justify-center z-0">
+        <div className="w-10 h-10 rounded-full bg-slate-50 border border-slate-300 flex items-center justify-center shrink-0 shadow-2xs print:bg-white print:border-black">
+          {checkFemale ? (
+            <IconNu className="w-9 h-9 text-rose-600 print:text-black" />
+          ) : (
+            <IconNam className="w-9 h-9 text-indigo-700 print:text-black" />
+          )}
+        </div>
+      </div>
+
+      {/* 4. CHỨC DANH TỔ: hàng 3 cột 1, canh lề trái và lề trên */}
+      <div className="row-start-3 col-start-1 flex items-start justify-start z-10">
+        {to && (
+          <span
+            className="font-black text-black print:text-black truncate max-w-[45px] text-left"
+            style={{ fontSize: '11pt' }}
+            title={`Tổ: ${to}`}
+          >
+            {to}
+          </span>
+        )}
+      </div>
+
+      {/* Hàng 3 Cột 2 (Trống) */}
+      <div className="row-start-3 col-start-2" />
+
+      {/* 5. CHỨC DANH BỘ MÔN: hàng 3 cột 3, canh lề phải và lề trên */}
+      <div className="row-start-3 col-start-3 flex items-start justify-end z-10">
+        {mon && (
+          <span
+            className="font-black text-black print:text-black truncate max-w-[45px] text-right"
+            style={{ fontSize: '11pt' }}
+            title={`BCS Môn: ${mon}`}
+          >
+            {mon}
+          </span>
+        )}
+      </div>
+
+      {/* 6. BIỆT DANH: hàng 4 cột 1 đến cột 3 (toàn bộ hàng 4) */}
+      <div className="row-start-4 col-start-1 col-span-3 flex items-center justify-center z-10">
+        <div 
+          className="font-normal normal-case text-black print:text-black truncate px-1 text-center w-full" 
+          style={{ fontSize: '14pt', lineHeight: '1.2' }}
+          title={fullName ? `Họ tên: ${fullName}` : nickname}
+        >
           {nickname}
         </div>
       </div>
@@ -253,6 +276,39 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   // Áp dụng từ tuần k (k thay đổi được)
   const [applyWeekNum, setApplyWeekNum] = useState<number>(12);
+  // Trạng thái đang tải lên Drive
+  const [isUploadingDrive, setIsUploadingDrive] = useState<boolean>(false);
+
+  // State và hàm hỗ trợ cho Custom Confirm Modal
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    onCancel?: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void, onCancel?: () => void) => {
+    setConfirmDialog({
+      isOpen: true,
+      title,
+      message,
+      onConfirm: () => {
+        onConfirm();
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      },
+      onCancel: () => {
+        if (onCancel) onCancel();
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+      }
+    });
+  };
+
   // Trạng thái đang xuất file PNG (để ẩn sạch các nút điều khiển, nhãn bàn, empty placeholder)
   const [isExportingPNG, setIsExportingPNG] = useState<boolean>(false);
 
@@ -401,7 +457,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   // Helper trả về class Tailwind grid cho số ghế
   const getDeskGridColsClass = (seats: number) => {
     switch (seats) {
-      case 2: return 'grid-cols-2';
+      case 2: return 'grid-cols-3'; // Bàn 2 người dùng 3 cột để đẩy ra 2 đầu bàn
       case 3: return 'grid-cols-3';
       case 5: return 'grid-cols-5';
       case 6: return 'grid-cols-6';
@@ -415,6 +471,14 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
     if (!text.trim()) return;
     const lines = text.split('\n').filter(l => l.trim().length > 0);
     const parsed: StudentCardData[] = [];
+
+    // Tạo bản đồ lưu trữ chỗ ngồi hiện tại của học sinh theo ID và theo Tên để giữ nguyên vị trí khi gõ chữ realtime
+    const currentStudentsMap = new Map<string, { team: string; desk: number; seatCol: number }>();
+    students.forEach(s => {
+      currentStudentsMap.set(s.id, { team: s.team, desk: s.desk, seatCol: s.seatCol });
+      // Thêm ánh xạ phụ theo Tên viết thường để dự phòng nếu dòng chữ có sự dịch chuyển dòng
+      currentStudentsMap.set(`name_${s.name.trim().toLowerCase()}`, { team: s.team, desk: s.desk, seatCol: s.seatCol });
+    });
 
     lines.forEach((line, idx) => {
       const parts = line.split(';').map(p => p.trim());
@@ -456,7 +520,17 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       let desk = 0;
       let seatCol = 0;
 
-      if (team) {
+      // Tìm vị trí ngồi cũ dựa trên ID dòng chữ hs_${idx+1} hoặc tên học sinh
+      const targetId = `hs_${idx + 1}`;
+      const oldSeatingById = currentStudentsMap.get(targetId);
+      const oldSeatingByName = currentStudentsMap.get(`name_${name.trim().toLowerCase()}`);
+      const oldSeating = oldSeatingById || oldSeatingByName;
+
+      if (oldSeating && oldSeating.team.toLowerCase() === team.toLowerCase()) {
+        // Nếu tổ giữ nguyên, bảo toàn vị trí bàn, ghế ngồi cũ tuyệt đối
+        desk = oldSeating.desk;
+        seatCol = oldSeating.seatCol;
+      } else if (team) {
         const teamConf = teamsConfig.find(t => t.name.toLowerCase() === team.toLowerCase());
         const existingInTeam = parsed.filter(s => s.team.toLowerCase() === team.toLowerCase()).length;
 
@@ -471,7 +545,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       }
 
       parsed.push({
-        id: `hs_${idx + 1}`,
+        id: targetId,
         code: `HS10A1_${(idx + 1).toString().padStart(2, '0')}`,
         name,
         nickname: nickname || undefined,
@@ -616,12 +690,16 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   // Nút Xếp lại toàn bộ cả lớp -> Chuyển tất cả học sinh thành Chưa xếp chỗ
   const handleResetAllSeating = () => {
-    if (window.confirm('Bạn có chắc chắn muốn XÓA TOÀN BỘ chỗ ngồi của cả lớp để xếp lại từ đầu không?')) {
-      setStudents(prev => prev.map(s => ({ ...s, team: '', desk: 0, seatCol: 0 })));
-      setSelectedSeat(null);
-      setSyncMessage('Đã hủy tất cả vị trí chỗ ngồi! Hãy bấm vào các ô ghế để chọn học sinh nhanh.');
-      setTimeout(() => setSyncMessage(null), 3000);
-    }
+    showConfirm(
+      'Xếp Lại Cả Lớp',
+      'Bạn có chắc chắn muốn XÓA TOÀN BỘ chỗ ngồi của cả lớp để xếp lại từ đầu không?',
+      () => {
+        setStudents(prev => prev.map(s => ({ ...s, team: '', desk: 0, seatCol: 0 })));
+        setSelectedSeat(null);
+        setSyncMessage('Đã hủy tất cả vị trí chỗ ngồi! Hãy bấm vào các ô ghế để chọn học sinh nhanh.');
+        setTimeout(() => setSyncMessage(null), 3000);
+      }
+    );
   };
 
   // Nút Xếp lại chỗ ngồi từng Tổ
@@ -693,7 +771,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
       setSyncMessage('Đang khởi tạo file PNG sơ đồ lớp sắc nét...');
       const dataUrl = await toPng(el, {
-        quality: 0.98,
+        quality: 1.0,
         pixelRatio: 2,
         backgroundColor: '#ffffff',
         skipFonts: true,
@@ -896,6 +974,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   };
 
   const handleUploadToDrive = async () => {
+    setIsUploadingDrive(true);
     try {
       const cleanClassName = headerInfo.className.replace(/^Lớp\s*/i, '').trim().replace(/\s+/g, '_');
       const fileName = `SoDoLop_${cleanClassName}_Tuan${applyWeekNum}.json`;
@@ -934,53 +1013,54 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         content: saveData,
       };
 
-      // Replace if same name, otherwise unshift
       const existingIdx = files.findIndex(f => f.name === fileName);
-      if (existingIdx >= 0) {
-        newFileItem.id = files[existingIdx].id;
-        files[existingIdx] = newFileItem;
-      } else {
-        files.unshift(newFileItem);
-      }
 
-      localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
-
-      const conn = getDriveConnectionState();
-      const cleanFileName = fileName.replace('.json', '');
-      if (conn.isConnected && conn.isRealConfigured) {
-        try {
-          // Upload to real Drive using existing driveService API
-          const planLegacy: ClassSeatingPlan = {
-            classId: selectedClassId,
-            className: headerInfo.className,
-            room: 'Phòng 204',
-            teacherName: headerInfo.teacherName,
-            academicYear: headerInfo.academicYear,
-            seats: students.map((s, idx) => ({
-              id: `seat_${s.id}`,
-              row: s.desk,
-              col: s.seatCol || (idx % seatsPerDesk) + 1,
-              studentId: s.id,
-              studentName: s.name,
-              studentCode: `${s.team || 'Chưa xếp'} • Bàn ${s.desk || 0}`,
-              status: 'present',
-              notes: `Biệt danh: ${s.nickname || 'Không'} | Chức danh: ${s.titles.join(', ')}`,
-            })),
-          };
-          await saveSeatingChartToDrive(selectedClassId, planLegacy);
-          await savePersonalSeatingPlanToDrive(planLegacy);
-          setSyncMessage(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
-        } catch (realErr) {
-          console.warn('Real Drive upload failed, saved to sandbox:', realErr);
-          setSyncMessage(`Đã lưu file ${cleanFileName} vào bộ nhớ tạm Drive (Sandbox Mode)!`);
+      const proceedUpload = async (idxToReplace: number | null) => {
+        if (idxToReplace !== null) {
+          newFileItem.id = files[idxToReplace].id;
+          files[idxToReplace] = newFileItem;
+        } else {
+          files.unshift(newFileItem);
         }
-      } else {
-        setSyncMessage(`Đã tải lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
-      }
 
-      setTimeout(() => setSyncMessage(null), 3500);
+        localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
+
+        const conn = getDriveConnectionState();
+        const cleanFileName = fileName.replace('.json', '');
+        if (conn.isConnected && conn.isRealConfigured) {
+          try {
+            // Upload to real Drive using existing driveService API with full custom file name and data structure
+            await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
+            setSyncMessage(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
+          } catch (realErr) {
+            console.warn('Real Drive upload failed, saved to sandbox:', realErr);
+            setSyncMessage(`Đã lưu file ${cleanFileName} vào bộ nhớ tạm Drive (Sandbox Mode)!`);
+          }
+        } else {
+          setSyncMessage(`Đã tải lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
+        }
+
+        setIsUploadingDrive(false);
+        setTimeout(() => setSyncMessage(null), 3500);
+      };
+
+      if (existingIdx >= 0) {
+        showConfirm(
+          'Ghi Đè Sơ Đồ Lớp',
+          `Tên sơ đồ lớp "${fileName}" đã tồn tại. Bạn có muốn cập nhật không?`,
+          () => {
+            proceedUpload(existingIdx);
+          },
+          () => {
+            setIsUploadingDrive(false);
+          }
+        );
+      } else {
+        await proceedUpload(null);
+      }
     } catch (err) {
       console.error(err);
+      setIsUploadingDrive(false);
       alert('Đã xảy ra lỗi khi tải lên Drive.');
     }
   };
@@ -1017,22 +1097,26 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   };
 
   const handleDeleteDriveFile = (fileId: string) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa file này khỏi Drive không?')) return;
+    showConfirm(
+      'Xóa File Trên Drive',
+      'Bạn có chắc chắn muốn xóa file này khỏi Drive không?',
+      () => {
+        const storedRaw = localStorage.getItem('lopu_google_drive_files_v1') || '[]';
+        let files: DriveStoredFile[] = [];
+        try {
+          files = JSON.parse(storedRaw);
+        } catch (e) {
+          files = [];
+        }
 
-    const storedRaw = localStorage.getItem('lopu_google_drive_files_v1') || '[]';
-    let files: DriveStoredFile[] = [];
-    try {
-      files = JSON.parse(storedRaw);
-    } catch (e) {
-      files = [];
-    }
+        const filtered = files.filter(f => f.id !== fileId);
+        localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(filtered));
 
-    const filtered = files.filter(f => f.id !== fileId);
-    localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(filtered));
-
-    setDriveFiles(prev => prev.filter(f => f.id !== fileId));
-    setSyncMessage('Đã xóa file trên Drive thành công!');
-    setTimeout(() => setSyncMessage(null), 2500);
+        setDriveFiles(prev => prev.filter(f => f.id !== fileId));
+        setSyncMessage('Đã xóa file trên Drive thành công!');
+        setTimeout(() => setSyncMessage(null), 2500);
+      }
+    );
   };
 
   // Lọc học sinh chưa xếp chỗ
@@ -1090,16 +1174,16 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   return (
     <div id="a4-seating-chart-container" className="space-y-6 bg-white p-2 rounded-2xl">
-      {/* CSS In Ấn Khổ A4 Dọc */}
+      {/* CSS In Ấn Khổ A4 (Ngang / Dọc) với tỉ lệ chuẩn 16:9 */}
       <style>{`
         @media print {
           @page {
-            size: A4 portrait;
-            margin: 8mm;
+            size: A4 ${paperOrientation};
+            margin: 20mm !important; /* Lề trên dưới trái phải đúng 2cm giống Word */
           }
           body {
             background: white !important;
-            color: black !important;
+            color: #000000 !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -1121,6 +1205,77 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
           .print\\:w-full {
             width: 100% !important;
             max-width: 100% !important;
+          }
+
+          /* Ẩn mọi phần tử rác ngoại trừ khung sơ đồ duy nhất */
+          #root > div > *:not(#a4-seating-chart-container),
+          #a4-seating-chart-container > *:not(#seating-diagram-only) {
+            display: none !important;
+          }
+
+          /* Áp dụng tỷ lệ chuẩn A4 16:9 hoặc 9:16 sắc nét cho khung in */
+          #seating-diagram-only {
+            display: block !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            aspect-ratio: ${paperOrientation === 'landscape' ? '16 / 9' : '9 / 16'} !important;
+            border: 4px solid #000000 !important; /* Đường viền bao ngoài 4px đen siêu nét */
+            border-radius: 0px !important;
+            padding: 20px !important;
+            box-sizing: border-box !important;
+            margin: 0 auto !important;
+            background: #ffffff !important;
+            box-shadow: none !important;
+            page-break-inside: avoid !important;
+          }
+
+          /* ĐẬM HÓA TOÀN BỘ ĐƯỜNG VIỀN KHI IN ĐỂ KHÔNG BỊ MỜ TRÊN BẢN IN ĐEN TRẮNG */
+          #seating-diagram-only .border,
+          #seating-diagram-only .border-2,
+          #seating-diagram-only .border-t-2,
+          #seating-diagram-only .print\\:border-2,
+          #seating-diagram-only .print\\:border-slate-800,
+          #seating-diagram-only .print\\:border-black,
+          #seating-diagram-only [class*="border-"] {
+            border-color: #000000 !important;
+            border-width: 3px !important; /* Đường viền 3px sắc nét cho các ô học sinh và bàn */
+            border-style: solid !important;
+            border-radius: 6px !important;
+            opacity: 1 !important;
+            box-shadow: none !important;
+          }
+
+          /* Giữ nét đứt cho Bảng */
+          #seating-diagram-only .border-dashed {
+            border-style: dashed !important;
+          }
+
+          /* Giữ nền trắng sạch cho toàn bộ sơ đồ */
+          #seating-diagram-only,
+          #seating-diagram-only * {
+            background-color: #ffffff !important;
+            background-image: none !important;
+          }
+
+          /* Đậm hóa toàn bộ văn bản và nhãn chữ sang màu đen 100% */
+          #seating-diagram-only span,
+          #seating-diagram-only div,
+          #seating-diagram-only h3,
+          #seating-diagram-only h1,
+          #seating-diagram-only p {
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+            text-shadow: none !important;
+            font-weight: 900 !important;
+          }
+
+          /* Đậm hóa biểu tượng SVG Nam/Nữ để in đen trắng rõ mồn một */
+          #seating-diagram-only svg {
+            stroke: #000000 !important;
+            stroke-width: 2.5px !important;
+            color: #000000 !important;
+            fill: none !important;
           }
         }
       `}</style>
@@ -1189,11 +1344,20 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             <button
               id="btn-upload-drive"
               onClick={handleUploadToDrive}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs cursor-pointer transition-colors"
+              disabled={isUploadingDrive}
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-white shadow-xs transition-colors ${
+                isUploadingDrive
+                  ? 'bg-blue-400 cursor-not-allowed opacity-80'
+                  : 'bg-blue-600 hover:bg-blue-700 cursor-pointer'
+              }`}
               title="Tải cấu trúc sơ đồ lớp lên Google Drive"
             >
-              <Cloud className="w-4 h-4" />
-              <span>Tải lên Drive</span>
+              {isUploadingDrive ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <Cloud className="w-4 h-4" />
+              )}
+              <span>{isUploadingDrive ? 'Đang tải lên...' : 'Tải lên Drive'}</span>
             </button>
 
             <button
@@ -1264,7 +1428,11 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
           <textarea
             rows={2}
             value={rawStudentsText}
-            onChange={e => setRawStudentsText(e.target.value)}
+            onChange={e => {
+              const val = e.target.value;
+              setRawStudentsText(val);
+              parseRawTextToStudents(val);
+            }}
             className="w-full text-xs font-mono p-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
             placeholder="Mỗi dòng 1 học sinh..."
           />
@@ -1343,6 +1511,16 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 <Download className="w-4 h-4 text-amber-400" />
                 <span>Tải PNG</span>
               </button>
+
+              <button
+                id="btn-print-seating"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer transition-colors print:hidden"
+                title="In trực tiếp Sơ đồ lớp học khổ A4 Ngang/Dọc chuẩn tỷ lệ 16:9 sắc nét"
+              >
+                <Printer className="w-4 h-4 text-white" />
+                <span>In Sơ Đồ</span>
+              </button>
             </div>
 
             <button
@@ -1363,9 +1541,19 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         {/* VÙNG SƠ ĐỒ LỚP HỌC (CHỈ DUY NHẤT KHUNG NÀY ĐƯỢC XUẤT THÀNH FILE PNG) */}
         <div
           id="seating-diagram-only"
-          className={`bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-4 ${
+          className={`bg-white p-6 rounded-none border-4 border-slate-950 shadow-2xs space-y-4 ${
             isExportingPNG ? 'lg:col-span-4 w-full' : 'lg:col-span-3'
           }`}
+          style={isExportingPNG ? {
+            width: paperOrientation === 'landscape' ? '1285px' : '850px',
+            minHeight: paperOrientation === 'landscape' ? '850px' : '1285px',
+            padding: '40px',
+            boxSizing: 'border-box',
+            backgroundColor: '#ffffff',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between'
+          } : undefined}
         >
           {/* TIÊU ĐỀ SƠ ĐỒ LỚP, CỬA RA VÀO, BẢNG & BÀN GIÁO VIÊN (LUÔN CỐ ĐỊNH Ở TRÊN CÙNG) */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -1584,7 +1772,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
               return (
                 <div
                   key={teamConf.id}
-                  className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3.5 space-y-3 flex flex-col justify-between print:border-slate-300 print:shadow-none"
+                  className="bg-white rounded-2xl border-3 border-slate-950 shadow-xs p-3.5 space-y-3 flex flex-col justify-between print:border-3 print:border-black print:shadow-none"
                 >
                   {/* Nhãn Tổ: Góc nhìn LÊN -> hiển thị trước các bàn */}
                   {viewPerspective === 'up' && renderTeamHeaderUI()}
@@ -1599,7 +1787,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                       return (
                         <div
                           key={`desk_${teamName}_${deskNum}`}
-                          className="p-2 rounded-xl bg-amber-50/70 border-t-2 border-amber-300 space-y-1.5 shadow-2xs print:bg-white print:border-amber-400"
+                          className="p-2 rounded-xl bg-slate-50/20 border-2 border-dashed border-slate-900 space-y-1.5 shadow-2xs print:bg-white print:border-2 print:border-dashed print:border-black"
                         >
                           {!isExportingPNG && (
                             <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase px-1 print:hidden">
@@ -1629,92 +1817,105 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                           )}
 
                           {/* MỖI BÀN LÀ 1 HÀNG NGANG VỚI SỐ GHẾ ĐỘNG (2, 3, 4, 5, 6 GHẾ) */}
-                          <div className={`grid ${getDeskGridColsClass(currentDeskSeats)} gap-1.5 items-center`}>
-                            {Array.from({ length: currentDeskSeats }, (_, i) => i + 1).map(colNum => {
-                              const student = deskStudents.find(
-                                s => s.seatCol === colNum || (!s.seatCol && deskStudents.indexOf(s) === colNum - 1)
-                              );
-
-                              const isSelected =
-                                selectedSeat?.team.toLowerCase() === teamName.toLowerCase() &&
-                                selectedSeat?.desk === deskNum &&
-                                selectedSeat?.seatCol === colNum;
-
-                              if (student) {
-                                const isMe = student.id === currentStudentId;
-                                const isFemale = student.gender.toLowerCase() === 'nữ' || student.gender.toLowerCase() === 'nu';
-
-                                const execBadge = student.titles.find(t => EXEC_TITLES.includes(t.toUpperCase()));
-                                const doanBadge = student.titles.find(t => DOAN_TITLES.includes(t.toUpperCase()));
-                                const teamBadge = student.titles.find(t => TEAM_TITLES.includes(t.toUpperCase()));
-                                const subjectBadge = student.titles.find(t =>
-                                  SUBJECT_TITLES.some(st => t.toUpperCase().includes(st))
-                                );
-
-                                return (
-                                  <div
-                                    key={student.id}
-                                    draggable={!isExportingPNG}
-                                    onDragStart={e => handleDragStart(e, student.id)}
-                                    onClick={() => !isExportingPNG && handleSelectSeat(teamName, deskNum, colNum)}
-                                    className={`w-full rounded-2xl p-0.5 ${!isExportingPNG ? 'cursor-pointer transition-all' : ''} ${
-                                      isSelected && !isExportingPNG
-                                        ? 'ring-4 ring-indigo-600 shadow-md scale-105 bg-indigo-100/80 z-10'
-                                        : !isExportingPNG ? 'hover:ring-2 hover:ring-indigo-400' : ''
-                                    }`}
-                                    title={!isExportingPNG ? "Bấm để đổi học sinh hoặc hủy xếp chỗ" : undefined}
-                                  >
-                                    <StudentCardBox
-                                      isFemale={isFemale}
-                                      dieuHanh={execBadge}
-                                      to={teamBadge}
-                                      doan={doanBadge}
-                                      mon={subjectBadge}
-                                      nickname={student.nickname || student.name.trim().split(/\s+/).pop() || student.name}
-                                      fullName={student.name}
-                                      isMe={isMe}
-                                      rotate180={viewPerspective === 'down'}
+                           <div className={`grid ${getDeskGridColsClass(currentDeskSeats)} gap-1.5 items-center`}>
+                            {(() => {
+                              const items = currentDeskSeats === 2 ? [1, 'spacer', 2] : Array.from({ length: currentDeskSeats }, (_, i) => i + 1);
+                              return items.map((item, idx) => {
+                                if (item === 'spacer') {
+                                  return (
+                                    <div
+                                      key={`spacer_${teamName}_${deskNum}_${idx}`}
+                                      className="h-full pointer-events-none"
                                     />
-                                  </div>
-                                );
-                              }
+                                  );
+                                }
 
-                              // Nếu đang xuất PNG: trả về khung ghế trống sạch sẽ không chữ
-                              if (isExportingPNG) {
+                                const colNum = item as number;
+                                const student = deskStudents.find(
+                                  s => s.seatCol === colNum || (!s.seatCol && deskStudents.indexOf(s) === colNum - 1)
+                                );
+
+                                const isSelected =
+                                  selectedSeat?.team.toLowerCase() === teamName.toLowerCase() &&
+                                  selectedSeat?.desk === deskNum &&
+                                  selectedSeat?.seatCol === colNum;
+
+                                if (student) {
+                                  const isMe = student.id === currentStudentId;
+                                  const isFemale = student.gender.toLowerCase() === 'nữ' || student.gender.toLowerCase() === 'nu';
+
+                                  const execBadge = student.titles.find(t => EXEC_TITLES.includes(t.toUpperCase()));
+                                  const doanBadge = student.titles.find(t => DOAN_TITLES.includes(t.toUpperCase()));
+                                  const teamBadge = student.titles.find(t => TEAM_TITLES.includes(t.toUpperCase()));
+                                  const subjectBadge = student.titles.find(t =>
+                                    SUBJECT_TITLES.some(st => t.toUpperCase().includes(st))
+                                  );
+
+                                  return (
+                                    <div
+                                      key={student.id}
+                                      draggable={!isExportingPNG}
+                                      onDragStart={e => handleDragStart(e, student.id)}
+                                      onClick={() => !isExportingPNG && handleSelectSeat(teamName, deskNum, colNum)}
+                                      className={`w-full rounded-2xl p-0.5 ${!isExportingPNG ? 'cursor-pointer transition-all' : ''} ${
+                                        isSelected && !isExportingPNG
+                                          ? 'ring-4 ring-indigo-600 shadow-md scale-105 bg-indigo-100/80 z-10'
+                                          : !isExportingPNG ? 'hover:ring-2 hover:ring-indigo-400' : ''
+                                      }`}
+                                      title={!isExportingPNG ? "Bấm để đổi học sinh hoặc hủy xếp chỗ" : undefined}
+                                    >
+                                      <StudentCardBox
+                                        isFemale={isFemale}
+                                        dieuHanh={execBadge}
+                                        to={teamBadge}
+                                        doan={doanBadge}
+                                        mon={subjectBadge}
+                                        nickname={student.nickname || student.name.trim().split(/\s+/).pop() || student.name}
+                                        fullName={student.name}
+                                        isMe={isMe}
+                                        rotate180={viewPerspective === 'down'}
+                                      />
+                                    </div>
+                                  );
+                                }
+
+                                // Nếu đang xuất PNG: trả về khung ghế trống sạch sẽ không chữ
+                                if (isExportingPNG) {
+                                  return (
+                                    <div
+                                      key={`empty_${teamName}_${deskNum}_col_${colNum}`}
+                                      className="min-h-[92px] border-2 border-dashed border-amber-200/50 rounded-2xl bg-white/50"
+                                    />
+                                  );
+                                }
+
+                                // Nếu ghế trống trong chế độ sửa: Bấm vào để mở Thanh Nổi hoặc Kéo thả vào
                                 return (
                                   <div
                                     key={`empty_${teamName}_${deskNum}_col_${colNum}`}
-                                    className="min-h-[92px] border-2 border-dashed border-amber-200/50 rounded-2xl bg-white/50"
-                                  />
+                                    onDragOver={handleDragOver}
+                                    onDrop={e => handleDropOnSeat(e, teamName, deskNum, colNum)}
+                                    onClick={() => handleSelectSeat(teamName, deskNum, colNum)}
+                                    className={`min-h-[95px] border-2 border-dashed rounded-2xl transition-all flex flex-col items-center justify-center p-1 text-center cursor-pointer group ${
+                                      isSelected
+                                        ? 'border-indigo-600 bg-indigo-100/90 ring-4 ring-indigo-500 shadow-md animate-pulse'
+                                        : 'border-slate-300 bg-white/80 hover:bg-indigo-50/70 hover:border-indigo-400'
+                                    }`}
+                                    title={`Ghế ${colNum} bàn ${deskNum} trống (Bấm để chọn học sinh)`}
+                                  >
+                                    <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-indigo-600">
+                                      G{colNum}
+                                    </span>
+                                    <span className="text-slate-300 group-hover:text-indigo-500 text-xl font-light">
+                                      +
+                                    </span>
+                                    <span className="text-[9px] font-bold text-indigo-600 group-hover:underline">
+                                      Chọn HS
+                                    </span>
+                                  </div>
                                 );
-                              }
-
-                              // Nếu ghế trống trong chế độ sửa: Bấm vào để mở Thanh Nổi hoặc Kéo thả vào
-                              return (
-                                <div
-                                  key={`empty_${teamName}_${deskNum}_col_${colNum}`}
-                                  onDragOver={handleDragOver}
-                                  onDrop={e => handleDropOnSeat(e, teamName, deskNum, colNum)}
-                                  onClick={() => handleSelectSeat(teamName, deskNum, colNum)}
-                                  className={`min-h-[95px] border-2 border-dashed rounded-2xl transition-all flex flex-col items-center justify-center p-1 text-center cursor-pointer group ${
-                                    isSelected
-                                      ? 'border-indigo-600 bg-indigo-100/90 ring-4 ring-indigo-500 shadow-md animate-pulse'
-                                      : 'border-slate-300 bg-white/80 hover:bg-indigo-50/70 hover:border-indigo-400'
-                                  }`}
-                                  title={`Ghế ${colNum} bàn ${deskNum} trống (Bấm để chọn học sinh)`}
-                                >
-                                  <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-indigo-600">
-                                    G{colNum}
-                                  </span>
-                                  <span className="text-slate-300 group-hover:text-indigo-500 text-xl font-light">
-                                    +
-                                  </span>
-                                  <span className="text-[9px] font-bold text-indigo-600 group-hover:underline">
-                                    Chọn HS
-                                  </span>
-                                </div>
-                              );
-                            })}
+                              });
+                            })()}
                           </div>
                         </div>
                       );
@@ -2127,6 +2328,45 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Dialog Modal */}
+      {confirmDialog.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-sm w-full overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 border-b border-slate-100 flex items-center gap-2.5 bg-amber-50/50 text-amber-900">
+              <HelpCircle className="w-5 h-5 text-amber-600 shrink-0" />
+              <h3 className="font-black text-sm uppercase tracking-wide">
+                {confirmDialog.title}
+              </h3>
+            </div>
+
+            {/* Message */}
+            <div className="p-5 text-xs text-slate-700 font-medium leading-relaxed">
+              {confirmDialog.message}
+            </div>
+
+            {/* Footer buttons */}
+            <div className="p-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  if (confirmDialog.onCancel) confirmDialog.onCancel();
+                  setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+                }}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                onClick={confirmDialog.onConfirm}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-2xs"
+              >
+                Xác nhận
               </button>
             </div>
           </div>

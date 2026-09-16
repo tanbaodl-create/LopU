@@ -331,6 +331,55 @@ export const QuanLyNguoiDungView: React.FC = () => {
       return;
     }
 
+    // Kiểm tra trùng tên tài khoản
+    const existingName = users.find(u => u.name.toLowerCase() === newName.trim().toLowerCase());
+    if (existingName) {
+      const confirmOverwrite = window.confirm(
+        `Người dùng với họ tên "${newName.trim()}" đã tồn tại trong hệ thống. Bạn có muốn ghi đè lên thông tin tài khoản cũ này không?`
+      );
+      if (!confirmOverwrite) return;
+
+      const isSuperadmin = SUPERADMIN_EMAILS.some(e => e.toLowerCase() === newEmail.trim().toLowerCase());
+      const finalRole: UserRole = isSuperadmin ? 'superadmin' : newRole;
+
+      const parsedSubjects = newSubjects.split(',').map(s => s.trim()).filter(Boolean);
+      const parsedManagedSubjects = newManagedSubjects
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => parsedSubjects.includes(s) || parsedSubjects.length === 0);
+
+      const updatedUser: ExtendedUserProfile = {
+        ...existingName,
+        nickname: newNickname.trim() || existingName.nickname,
+        gender: newGender,
+        workplace: newWorkplace.trim() || existingName.workplace,
+        email: newEmail.trim(),
+        role: finalRole,
+        roles: [finalRole],
+        phone: newPhone.trim() || existingName.phone || '0901234567',
+        homeAddress: newHomeAddress.trim() || existingName.homeAddress,
+        classIds: newClassIds.split(',').map(c => c.trim()).filter(Boolean),
+        subjects: parsedSubjects,
+        managedSubjects: parsedManagedSubjects,
+        groupOrTeam: newGroupOrTeam.trim() || existingName.groupOrTeam,
+        classTitle: newClassTitle.trim() || 'Thành viên',
+        classTitles: [newClassTitle.trim() || 'Thành viên'],
+        isApproved: finalRole !== 'guest',
+      };
+
+      await saveUser(updatedUser);
+      setUsers(users.map(u => u.id === existingName.id ? updatedUser : u));
+      setShowAddModal(false);
+      setNewName('');
+      setNewNickname('');
+      setNewEmail('');
+      setNewWorkplace('');
+      setNewHomeAddress('');
+      setNotification(`Đã ghi đè & cập nhật thông tin tài khoản "${updatedUser.name}" thành công.`);
+      setTimeout(() => setNotification(null), 4000);
+      return;
+    }
+
     const isSuperadmin = SUPERADMIN_EMAILS.some(e => e.toLowerCase() === newEmail.trim().toLowerCase());
     const finalRole: UserRole = isSuperadmin ? 'superadmin' : newRole;
 

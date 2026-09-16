@@ -20,13 +20,14 @@ import {
 import { GiaoDienHocSinhLayout } from '../GiaoDienHocSinh';
 import { GiaoDienGiaoVienLayout } from '../GiaoDienGiaoVien';
 import { GiaoDienQuanTriLayout } from '../GiaoDienQuanTri';
-import { HuongDanWebView, PhanTichLenh } from '../HuongDanWeb';
+import { HuongDanWebView, PhanTichLenh, LuuPromptChuanView } from '../HuongDanWeb';
 
 interface DynamicViewContainerProps {
   activeView: ViewId;
   currentRole: UserRole;
   onOpenDriveConnect: () => void;
   onNavigateToView?: (viewId: ViewId) => void;
+  driveEmail?: string;
 }
 
 export const DynamicViewContainer: React.FC<DynamicViewContainerProps> = ({
@@ -34,6 +35,7 @@ export const DynamicViewContainer: React.FC<DynamicViewContainerProps> = ({
   currentRole,
   onOpenDriveConnect,
   onNavigateToView,
+  driveEmail = '',
 }) => {
   const meta = getViewMeta(activeView);
   const viewTitle = meta.title;
@@ -44,6 +46,17 @@ export const DynamicViewContainer: React.FC<DynamicViewContainerProps> = ({
       return <HuongDanWebView onNavigateToView={onNavigateToView} />;
     case 'guide-prompt-assistant':
       return <PhanTichLenh onNavigateToView={onNavigateToView} />;
+    case 'guide-prompts-saved': {
+      const isDevEmail = driveEmail === 'tanbaobg@gmail.com' || driveEmail === 'tanbaodl@gmail.com' || driveEmail === 'teacher.google@lopu.edu.vn';
+      if (!isDevEmail) {
+        return (
+          <div className="p-8 text-center bg-red-50 text-red-700 font-bold border border-red-200 rounded-2xl max-w-md mx-auto mt-10">
+            Quyền truy cập bị từ chối! Phân hệ này chỉ hiển thị cho nhà phát triển hệ thống.
+          </div>
+        );
+      }
+      return <LuuPromptChuanView />;
+    }
 
     // Module 1: Không gian Học tập (ModuleHocSinh) -> Giao diện Học sinh
     case 'learning-classes':

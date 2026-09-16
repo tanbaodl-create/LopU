@@ -13,6 +13,7 @@ import {
   ClipboardList,
   Network,
   Zap,
+  BookMarked,
 } from 'lucide-react';
 
 export type ViewId =
@@ -27,7 +28,8 @@ export type ViewId =
   | 'settings-users'
   | 'settings-permissions'
   | 'guide-tree'
-  | 'guide-prompt-assistant';
+  | 'guide-prompt-assistant'
+  | 'guide-prompts-saved';
 
 export interface SubMenuItem {
   id: ViewId;
@@ -167,6 +169,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         badge: 'Siêu tốc',
         icon: Zap,
         description: 'Nhập yêu cầu tự nhiên, đối chiếu sơ đồ cây và tạo Prompt chuẩn tối ưu sửa nhanh app',
+      },
+      {
+        id: 'guide-prompts-saved',
+        label: 'Kho Prompt chuẩn',
+        badge: 'Lưu trữ',
+        icon: BookMarked,
+        description: 'Lưu trữ các mẫu Prompt lệnh chuẩn cho từng module lớp học (Chỉ Dev)',
       },
     ],
   },

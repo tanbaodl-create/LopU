@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   School,
   Network,
+  BookMarked,
 } from 'lucide-react';
 import { ViewId, getViewMeta } from '../Navigation';
 import { UserRole } from '../../../services/storageTypes';
@@ -148,6 +149,23 @@ export const Header: React.FC<HeaderProps> = ({
             >
               <Network className="w-3.5 h-3.5" />
               <span className="hidden md:inline">Sơ đồ cây</span>
+            </button>
+          )}
+
+          {/* Quick link button: Kho Prompt Lệnh Chuẩn (Developer Only) */}
+          {onSelectView && (driveEmail === 'tanbaobg@gmail.com' || driveEmail === 'tanbaodl@gmail.com' || driveEmail === 'teacher.google@lopu.edu.vn') && (
+            <button
+              id="btn-header-guide-prompts-saved"
+              onClick={() => onSelectView('guide-prompts-saved')}
+              title="Kho Prompt Lệnh Chuẩn (Chỉ mở cho Dev)"
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'guide-prompts-saved'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200/60 animate-bounce'
+              }`}
+            >
+              <BookMarked className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Kho Prompt</span>
             </button>
           )}
         </div>

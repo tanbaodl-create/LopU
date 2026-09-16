@@ -1,4 +1,5 @@
-import { googleClientConfig, isGoogleClientConfigured } from '../../../config/firebase';
+import { googleClientConfig, isGoogleClientConfigured, auth, isFirebaseConfigured } from '../../../config/firebase';
+import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import {
   StudentGradeRecord,
   ClassSeatingPlan,
@@ -29,7 +30,7 @@ const DRIVE_TOKEN_STORAGE_KEY = 'lopu_google_drive_token_v1';
 // In-memory token cache
 let currentAccessToken: string | null = localStorage.getItem(DRIVE_TOKEN_STORAGE_KEY);
 let isDriveConnected: boolean = Boolean(currentAccessToken);
-let currentDriveEmail: string = localStorage.getItem('lopu_drive_email') || 'giaovien.lopu@gmail.com';
+let currentDriveEmail: string = localStorage.getItem('lopu_drive_email') || 'tanbaodl@gmail.com';
 
 // Listeners for UI reactive status
 type DriveStatusListener = (connected: boolean, email: string) => void;
@@ -102,18 +103,52 @@ export function getDriveConnectionState(): { isConnected: boolean; email: string
   return {
     isConnected: isDriveConnected,
     email: currentDriveEmail,
-    isRealConfigured: isGoogleClientConfigured,
+    isRealConfigured: isGoogleClientConfigured || isFirebaseConfigured,
   };
 }
 
-// Connect to Google Drive using Google Identity Services or simulated sandbox token
-export async function connectGoogleDrive(): Promise<{ success: boolean; email: string; message: string }> {
+// Connect to Google Drive using Google Identity Services, Firebase Auth popup, or simulated sandbox token
+export async function connectGoogleDrive(forceSimulated = false): Promise<{ success: boolean; email: string; message: string }> {
+  if (forceSimulated) {
+    return new Promise((resolve) => {
+      enableSimulatedDriveSession(resolve);
+    });
+  }
+
+  // 1. Try Firebase Auth popup first (extremely robust for dynamic preview URLs/iframes because the redirect goes to firebaseapp.com authorized origin)
+  if (auth && isFirebaseConfigured) {
+    try {
+      const provider = new GoogleAuthProvider();
+      provider.addScope('https://www.googleapis.com/auth/drive.file');
+      provider.addScope('https://www.googleapis.com/auth/drive');
+      
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (credential?.accessToken) {
+        currentAccessToken = credential.accessToken;
+        localStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, currentAccessToken);
+        isDriveConnected = true;
+        currentDriveEmail = result.user.email || 'tanbaodl@gmail.com';
+        localStorage.setItem('lopu_drive_email', currentDriveEmail);
+        notifyStatusChanged();
+        return {
+          success: true,
+          email: currentDriveEmail,
+          message: 'Đã xác thực Google Drive thành công qua Firebase Auth!',
+        };
+      }
+    } catch (firebaseErr: any) {
+      console.warn('Firebase Auth Google Sign-In popup failed/cancelled, falling back to other methods:', firebaseErr);
+    }
+  }
+
+  // 2. Fallback to Google Identity Services (GSI)
   if (typeof window !== 'undefined' && (window as any).google?.accounts?.oauth2 && isGoogleClientConfigured) {
     return new Promise((resolve) => {
       try {
         const client = (window as any).google.accounts.oauth2.initTokenClient({
           client_id: googleClientConfig.clientId,
-          scope: googleClientConfig.scope,
+          scope: googleClientConfig.scope + ' https://www.googleapis.com/auth/drive',
           callback: (tokenResponse: { access_token?: string; error?: string }) => {
             if (tokenResponse.error || !tokenResponse.access_token) {
               resolve({
@@ -145,7 +180,7 @@ export async function connectGoogleDrive(): Promise<{ success: boolean; email: s
     });
   }
 
-  // Preview or developer environment: activate simulated drive session
+  // 3. Fallback to simulated drive session
   return new Promise((resolve) => {
     enableSimulatedDriveSession(resolve);
   });
@@ -156,7 +191,7 @@ function enableSimulatedDriveSession(resolve: (val: any) => void) {
     currentAccessToken = `lopu_token_${Date.now()}`;
     localStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, currentAccessToken);
     isDriveConnected = true;
-    currentDriveEmail = 'giaovien.lopu@gmail.com';
+    currentDriveEmail = 'tanbaodl@gmail.com';
     localStorage.setItem('lopu_drive_email', currentDriveEmail);
     notifyStatusChanged();
     resolve({

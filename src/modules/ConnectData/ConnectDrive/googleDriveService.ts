@@ -26,6 +26,76 @@ export interface HierarchyDriveResult {
   folderChain: string[];
 }
 
+// Helper function to find a folder by name and parent ID on real Google Drive
+async function findFolderOnDrive(token: string, name: string, parentId?: string): Promise<string | null> {
+  try {
+    let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and trashed = false`;
+    if (parentId) {
+      query += ` and '${parentId}' in parents`;
+    } else {
+      query += ` and 'root' in parents`;
+    }
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!res.ok) {
+      console.warn(`findFolderOnDrive non-ok status: ${res.status}`);
+      return null;
+    }
+    const data = await res.json();
+    if (data.files && data.files.length > 0) {
+      return data.files[0].id;
+    }
+    return null;
+  } catch (err) {
+    console.error(`Error finding folder ${name}:`, err);
+    return null;
+  }
+}
+
+// Helper function to create a folder on real Google Drive under a parent ID
+async function createFolderOnDrive(token: string, name: string, parentId?: string): Promise<string> {
+  const metadata: any = {
+    name,
+    mimeType: 'application/vnd.google-apps.folder',
+  };
+  if (parentId) {
+    metadata.parents = [parentId];
+  }
+  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(metadata),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to create folder ${name}: ${res.statusText}`);
+  }
+  const data = await res.json();
+  return data.id;
+}
+
+// Helper function to recursively find or create a deep folder path
+async function getOrCreateFolderPathOnDrive(token: string, pathSegments: string[]): Promise<string> {
+  let currentParentId: string | undefined = undefined;
+  for (const segment of pathSegments) {
+    const cleanSegment = segment.trim();
+    if (!cleanSegment) continue;
+    let folderId = await findFolderOnDrive(token, cleanSegment, currentParentId);
+    if (!folderId) {
+      folderId = await createFolderOnDrive(token, cleanSegment, currentParentId);
+      console.log(`Đã tạo thư mục mới trên Google Drive: ${cleanSegment} (ID: ${folderId})`);
+    } else {
+      console.log(`Tìm thấy thư mục hiện có trên Google Drive: ${cleanSegment} (ID: ${folderId})`);
+    }
+    currentParentId = folderId;
+  }
+  return currentParentId || 'root';
+}
+
 /**
  * Lưu trữ tài liệu dạy học của giáo viên trên Google Drive theo đúng cấu trúc chuẩn:
  * Chương --> Bài --> Vấn đề --> Chuyên đề
@@ -42,8 +112,10 @@ export async function saveTeachingMaterialHierarchyToDrive(
   const safeVanDe = (vanDe || docItem.vanDe || 'Vấn đề 1: Lý thuyết trọng tâm').trim();
   const safeChuyenDe = (chuyenDe || docItem.chuyenDe || 'Chuyên đề: Phương pháp giải bài tập').trim();
 
-  const folderChain = [
-    'myApp\\LopU',
+  // Mảng phân đoạn thư mục vật lý để tạo trên Google Drive
+  const physicalFolders = [
+    'myApp',
+    'LopU',
     docItem.subject || 'MonHoc',
     safeChuong,
     safeBai,
@@ -51,7 +123,7 @@ export async function saveTeachingMaterialHierarchyToDrive(
     safeChuyenDe,
   ];
 
-  const drivePath = folderChain.join(' / ');
+  const drivePath = physicalFolders.join(' / ');
   const cleanTitle = (docItem.title || 'TaiLieu').replace(/[\s:/\\?*]+/g, '_');
   const fileName = `[${safeChuyenDe}]_${cleanTitle}.${docItem.fileType || 'pdf'}`;
 
@@ -73,9 +145,14 @@ export async function saveTeachingMaterialHierarchyToDrive(
   const token = localStorage.getItem('lopu_google_drive_token_v1');
   if (token && isGoogleClientConfigured) {
     try {
+      // 1. Tìm hoặc tạo cấu trúc thư mục vật lý sâu 7 cấp độ
+      const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+
+      // 2. Upload file vào đúng thư mục đích vừa tạo/tìm được
       const metadata = {
         name: fileName,
         mimeType: docItem.fileType === 'sheet' ? 'application/vnd.google-apps.spreadsheet' : 'application/vnd.google-apps.document',
+        parents: [parentFolderId],
       };
       const form = new FormData();
       form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -88,7 +165,7 @@ export async function saveTeachingMaterialHierarchyToDrive(
         },
         body: form,
       });
-      console.log(`Đã tải lên Google Drive thực tế thành công: ${fileName}`);
+      console.log(`Đã tải lên Google Drive thực tế thành công tại thư mục "${drivePath}": ${fileName}`);
     } catch (uploadErr) {
       console.error('Lỗi tải file tài liệu thực tế lên Google Drive API:', uploadErr);
     }
@@ -99,16 +176,16 @@ export async function saveTeachingMaterialHierarchyToDrive(
     fileId: driveRes.fileId,
     fileName: fileName,
     drivePath: drivePath,
-    folderChain: folderChain,
+    folderChain: physicalFolders,
   };
 }
 
 /**
  * Lưu sơ đồ chỗ ngồi lớp học (Drag & Drop) lên Google Drive
  */
-export async function saveSeatingChartToDrive(classId: string, seatingData: any): Promise<{ success: boolean; fileId: string }> {
+export async function saveSeatingChartToDrive(classId: string, seatingData: any, customFileName?: string): Promise<{ success: boolean; fileId: string }> {
   try {
-    const fileName = `LopU_SeatingChart_${classId}.json`;
+    const fileName = customFileName || `LopU_SeatingChart_${classId}.json`;
     const stored = localStorage.getItem('lopu_gdrive_files_v1') || '[]';
     const files: DriveStoredFile[] = JSON.parse(stored);
 
@@ -136,9 +213,43 @@ export async function saveSeatingChartToDrive(classId: string, seatingData: any)
     const token = localStorage.getItem('lopu_google_drive_token_v1');
     if (token && isGoogleClientConfigured) {
       try {
+        // 1. Tìm hoặc tạo cấu trúc thư mục myApp -> LopU -> SoDoLop
+        const physicalFolders = ['myApp', 'LopU', 'SoDoLop'];
+        const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+
+        // 1.5 Tìm kiếm và xóa sạch các file trùng tên cũ trong thư mục này trước khi ghi file mới
+        try {
+          const query = `name = '${fileName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed = false`;
+          const findUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+          const findRes = await fetch(findUrl, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (findRes.ok) {
+            const findData = await findRes.json();
+            if (findData.files && findData.files.length > 0) {
+              console.log(`Tìm thấy ${findData.files.length} file trùng tên "${fileName}" trên Drive. Đang tiến hành xóa trước khi ghi file mới...`);
+              for (const existingFile of findData.files) {
+                try {
+                  await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  console.log(`Đã xóa file trùng lặp cũ (ID: ${existingFile.id}) trên Drive thành công.`);
+                } catch (delErr) {
+                  console.error(`Lỗi khi xóa file trùng lặp cũ ${existingFile.id}:`, delErr);
+                }
+              }
+            }
+          }
+        } catch (findErr) {
+          console.error('Lỗi khi tìm và xóa các file trùng lặp cũ trên Drive:', findErr);
+        }
+
+        // 2. Upload file vào thư mục SoDoLop vừa tìm hoặc tạo được
         const metadata = {
           name: fileName,
           mimeType: 'application/json',
+          parents: [parentFolderId],
         };
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -151,7 +262,7 @@ export async function saveSeatingChartToDrive(classId: string, seatingData: any)
           },
           body: form,
         });
-        console.log(`Đã tải lên Google Drive sơ đồ lớp thực tế thành công: ${fileName}`);
+        console.log(`Đã tải lên Google Drive sơ đồ lớp thực tế thành công tại "myApp/LopU/SoDoLop": ${fileName}`);
       } catch (uploadErr) {
         console.error('Lỗi tải file sơ đồ lớp thực tế lên Google Drive API:', uploadErr);
       }

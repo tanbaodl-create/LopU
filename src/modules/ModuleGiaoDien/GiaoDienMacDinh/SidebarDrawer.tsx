@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   X,
   ChevronDown,
@@ -32,9 +32,26 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   currentRole,
   onChangeRole,
   isDriveConnected,
+  driveEmail,
   isFirestoreLive,
   onConnectDrive,
 }) => {
+  const isDevEmail = driveEmail === 'tanbaobg@gmail.com' || driveEmail === 'tanbaodl@gmail.com' || driveEmail === 'teacher.google@lopu.edu.vn';
+
+  const filteredMenuGroups = useMemo(() => {
+    return MENU_GROUPS.map(group => {
+      return {
+        ...group,
+        subItems: group.subItems.filter(sub => {
+          if (sub.id === 'guide-prompts-saved') {
+            return isDevEmail;
+          }
+          return true;
+        })
+      };
+    }).filter(group => group.subItems.length > 0);
+  }, [isDevEmail]);
+
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => ({
     learning: true,
     teaching: true,
@@ -45,7 +62,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      const activeGroup = MENU_GROUPS.find(g =>
+      const activeGroup = filteredMenuGroups.find(g =>
         g.subItems.some(sub => sub.id === activeView)
       );
       if (activeGroup) {
@@ -55,7 +72,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
         }));
       }
     }
-  }, [isOpen, activeView]);
+  }, [isOpen, activeView, filteredMenuGroups]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -180,7 +197,7 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
           id="sidebar-accordion-nav"
           className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5 divide-y divide-slate-100"
         >
-          {MENU_GROUPS.map(group => {
+          {filteredMenuGroups.map(group => {
             const isExpanded = expandedGroups[group.id] ?? false;
             const GroupIcon = group.icon;
             const hasActiveChild = group.subItems.some(item => item.id === activeView);
