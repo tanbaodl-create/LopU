@@ -6,6 +6,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { db, auth, isFirebaseConfigured } from '../../../config/firebase';
+import { decryptData, resolveConflictByTimestamp, enqueueSyncTask } from '../ConnectDataShared';
 import {
   ClassItem,
   UserProfile,
@@ -16,12 +17,14 @@ import {
   ImportDeduplicationReport,
   UserRole,
   SUPERADMIN_EMAILS,
+  TeacherDocument,
 } from '../../../services/storageTypes';
 import {
   INITIAL_CLASSES,
   INITIAL_USERS,
   INITIAL_PROGRESS,
   INITIAL_SEATING_PLANS,
+  INITIAL_TEACHER_DOCS,
 } from '../../../services/mockInitialData';
 
 const STORAGE_KEYS = {
@@ -30,6 +33,7 @@ const STORAGE_KEYS = {
   PROGRESS: 'lopu_firestore_progress_v1',
   SEATING: 'lopu_firestore_seating_v1',
   PIN_REQUESTS: 'lopu_firestore_pin_requests_v1',
+  DOCUMENTS: 'lopu_firestore_documents_v1',
 };
 
 // Error handling helper according to Firebase skill
@@ -84,30 +88,97 @@ function setLocalItem<T>(key: string, data: T): void {
   }
 }
 
+function parseRemoteDocument<T>(docData: any): T {
+  if (docData && docData._encrypted && docData.data) {
+    return decryptData(docData.data) as T;
+  }
+  return docData as T;
+}
+
+function mergeAndResolveConflicts<T extends { id: string; updatedAt?: string; modifiedTime?: string }>(
+  localList: T[],
+  remoteList: T[]
+): T[] {
+  const mergedMap = new Map<string, T>();
+  
+  for (const item of localList) {
+    mergedMap.set(item.id, item);
+  }
+
+  for (const remoteItem of remoteList) {
+    const localItem = mergedMap.get(remoteItem.id);
+    if (localItem) {
+      const resolved = resolveConflictByTimestamp(localItem, remoteItem);
+      if (resolved) {
+        mergedMap.set(remoteItem.id, resolved);
+      }
+    } else {
+      mergedMap.set(remoteItem.id, remoteItem);
+    }
+  }
+
+  return Array.from(mergedMap.values());
+}
+
 // Initializer to seed local data if empty
 export function seedInitialDataIfNeeded(): void {
+  // Clear old demo data keys to ensure a clean state
+  if (!localStorage.getItem('lopu_demo_cleared_v5')) {
+    localStorage.removeItem(STORAGE_KEYS.CLASSES);
+    localStorage.removeItem(STORAGE_KEYS.USERS);
+    localStorage.removeItem(STORAGE_KEYS.PROGRESS);
+    localStorage.removeItem(STORAGE_KEYS.SEATING);
+    localStorage.removeItem(STORAGE_KEYS.PIN_REQUESTS);
+    localStorage.removeItem(STORAGE_KEYS.DOCUMENTS);
+    localStorage.removeItem('lopu_google_drive_files_v1');
+    localStorage.setItem('lopu_demo_cleared_v5', 'true');
+  }
+
   if (!localStorage.getItem(STORAGE_KEYS.CLASSES)) {
     setLocalItem(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
   }
   
   const existingUsers = getLocalItem<UserProfile[]>(STORAGE_KEYS.USERS, []);
   if (existingUsers.length === 0) {
-    setLocalItem(STORAGE_KEYS.USERS, INITIAL_USERS);
+    const seededUsers = INITIAL_USERS.map(u => ({
+      ...u,
+      diamonds: u.diamonds !== undefined ? u.diamonds : (u.role === 'student' ? 200 : 500),
+      hearts: u.hearts !== undefined ? u.hearts : (u.role === 'student' ? 10 : 35)
+    }));
+    setLocalItem(STORAGE_KEYS.USERS, seededUsers);
   } else {
+    // Đảm bảo các user cũ cũng có ví Kim cương và Tim nếu chưa có
+    let modified = false;
+    const mappedUsers = existingUsers.map(u => {
+      const updatedUser = { ...u };
+      if (updatedUser.diamonds === undefined) {
+        updatedUser.diamonds = u.role === 'student' ? 200 : 500;
+        modified = true;
+      }
+      if (updatedUser.hearts === undefined) {
+        updatedUser.hearts = u.role === 'student' ? 10 : 35;
+        modified = true;
+      }
+      return updatedUser;
+    });
+
     // Đảm bảo 2 tài khoản Superadmin luôn có mặt
-    let updated = false;
     for (const saEmail of SUPERADMIN_EMAILS) {
-      const found = existingUsers.some(u => u.email.toLowerCase() === saEmail.toLowerCase());
+      const found = mappedUsers.some(u => u.email.toLowerCase() === saEmail.toLowerCase());
       if (!found) {
         const saInitial = INITIAL_USERS.find(u => u.email.toLowerCase() === saEmail.toLowerCase());
         if (saInitial) {
-          existingUsers.unshift(saInitial);
-          updated = true;
+          mappedUsers.unshift({
+            ...saInitial,
+            diamonds: saInitial.diamonds !== undefined ? saInitial.diamonds : 1000,
+            hearts: saInitial.hearts !== undefined ? saInitial.hearts : 100
+          });
+          modified = true;
         }
       }
     }
-    if (updated) {
-      setLocalItem(STORAGE_KEYS.USERS, existingUsers);
+    if (modified) {
+      setLocalItem(STORAGE_KEYS.USERS, mappedUsers);
     }
   }
   if (!localStorage.getItem(STORAGE_KEYS.PROGRESS)) {
@@ -117,31 +188,11 @@ export function seedInitialDataIfNeeded(): void {
     setLocalItem(STORAGE_KEYS.SEATING, INITIAL_SEATING_PLANS);
   }
   if (!localStorage.getItem(STORAGE_KEYS.PIN_REQUESTS)) {
-    const samplePinRequests: PinJoinRequest[] = [
-      {
-        id: 'pin_req_1',
-        classId: 'class_10a1',
-        className: 'Toán Học Chuyên Sâu 10A1',
-        studentId: 'u_hs07',
-        studentName: 'Bùi Gia Huy',
-        studentEmail: 'huy.bui@student.lopu.edu.vn',
-        submittedPin: 'TOAN10',
-        status: 'pending',
-        requestDate: '2025-09-08 08:30',
-      },
-      {
-        id: 'pin_req_2',
-        classId: 'class_11b2',
-        className: 'Vật Lý Ứng Dụng 11B2',
-        studentId: 'u_hs08',
-        studentName: 'Đỗ Hà Phương',
-        studentEmail: 'phuong.do@student.lopu.edu.vn',
-        submittedPin: 'VATLY11',
-        status: 'approved',
-        requestDate: '2025-09-07 14:15',
-      },
-    ];
+    const samplePinRequests: PinJoinRequest[] = [];
     setLocalItem(STORAGE_KEYS.PIN_REQUESTS, samplePinRequests);
+  }
+  if (!localStorage.getItem(STORAGE_KEYS.DOCUMENTS)) {
+    setLocalItem(STORAGE_KEYS.DOCUMENTS, []);
   }
 }
 
@@ -152,92 +203,92 @@ seedInitialDataIfNeeded();
 // 1. CLASSES SERVICE
 // ==========================================
 export async function getClasses(): Promise<ClassItem[]> {
+  const local = getLocalItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
   if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'classes'));
       if (!snap.empty) {
-        return snap.docs.map(d => ({ id: d.id, ...d.data() } as ClassItem));
+        const remote = snap.docs.map(d => parseRemoteDocument<ClassItem>({ id: d.id, ...d.data() }));
+        const resolved = mergeAndResolveConflicts(local, remote);
+        setLocalItem(STORAGE_KEYS.CLASSES, resolved);
+        return resolved;
       }
     } catch (err) {
       console.warn('Firestore getClasses fallback to local storage:', err);
     }
   }
-  return getLocalItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+  return local;
 }
 
 export async function saveClass(classItem: ClassItem): Promise<void> {
+  const classWithTimestamp = {
+    ...classItem,
+    updatedAt: classItem.updatedAt || new Date().toLocaleString('vi-VN')
+  };
+  
   // Update local storage
-  const classes = await getClasses();
-  const index = classes.findIndex(c => c.id === classItem.id);
+  const classes = await getLocalItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+  const index = classes.findIndex(c => c.id === classWithTimestamp.id);
   if (index >= 0) {
-    classes[index] = classItem;
+    classes[index] = classWithTimestamp;
   } else {
-    classes.unshift(classItem);
+    classes.unshift(classWithTimestamp);
   }
   setLocalItem(STORAGE_KEYS.CLASSES, classes);
 
-  // Firestore sync if configured
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'classes', classItem.id), classItem, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `classes/${classItem.id}`);
-    }
-  }
+  // Queue background sync
+  enqueueSyncTask('firestore', 'setDoc', 'classes', classWithTimestamp.id, classWithTimestamp);
 }
 
 export async function deleteClass(classId: string): Promise<void> {
-  const classes = await getClasses();
+  const classes = await getLocalItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
   const filtered = classes.filter(c => c.id !== classId);
   setLocalItem(STORAGE_KEYS.CLASSES, filtered);
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'classes', classId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `classes/${classId}`);
-    }
-  }
+  enqueueSyncTask('firestore', 'deleteDoc', 'classes', classId, null);
 }
 
 // ==========================================
 // 2. USERS SERVICE & IMPORT EXCEL
 // ==========================================
 export async function getUsers(): Promise<UserProfile[]> {
+  const local = getLocalItem<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
   if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'users'));
       if (!snap.empty) {
-        return snap.docs.map(d => ({ id: d.id, ...d.data() } as UserProfile));
+        const remote = snap.docs.map(d => parseRemoteDocument<UserProfile>({ id: d.id, ...d.data() }));
+        const resolved = mergeAndResolveConflicts(local, remote);
+        setLocalItem(STORAGE_KEYS.USERS, resolved);
+        return resolved;
       }
     } catch (err) {
       console.warn('Firestore getUsers fallback to local storage:', err);
     }
   }
-  return getLocalItem<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+  return local;
 }
 
 export async function saveUser(user: UserProfile): Promise<void> {
-  const users = await getUsers();
-  const index = users.findIndex(u => u.id === user.id);
+  const userWithTimestamp = {
+    ...user,
+    updatedAt: user.updatedAt || new Date().toLocaleString('vi-VN')
+  };
+  
+  const users = await getLocalItem<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+  const index = users.findIndex(u => u.id === userWithTimestamp.id);
   if (index >= 0) {
-    users[index] = user;
+    users[index] = userWithTimestamp;
   } else {
-    users.unshift(user);
+    users.unshift(userWithTimestamp);
   }
   setLocalItem(STORAGE_KEYS.USERS, users);
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'users', user.id), user, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `users/${user.id}`);
-    }
-  }
+  enqueueSyncTask('firestore', 'setDoc', 'users', userWithTimestamp.id, userWithTimestamp);
 }
 
 export async function deleteUser(userId: string): Promise<void> {
-  const users = await getUsers();
+  const users = await getLocalItem<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
   const target = users.find(u => u.id === userId);
   if (target) {
     const isProtected = target.isProtected || SUPERADMIN_EMAILS.some(e => e.toLowerCase() === target.email.toLowerCase());
@@ -250,36 +301,15 @@ export async function deleteUser(userId: string): Promise<void> {
   const filtered = users.filter(u => u.id !== userId);
   setLocalItem(STORAGE_KEYS.USERS, filtered);
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await deleteDoc(doc(db, 'users', userId));
-    } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
-    }
-  }
+  enqueueSyncTask('firestore', 'deleteDoc', 'users', userId, null);
 }
 
 export async function importUsers(newUsers: UserProfile[]): Promise<number> {
-  const users = await getUsers();
   let count = 0;
   for (const nu of newUsers) {
-    const existingIndex = users.findIndex(u => u.email === nu.email || u.id === nu.id);
-    if (existingIndex >= 0) {
-      users[existingIndex] = { ...users[existingIndex], ...nu };
-    } else {
-      users.push(nu);
-    }
+    await saveUser(nu);
     count++;
-
-    if (isFirebaseConfigured && db) {
-      try {
-        await setDoc(doc(db, 'users', nu.id), nu, { merge: true });
-      } catch (err) {
-        console.warn('Sync imported user failed:', err);
-      }
-    }
   }
-  setLocalItem(STORAGE_KEYS.USERS, users);
   return count;
 }
 
@@ -287,44 +317,42 @@ export async function importUsers(newUsers: UserProfile[]): Promise<number> {
 // 3. STUDENT PROGRESS SERVICE
 // ==========================================
 export async function getStudentProgressList(classId?: string): Promise<StudentProgress[]> {
-  let list: StudentProgress[] = [];
+  const local = getLocalItem<StudentProgress[]>(STORAGE_KEYS.PROGRESS, INITIAL_PROGRESS);
+  let resolved = local;
   if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'progress'));
       if (!snap.empty) {
-        list = snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentProgress));
+        const remote = snap.docs.map(d => parseRemoteDocument<StudentProgress>({ id: d.id, ...d.data() }));
+        resolved = mergeAndResolveConflicts(local, remote);
+        setLocalItem(STORAGE_KEYS.PROGRESS, resolved);
       }
     } catch (err) {
       console.warn('Firestore getStudentProgressList fallback:', err);
     }
   }
-  if (list.length === 0) {
-    list = getLocalItem<StudentProgress[]>(STORAGE_KEYS.PROGRESS, INITIAL_PROGRESS);
-  }
 
   if (classId) {
-    return list.filter(p => p.classId === classId);
+    return resolved.filter(p => p.classId === classId);
   }
-  return list;
+  return resolved;
 }
 
 export async function updateProgress(item: StudentProgress): Promise<void> {
-  const list = await getStudentProgressList();
-  const idx = list.findIndex(p => p.id === item.id);
+  const itemWithTimestamp = {
+    ...item,
+    updatedAt: item.updatedAt || new Date().toLocaleString('vi-VN')
+  };
+  const list = await getLocalItem<StudentProgress[]>(STORAGE_KEYS.PROGRESS, INITIAL_PROGRESS);
+  const idx = list.findIndex(p => p.id === itemWithTimestamp.id);
   if (idx >= 0) {
-    list[idx] = item;
+    list[idx] = itemWithTimestamp;
   } else {
-    list.unshift(item);
+    list.unshift(itemWithTimestamp);
   }
   setLocalItem(STORAGE_KEYS.PROGRESS, list);
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'progress', item.id), item, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `progress/${item.id}`);
-    }
-  }
+  enqueueSyncTask('firestore', 'setDoc', 'progress', itemWithTimestamp.id, itemWithTimestamp);
 }
 
 // ==========================================
@@ -335,7 +363,26 @@ export async function getSeatingPlan(classId: string): Promise<ClassSeatingPlan 
     STORAGE_KEYS.SEATING,
     INITIAL_SEATING_PLANS
   );
-  return allPlans[classId] || null;
+  const localPlan = allPlans[classId] || null;
+
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'seating_plans'));
+      if (!snap.empty) {
+        const remotePlans = snap.docs.map(d => parseRemoteDocument<ClassSeatingPlan>({ classId: d.id, ...d.data() }));
+        const remotePlan = remotePlans.find(p => p.classId === classId) || null;
+        const resolved = resolveConflictByTimestamp(localPlan, remotePlan);
+        if (resolved) {
+          allPlans[classId] = resolved;
+          setLocalItem(STORAGE_KEYS.SEATING, allPlans);
+          return resolved;
+        }
+      }
+    } catch (err) {
+      console.warn('Sync seating plan fallback to local:', err);
+    }
+  }
+  return localPlan;
 }
 
 export async function saveSeatingPlan(plan: ClassSeatingPlan): Promise<void> {
@@ -343,26 +390,35 @@ export async function saveSeatingPlan(plan: ClassSeatingPlan): Promise<void> {
     STORAGE_KEYS.SEATING,
     INITIAL_SEATING_PLANS
   );
-  allPlans[plan.classId] = {
+  const planWithTimestamp = {
     ...plan,
-    updatedAt: new Date().toLocaleString('vi-VN'),
+    updatedAt: plan.updatedAt || new Date().toLocaleString('vi-VN'),
   };
+  allPlans[plan.classId] = planWithTimestamp;
   setLocalItem(STORAGE_KEYS.SEATING, allPlans);
 
-  if (isFirebaseConfigured && db) {
-    try {
-      await setDoc(doc(db, 'seating_plans', plan.classId), plan, { merge: true });
-    } catch (err) {
-      console.warn('Sync seating plan failed:', err);
-    }
-  }
+  enqueueSyncTask('firestore', 'setDoc', 'seating_plans', plan.classId, planWithTimestamp);
 }
 
 // ==========================================
 // 5. PIN JOIN REQUESTS SERVICE
 // ==========================================
 export async function getPinRequests(): Promise<PinJoinRequest[]> {
-  return getLocalItem<PinJoinRequest[]>(STORAGE_KEYS.PIN_REQUESTS, []);
+  const local = getLocalItem<PinJoinRequest[]>(STORAGE_KEYS.PIN_REQUESTS, []);
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'pin_requests'));
+      if (!snap.empty) {
+        const remote = snap.docs.map(d => parseRemoteDocument<PinJoinRequest>({ id: d.id, ...d.data() }));
+        const resolved = mergeAndResolveConflicts(local, remote);
+        setLocalItem(STORAGE_KEYS.PIN_REQUESTS, resolved);
+        return resolved;
+      }
+    } catch (err) {
+      console.warn('Sync pin requests fallback:', err);
+    }
+  }
+  return local;
 }
 
 export async function submitPinRequest(req: Omit<PinJoinRequest, 'id' | 'status' | 'requestDate'>): Promise<{ success: boolean; message: string }> {
@@ -388,6 +444,8 @@ export async function submitPinRequest(req: Omit<PinJoinRequest, 'id' | 'status'
   requests.unshift(newReq);
   setLocalItem(STORAGE_KEYS.PIN_REQUESTS, requests);
 
+  enqueueSyncTask('firestore', 'setDoc', 'pin_requests', newReq.id, newReq);
+
   return { success: true, message: 'Đã gửi yêu cầu tham gia lớp học thành công! Chờ giáo viên duyệt.' };
 }
 
@@ -396,7 +454,10 @@ export async function reviewPinRequest(reqId: string, status: 'approved' | 'reje
   const idx = requests.findIndex(r => r.id === reqId);
   if (idx >= 0) {
     requests[idx].status = status;
+    requests[idx].updatedAt = new Date().toLocaleString('vi-VN');
     setLocalItem(STORAGE_KEYS.PIN_REQUESTS, requests);
+
+    enqueueSyncTask('firestore', 'setDoc', 'pin_requests', reqId, requests[idx]);
 
     // If approved, automatically add student to class
     if (status === 'approved') {
@@ -409,6 +470,17 @@ export async function reviewPinRequest(reqId: string, status: 'approved' | 'reje
           targetClass.studentIds.push(req.studentId);
           targetClass.studentCount = targetClass.studentIds.length;
           await saveClass(targetClass);
+        }
+
+        // Cập nhật classIds của Học sinh để đồng bộ hiển thị lớp học trong Menu Học sinh
+        const users = await getUsers();
+        const studentUser = users.find(u => u.id === req.studentId);
+        if (studentUser) {
+          if (!studentUser.classIds) studentUser.classIds = [];
+          if (!studentUser.classIds.includes(req.classId)) {
+            studentUser.classIds.push(req.classId);
+            await saveUser(studentUser);
+          }
         }
 
         // Add to seating plan if empty seat exists
@@ -649,12 +721,29 @@ export async function getStudentsByClassId(classId: string): Promise<StudentProf
   return matchingUsers.map(u => ({
     id: u.id,
     name: u.name,
+    nickname: u.nickname,
     email: u.email,
     studentCode: u.studentCode || '',
     phone: u.phone || '',
+    gps: u.gps || '',
     currentClassId: classId,
     status: 'active',
+    level: u.level || 3, // Mặc định mức 3 nếu chưa gán
+    suggestedLevel: u.suggestedLevel || (u.level ? Math.min(6, Math.max(1, u.level)) : 3),
   }));
+}
+
+/**
+ * Cập nhật mức độ học sinh (1-6) do giáo viên đánh giá
+ */
+export async function updateStudentLevel(studentId: string, level: number): Promise<void> {
+  const users = await getUsers();
+  const user = users.find(u => u.id === studentId);
+  if (user) {
+    user.level = level;
+    user.updatedAt = new Date().toISOString().slice(0, 10);
+    await saveUser(user);
+  }
 }
 
 /**
@@ -717,3 +806,149 @@ export async function saveStudent(student: StudentProfile): Promise<void> {
     await saveUser(newUser);
   }
 }
+
+// ==========================================
+// 7. TEACHER DOCUMENTS & WALLETS (KIM CƯƠNG & TIM)
+// ==========================================
+
+export async function getTeacherDocuments(): Promise<TeacherDocument[]> {
+  const local = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, INITIAL_TEACHER_DOCS);
+  if (isFirebaseConfigured && db) {
+    try {
+      const snap = await getDocs(collection(db, 'documents'));
+      if (!snap.empty) {
+        const remote = snap.docs.map(d => parseRemoteDocument<TeacherDocument>({ id: d.id, ...d.data() }));
+        const resolved = mergeAndResolveConflicts(local, remote);
+        setLocalItem(STORAGE_KEYS.DOCUMENTS, resolved);
+        return resolved;
+      }
+    } catch (err) {
+      console.warn('Sync documents fallback:', err);
+    }
+  }
+  return local;
+}
+
+export async function saveTeacherDocument(docItem: TeacherDocument): Promise<void> {
+  const docWithTimestamp = {
+    ...docItem,
+    updatedAt: docItem.updatedAt || new Date().toLocaleString('vi-VN'),
+  };
+  const list = await getTeacherDocuments();
+  const idx = list.findIndex(d => d.id === docWithTimestamp.id);
+  if (idx >= 0) {
+    list[idx] = docWithTimestamp;
+  } else {
+    list.unshift(docWithTimestamp);
+  }
+  setLocalItem(STORAGE_KEYS.DOCUMENTS, list);
+
+  enqueueSyncTask('firestore', 'setDoc', 'documents', docWithTimestamp.id, docWithTimestamp);
+}
+
+export async function deleteTeacherDocument(docId: string): Promise<void> {
+  const list = await getTeacherDocuments();
+  const filtered = list.filter(d => d.id !== docId);
+  setLocalItem(STORAGE_KEYS.DOCUMENTS, filtered);
+
+  enqueueSyncTask('firestore', 'deleteDoc', 'documents', docId, null);
+}
+
+/**
+ * Nạp/Trừ Kim cương 💎 (Ví tiền số) cho tài khoản
+ */
+export async function adjustUserDiamonds(userId: string, amount: number): Promise<UserProfile> {
+  const users = await getUsers();
+  const userIdx = users.findIndex(u => u.id === userId);
+  if (userIdx < 0) {
+    throw new Error('Tài khoản không tồn tại.');
+  }
+
+  const currentDiamonds = users[userIdx].diamonds || 0;
+  const nextDiamonds = Math.max(0, currentDiamonds + amount);
+  users[userIdx].diamonds = nextDiamonds;
+  users[userIdx].updatedAt = new Date().toLocaleString('vi-VN');
+
+  await saveUser(users[userIdx]);
+  return users[userIdx];
+}
+
+/**
+ * Cộng/Trừ Điểm Tim ❤️ (Đánh giá uy tín) cho tài khoản
+ */
+export async function adjustUserHearts(userId: string, amount: number): Promise<UserProfile> {
+  const users = await getUsers();
+  const userIdx = users.findIndex(u => u.id === userId);
+  if (userIdx < 0) {
+    throw new Error('Tài khoản không tồn tại.');
+  }
+
+  const currentHearts = users[userIdx].hearts || 0;
+  const nextHearts = Math.max(0, currentHearts + amount);
+  users[userIdx].hearts = nextHearts;
+  users[userIdx].updatedAt = new Date().toLocaleString('vi-VN');
+
+  await saveUser(users[userIdx]);
+  return users[userIdx];
+}
+
+/**
+ * Học sinh mua tài liệu mất phí bằng Kim Cương 💎
+ */
+export async function purchaseDocument(docId: string, studentId: string): Promise<{ success: boolean; message: string; updatedUser?: UserProfile; updatedDoc?: TeacherDocument }> {
+  const users = await getUsers();
+  const studentIdx = users.findIndex(u => u.id === studentId);
+  if (studentIdx < 0) {
+    return { success: false, message: 'Không tìm thấy tài khoản học sinh.' };
+  }
+
+  const docs = await getTeacherDocuments();
+  const docIdx = docs.findIndex(d => d.id === docId);
+  if (docIdx < 0) {
+    return { success: false, message: 'Tài liệu không tồn tại trên hệ thống.' };
+  }
+
+  const student = users[studentIdx];
+  const document = docs[docIdx];
+
+  // Kiểm tra nếu đã sở hữu hoặc tài liệu miễn phí
+  const isForSale = document.isForSale || false;
+  const price = document.priceDiamonds || 0;
+
+  if (!isForSale || price <= 0) {
+    return { success: true, message: 'Tài liệu này hoàn toàn miễn phí!', updatedUser: student, updatedDoc: document };
+  }
+
+  const purchasedList = document.purchasedUserIds || [];
+  if (purchasedList.includes(studentId)) {
+    return { success: true, message: 'Bạn đã mua tài liệu này trước đó rồi.', updatedUser: student, updatedDoc: document };
+  }
+
+  const currentBalance = student.diamonds || 0;
+  if (currentBalance < price) {
+    return { success: false, message: `Bạn không đủ Kim cương 💎 để mở khóa tài liệu này! Cần thêm ${price - currentBalance} Kim cương.` };
+  }
+
+  // Khấu trừ số dư Kim Cương của học sinh
+  student.diamonds = currentBalance - price;
+  student.updatedAt = new Date().toLocaleString('vi-VN');
+  
+  // Ghi nhận học sinh đã mua tài liệu
+  if (!document.purchasedUserIds) {
+    document.purchasedUserIds = [];
+  }
+  document.purchasedUserIds.push(studentId);
+  document.updatedAt = new Date().toLocaleString('vi-VN');
+
+  // Lưu cả hai vào Local & Sync Cloud
+  await saveUser(student);
+  await saveTeacherDocument(document);
+
+  return {
+    success: true,
+    message: `Đã mở khóa tài liệu thành công! Trừ ${price} Kim cương 💎. Số dư hiện tại: ${student.diamonds} Kim cương.`,
+    updatedUser: student,
+    updatedDoc: document,
+  };
+}
+

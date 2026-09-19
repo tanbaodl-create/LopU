@@ -10,11 +10,15 @@ import {
   ShieldAlert,
   Cloud,
 } from 'lucide-react';
-import { ClassItem, UserProfile } from '../../../services/storageTypes';
+import { ClassItem, UserProfile, UserRole } from '../../../services/storageTypes';
 import { getClasses, saveClass, getUsers } from '../../ConnectData/ConnectFirestore';
 import { getDriveConnectionState } from '../../ConnectData/ConnectDrive';
 
-export const PhanQuyenLopHocView: React.FC = () => {
+export interface PhanQuyenLopHocViewProps {
+  currentRole?: UserRole;
+}
+
+export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ currentRole }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [teachers, setTeachers] = useState<UserProfile[]>([]);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
@@ -79,6 +83,21 @@ export const PhanQuyenLopHocView: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // Phân quyền bảo vệ: Phần sau thì admin và superadmin thấy: Quản trị tài khoản và phân quyền
+  if (currentRole && currentRole !== 'admin' && currentRole !== 'superadmin') {
+    return (
+      <div id="settings-permissions-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-amber-200 shadow-sm space-y-4">
+        <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+          <Lock className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Phân Quyền</h3>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Chỉ <strong>Quản trị viên (Admin)</strong> và <strong>Superadmin</strong> mới có quyền xem và điều phối tại phân hệ <strong>Phân quyền lớp học & Quản lý mã PIN</strong>.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div id="settings-permissions-view" className="space-y-6">
       {/* Toast Notification */}
@@ -138,7 +157,7 @@ export const PhanQuyenLopHocView: React.FC = () => {
         </div>
       </div>
 
-      {/* Google Drive Permissions & Connection Status */}
+      {/* Google Drive Permissions & Connection Status & Bảo Mật Drive Giáo Viên */}
       <div className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs ${
         driveConn.isConnected && driveConn.isRealConfigured
           ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
@@ -147,13 +166,16 @@ export const PhanQuyenLopHocView: React.FC = () => {
         <div className="space-y-1">
           <div className="flex items-center gap-1.5 font-bold">
             <Cloud className="w-4 h-4 shrink-0" />
-            <span>QUYỀN GHI GOOGLE DRIVE: {driveConn.isConnected && driveConn.isRealConfigured ? 'ĐÃ LIÊN KẾT THÀNH CÔNG' : 'CHẾ ĐỘ THỬ NGHIỆM (SANDBOX)'}</span>
+            <span>QUYỀN GHI GOOGLE DRIVE & BẢO MẬT DỮ LIỆU: {driveConn.isConnected && driveConn.isRealConfigured ? 'ĐÃ LIÊN KẾT THÀNH CÔNG' : 'CHẾ ĐỘ THỬ NGHIỆM (SANDBOX)'}</span>
           </div>
           <p className="text-[11px] leading-relaxed opacity-90">
             {driveConn.isConnected && driveConn.isRealConfigured
-              ? `Tài khoản giáo viên hiện tại (${driveConn.email}) có đầy đủ quyền tạo cấu trúc thư mục myApp\\LopU\\SoDoLop và ghi dữ liệu sơ đồ thực tế vào Google Drive.`
-              : 'Ứng dụng chưa liên kết hoặc chưa được cấp quyền ghi thực tế từ Google Drive API của bạn. Do đó, hệ thống đang lưu tạm sơ đồ vào Sandbox bộ nhớ của trình duyệt. Hãy bấm biểu tượng đám mây ở Header để liên kết Google Drive thật.'}
+              ? `Tài khoản giáo viên hiện tại (${driveConn.email}) có đầy đủ quyền tạo cấu trúc thư mục myApp / LopU / TaiLieu và ghi dữ liệu bài dạy vào Google Drive. Hệ thống áp dụng cơ chế bảo mật nghiêm ngặt: Drive của giáo viên chỉ chính giáo viên và app truy cập; học sinh tuyệt đối không được cấp link trực tiếp để lấy trộm tài liệu.`
+              : 'Ứng dụng chưa liên kết hoặc chưa được cấp quyền ghi thực tế từ Google Drive API của bạn. Do đó, hệ thống đang lưu tạm vào Sandbox bộ nhớ trình duyệt. Cơ chế bảo mật tuyệt đối ngăn chặn học sinh truy xuất Drive giáo viên vẫn được thực thi.'}
           </p>
+          <div className="pt-1 text-[10px] font-semibold text-indigo-700">
+            🛡️ Bảo mật phát lại: Với bài giảng E-Learning (KienThuc.html), hệ thống tự sinh sandbox đường dẫn tương đối để phát media/assets an toàn mà không làm lộ ID Drive hay file nguồn của giáo viên.
+          </div>
         </div>
       </div>
 

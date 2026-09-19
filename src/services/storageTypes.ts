@@ -28,7 +28,26 @@ export interface StudentProfile {
   gps?: string;
   currentClassId?: string;
   status?: 'active' | 'inactive';
+  level?: number; // Mức độ học sinh (1-6): Mức 1 (0-<=2đ), Mức 2 (2-<4đ), Mức 3 (4-<6đ), Mức 4 (6-<8đ), Mức 5 (8-9đ), Mức 6 (>9-10đ)
+  suggestedLevel?: number; // Mức độ gợi ý dựa trên dữ liệu cải thiện điểm số
 }
+
+export interface QuestionLevelDef {
+  level: number; // 1 to 6
+  label: string; // "Mức 1 (0 - ≤2đ)", "Mức 2 (2 - <4đ)", ...
+  scoreRange: string; // "0 - ≤2đ"
+  description: string;
+  badgeColor: string;
+}
+
+export const QUESTION_LEVELS: QuestionLevelDef[] = [
+  { level: 1, label: 'Mức 1', scoreRange: '0 → ≤2 điểm', description: 'Nhận biết rất cơ bản (Điểm 0 - ≤2)', badgeColor: 'bg-slate-100 text-slate-700 border-slate-300' },
+  { level: 2, label: 'Mức 2', scoreRange: '>2 → <4 điểm', description: 'Nhận biết & thông hiểu cơ bản (Điểm >2 - <4)', badgeColor: 'bg-sky-50 text-sky-700 border-sky-200' },
+  { level: 3, label: 'Mức 3', scoreRange: '4 → <6 điểm', description: 'Thông hiểu trung bình (Điểm 4 - <6)', badgeColor: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  { level: 4, label: 'Mức 4', scoreRange: '6 → <8 điểm', description: 'Vận dụng khá (Điểm 6 - <8)', badgeColor: 'bg-amber-50 text-amber-700 border-amber-200' },
+  { level: 5, label: 'Mức 5', scoreRange: '8 → 9 điểm', description: 'Vận dụng cao - Giỏi (Điểm 8 - 9)', badgeColor: 'bg-purple-50 text-purple-700 border-purple-200' },
+  { level: 6, label: 'Mức 6', scoreRange: '>9 → 10 điểm', description: 'Vận dụng rất cao - Xuất sắc (Điểm >9 - 10)', badgeColor: 'bg-rose-50 text-rose-700 border-rose-200' },
+];
 
 export interface UserProfile {
   id: string; // Khóa chính: Google UID hoặc Google Email định danh trong Firebase Firestore
@@ -55,6 +74,11 @@ export interface UserProfile {
   assignedSubject?: string; // Môn phụ trách nếu là quản lý
   isGoogleAuth?: boolean;
   createdAt?: string;
+  updatedAt?: string;
+  diamonds?: number; // Ví Kim Cương 💎: Tiền số của ứng dụng (do admin nạp, dùng mua tài liệu)
+  hearts?: number; // Điểm Tim ❤️: Điểm đánh giá năng lực/uy tín tài khoản (không mua bán)
+  level?: number; // Mức độ năng lực học sinh (1-6)
+  suggestedLevel?: number; // Mức độ gợi ý từ kết quả điểm số
 }
 
 export interface ClassLesson {
@@ -89,6 +113,7 @@ export interface ClassItem {
   semester: string;
   lessons: ClassLesson[];
   color: string;
+  updatedAt?: string;
 }
 
 export interface ImportDeduplicationReport {
@@ -158,6 +183,7 @@ export interface StudentProgress {
   averageScore: number; // 0 - 10
   lastActive: string;
   recentScore?: number;
+  updatedAt?: string;
 }
 
 export interface PinJoinRequest {
@@ -170,6 +196,7 @@ export interface PinJoinRequest {
   submittedPin: string;
   status: 'pending' | 'approved' | 'rejected';
   requestDate: string;
+  updatedAt?: string;
 }
 
 export interface TeacherDocument {
@@ -184,7 +211,7 @@ export interface TeacherDocument {
   chuyenDe?: string; // Ví dụ: "Chuyên đề: Ứng dụng suy luận toán học"
   driveFolderPath?: string; // Đường dẫn thư mục Google Drive: "Chương 1/Bài 1/Vấn đề 1/Chuyên đề"
   category: 'lesson_plan' | 'exercise' | 'slide' | 'exam' | 'reference';
-  fileType: 'pdf' | 'docx' | 'gdoc' | 'sheet' | 'json';
+  fileType: 'pdf' | 'docx' | 'gdoc' | 'sheet' | 'json' | 'html';
   createdAt: string;
   updatedAt: string;
   isPublished: boolean;
@@ -195,6 +222,9 @@ export interface TeacherDocument {
   authorId: string;
   authorEmail?: string;
   contentSnippet?: string;
+  isForSale?: boolean; // Phát hành có phí thu bằng Kim Cương
+  priceDiamonds?: number; // Giá bán tài liệu bằng Kim Cương 💎
+  purchasedUserIds?: string[]; // Danh sách các học sinh đã mua tài liệu
 }
 
 export interface StudentGradeRecord {

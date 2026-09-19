@@ -31,6 +31,8 @@ import { getClasses } from '../../ConnectData/ConnectFirestore';
 import {
   savePersonalSeatingPlanToDrive,
   saveSeatingChartToDrive,
+  fetchSeatingChartsFromDrive,
+  fetchDriveFileJsonContent,
   listAppFilesFromDrive,
   downloadFileJson,
   getDriveConnectionState,
@@ -249,22 +251,8 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
-  // Raw input string parser
-  const [rawStudentsText, setRawStudentsText] = useState<string>(
-    'Nguyễn Văn An; AnGV; Nam; Tổ 1; LT, BT, TT, Toán\n' +
-    'Lê Minh Khang; KhangKhang; Nam; Tổ 1; PHT, UV, , Lý\n' +
-    'Trần Thị Mai; MaiMai; Nữ; Tổ 1; , , TP, Hóa\n' +
-    'Phạm Hoàng Nam; NamNam; Nam; Tổ 1; TQ, , , Sinh\n' +
-    'Đỗ Thu Hà; HàHà; Nữ; Tổ 2; CĐ, , , Tin\n' +
-    'Vũ Quốc Tuấn; TuấnT; Nam; Tổ 2; , , , Anh\n' +
-    'Nguyễn Thị Yến; YếnNhi; Nữ; Tổ 2; , , , Văn\n' +
-    'Bùi Văn Hùng; HùngB; Nam; Tổ 3; , , , Sử\n' +
-    'Lâm Thu Trang; TrangT; Nữ; Tổ 3; , , , Địa\n' +
-    'Hoàng Minh Trí; TríM; Nam; Tổ 4; , , , KTPL\n' +
-    'Phạm Thanh Hà; HàPhạm; Nữ; Tổ 4; , PBT, TT, \n' +
-    'Nguyễn Văn Bình; BìnhB; Nam; ; , , , \n' +
-    'Trần Thu Cúc; CúcT; Nữ; ; , , , '
-  );
+  // Raw input string parser (Đã xóa sạch dữ liệu demo)
+  const [rawStudentsText, setRawStudentsText] = useState<string>('');
 
   const [students, setStudents] = useState<StudentCardData[]>([]);
   const [draggedStudentId, setDraggedStudentId] = useState<string | null>(null);
@@ -275,7 +263,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const [customDeskSeats, setCustomDeskSeats] = useState<Record<string, number>>({});
 
   // Áp dụng từ tuần k (k thay đổi được)
-  const [applyWeekNum, setApplyWeekNum] = useState<number>(12);
+  const [applyWeekNum, setApplyWeekNum] = useState<number>(1);
   // Trạng thái đang tải lên Drive
   const [isUploadingDrive, setIsUploadingDrive] = useState<boolean>(false);
 
@@ -314,6 +302,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   // States cho Google Drive files
   const [driveFilesModalOpen, setDriveFilesModalOpen] = useState<boolean>(false);
+  const [isLoadingDriveFiles, setIsLoadingDriveFiles] = useState<boolean>(false);
   const [driveFiles, setDriveFiles] = useState<DriveStoredFile[]>([]);
 
   // Góc nhìn Sơ đồ lớp: 'up' = Góc nhìn lên (Từ phía HS lên bảng), 'down' = Góc nhìn xuống (Từ Bàn Giáo Viên)
@@ -352,15 +341,15 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const [pickerStatusFilter, setPickerStatusFilter] = useState<'unassigned' | 'all' | 'assigned'>('unassigned');
   const [pickerTeamFilter, setPickerTeamFilter] = useState<string>('all');
 
-  // Config Header
+  // Config Header (Làm sạch 100% dữ liệu demo)
   const [headerInfo, setHeaderInfo] = useState({
-    department: 'Sở GD&ĐT TP. Hồ Chí Minh',
-    schoolName: 'THPT Chuyên Nguyễn Trãi',
-    className: 'Lớp 10A1',
-    academicYear: '2026 - 2027',
-    applyWeek: 'Tuần 12 (Áp dụng từ 15/11)',
+    department: 'Sở GD&ĐT',
+    schoolName: '',
+    className: '',
+    academicYear: getDynamicAcademicYear(),
+    applyWeek: '',
     teacherName: 'Đỗ Tấn Bảo',
-    teacherPhone: '039 447 9986',
+    teacherPhone: '',
   });
 
   useEffect(() => {
@@ -371,7 +360,11 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       if (clsList.length > 0) {
         setSelectedClassId(clsList[0].id);
       }
-      parseRawTextToStudents(rawStudentsText);
+      if (rawStudentsText.trim()) {
+        parseRawTextToStudents(rawStudentsText);
+      } else {
+        setStudents([]);
+      }
     }
     load();
   }, [seatsPerDesk]);
@@ -468,7 +461,10 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   // Parse chuỗi cấu trúc [Họ tên; Biệt danh; Giới tính; Tổ/nhóm; Vai trò; Chức danh]
   const parseRawTextToStudents = (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      setStudents([]);
+      return;
+    }
     const lines = text.split('\n').filter(l => l.trim().length > 0);
     const parsed: StudentCardData[] = [];
 
@@ -1066,26 +1062,31 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   };
 
   const handleOpenDriveFiles = async () => {
-    const storedRaw = localStorage.getItem('lopu_google_drive_files_v1') || '[]';
-    let files: DriveStoredFile[] = [];
-    try {
-      files = JSON.parse(storedRaw);
-    } catch (e) {
-      files = [];
-    }
-
-    const seatingFiles = files.filter(f => f.category === 'personal_seating' || f.name.startsWith('SoDoLop_'));
-    setDriveFiles(seatingFiles);
+    setIsLoadingDriveFiles(true);
     setDriveFilesModalOpen(true);
+    try {
+      const seatingFiles = await fetchSeatingChartsFromDrive();
+      setDriveFiles(seatingFiles);
+    } catch (err) {
+      console.error('Lỗi khi tải danh sách file từ Drive:', err);
+    } finally {
+      setIsLoadingDriveFiles(false);
+    }
   };
 
-  const handleApplyDriveFile = (file: DriveStoredFile) => {
+  const handleApplyDriveFile = async (file: DriveStoredFile) => {
     try {
-      const data = file.content as SoDoLopSaveData;
+      setSyncMessage(`Đang đọc nội dung file ${file.name} từ Google Drive...`);
+      const content = await fetchDriveFileJsonContent(file.id, file.content);
+      if (!content) {
+        alert(`Không thể đọc được nội dung của file ${file.name}. Vui lòng kiểm tra lại kết nối Drive.`);
+        return;
+      }
+      const data = content as SoDoLopSaveData;
       loadDataIntoState(data);
 
-      // Trigger file download to computer
-      downloadFileJson(file);
+      // Tải file JSON về máy tính của người dùng
+      downloadFileJson({ ...file, content: data });
 
       setSyncMessage(`Đã nạp sơ đồ & Tải file ${file.name} về máy thành công!`);
       setDriveFilesModalOpen(false);
@@ -2274,10 +2275,15 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             {/* List */}
             <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
               <p className="text-xs text-slate-500 font-medium">
-                Thư mục mặc định: <span className="font-bold text-slate-700">myApp\SoDoLop</span>. Chọn file JSON để nạp dữ liệu và tải về máy:
+                Thư mục mặc định: <span className="font-bold text-slate-700">myApp\LopU\SoDoLop</span>. Chọn file JSON để nạp dữ liệu và tải về máy:
               </p>
 
-              {driveFiles.length === 0 ? (
+              {isLoadingDriveFiles ? (
+                <div className="p-8 text-center text-xs text-indigo-600 bg-indigo-50/50 border border-dashed border-indigo-200 rounded-2xl flex flex-col items-center justify-center gap-2">
+                  <RefreshCw className="w-5 h-5 animate-spin text-indigo-600" />
+                  <span className="font-bold">Đang quét tìm các file sơ đồ lớp từ Google Drive...</span>
+                </div>
+              ) : driveFiles.length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-2xl italic">
                   Chưa có file sơ đồ lớp nào được lưu trên Drive.
                 </div>

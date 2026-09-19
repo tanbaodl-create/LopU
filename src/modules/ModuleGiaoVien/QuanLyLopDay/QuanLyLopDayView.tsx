@@ -14,7 +14,7 @@ import {
   MapPin,
   ArrowRightLeft,
 } from 'lucide-react';
-import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile } from '../../../services/storageTypes';
+import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile, UserProfile, UserRole, QUESTION_LEVELS } from '../../../services/storageTypes';
 import {
   getClasses,
   getSeatingPlan,
@@ -24,6 +24,8 @@ import {
   saveClass,
   getStudentsByClassId,
   removeStudentFromClass,
+  getUsers,
+  updateStudentLevel,
 } from '../../ConnectData/ConnectFirestore';
 import { ModalThemHocSinhExcel, themMotHocSinh } from '../NhapHocSinh';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
@@ -136,7 +138,11 @@ export const StudentCardBox: React.FC<StudentCardBoxProps> = ({
   );
 };
 
-export const QuanLyLopDayView: React.FC = () => {
+export interface QuanLyLopDayViewProps {
+  currentRole?: UserRole;
+}
+
+export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>('class_10a1');
   const [seatingPlan, setSeatingPlan] = useState<ClassSeatingPlan | null>(null);
@@ -146,6 +152,7 @@ export const QuanLyLopDayView: React.FC = () => {
   const [notification, setNotification] = useState<string | null>(null);
   const [showExcelModal, setShowExcelModal] = useState<boolean>(false);
   const [showGpsModal, setShowGpsModal] = useState<boolean>(false);
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
 
   // Modal Mở lớp dạy mới
   const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
@@ -180,6 +187,8 @@ export const QuanLyLopDayView: React.FC = () => {
     }
     const reqs = await getPinRequests();
     setPinRequests(reqs);
+    const users = await getUsers();
+    setUserProfiles(users);
   };
 
   useEffect(() => {
@@ -192,6 +201,8 @@ export const QuanLyLopDayView: React.FC = () => {
     setSeatingPlan(plan);
     const stds = await getStudentsByClassId(classId);
     setClassStudents(stds);
+    const users = await getUsers();
+    setUserProfiles(users);
   };
 
   // Mở lớp dạy mới
@@ -266,6 +277,16 @@ export const QuanLyLopDayView: React.FC = () => {
     }
   };
 
+  // Cập nhật mức độ năng lực học sinh (1-6)
+  const handleUpdateStudentLevelChange = async (studentId: string, level: number) => {
+    await updateStudentLevel(studentId, level);
+    setClassStudents(prev =>
+      prev.map(s => (s.id === studentId ? { ...s, level } : s))
+    );
+    setNotification(`Đã cập nhật mức độ học sinh thành Mức ${level}`);
+    setTimeout(() => setNotification(null), 2500);
+  };
+
   const handleSaveSeating = async () => {
     if (!seatingPlan) return;
     const updatedPlan: ClassSeatingPlan = {
@@ -312,6 +333,21 @@ export const QuanLyLopDayView: React.FC = () => {
     }
   };
 
+  // Phân quyền bảo vệ: Phần sau thì Giáo viên trở lên mới thấy: Nghiệp vụ giảng dạy
+  if (currentRole && !['superadmin', 'admin', 'manager', 'teacher'].includes(currentRole)) {
+    return (
+      <div id="teaching-management-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-emerald-200 shadow-sm space-y-4">
+        <div className="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center mx-auto">
+          <Users className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Nghiệp Vụ Giảng Dạy</h3>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Chỉ <strong>Giáo viên trở lên</strong> (Giáo viên, Quản lý môn, Quản trị viên, Superadmin) mới có quyền truy cập <strong>Nghiệp vụ giảng dạy & Quản lý lớp dạy</strong>.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div id="teaching-management-view" className="space-y-6">
       {/* Toast Notification */}
@@ -334,6 +370,9 @@ export const QuanLyLopDayView: React.FC = () => {
           <p className="text-xs text-slate-500 mt-0.5">
             Giáo viên mở lớp dạy, thêm/xóa học sinh bằng Google Account định danh và sắp xếp sơ đồ lớp
           </p>
+          <div className="mt-2 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 font-medium">
+            <span>🛡️ <strong>Bảo mật Drive giáo viên:</strong> Toàn bộ dữ liệu điểm số, sơ đồ lớp và giáo án lưu tại Google Drive của giáo viên. Hệ thống đảm bảo chỉ chính giáo viên và ứng dụng có quyền truy cập; học sinh không thể lấy tài liệu gốc từ Drive.</span>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
@@ -354,6 +393,7 @@ export const QuanLyLopDayView: React.FC = () => {
             onChange={e => handleClassChange(e.target.value)}
             className="text-xs font-bold bg-slate-50 text-slate-800 py-2 px-3 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
           >
+            <option value="">-- (Để trống) --</option>
             {classes.map(c => (
               <option key={c.id} value={c.id}>
                 {c.code} — {c.name}
@@ -455,11 +495,13 @@ export const QuanLyLopDayView: React.FC = () => {
           {/* Students Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
-              <thead>
+               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase text-[10px] tracking-wider">
                   <th className="py-2.5 px-3">Họ và Tên</th>
                   <th className="py-2.5 px-3">Biệt Danh</th>
                   <th className="py-2.5 px-3">Google Email</th>
+                  <th className="py-2.5 px-3">Mức Độ (1-6)</th>
+                  <th className="py-2.5 px-3">Ví Kim Cương</th>
                   <th className="py-2.5 px-3">Mã Học Sinh</th>
                   <th className="py-2.5 px-3">Tọa Độ GPS</th>
                   <th className="py-2.5 px-3">Số Điện Thoại</th>
@@ -467,20 +509,57 @@ export const QuanLyLopDayView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {classStudents.map(std => (
-                  <tr key={std.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-2.5 px-3 font-bold text-slate-900">{std.name}</td>
-                    <td className="py-2.5 px-3">
-                      {std.nickname ? (
-                        <span className="text-emerald-700 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[11px]">
-                          {std.nickname}
+                {classStudents.map(std => {
+                  const matchedUser = userProfiles.find(u => u.email.toLowerCase() === std.email.toLowerCase());
+                  const diamondBalance = matchedUser ? (matchedUser.diamonds !== undefined ? matchedUser.diamonds : 0) : 0;
+                  const currentLevel = std.level || 3;
+                  const currentLevelDef = QUESTION_LEVELS.find(l => l.level === currentLevel) || QUESTION_LEVELS[2];
+
+                  return (
+                    <tr key={std.id} className="hover:bg-slate-50/70 transition-colors">
+                      <td className="py-2.5 px-3 font-bold text-slate-900">{std.name}</td>
+                      <td className="py-2.5 px-3">
+                        {std.nickname ? (
+                          <span className="text-emerald-700 font-medium bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 text-[11px]">
+                            {std.nickname}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic">—</span>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 font-mono text-slate-600">{std.email}</td>
+                      <td className="py-2.5 px-3">
+                        <div className="flex flex-col gap-1">
+                          <select
+                            value={currentLevel}
+                            onChange={(e) => handleUpdateStudentLevelChange(std.id, parseInt(e.target.value, 10))}
+                            className={`text-[11px] font-bold py-1 px-2 rounded-lg border cursor-pointer focus:outline-hidden focus:ring-2 focus:ring-indigo-500 ${currentLevelDef.badgeColor}`}
+                            title={`Điểm số tương ứng: ${currentLevelDef.scoreRange}`}
+                          >
+                            {QUESTION_LEVELS.map(ql => (
+                              <option key={ql.level} value={ql.level}>
+                                {ql.label} ({ql.scoreRange})
+                              </option>
+                            ))}
+                          </select>
+                          {std.suggestedLevel && std.suggestedLevel !== currentLevel && (
+                            <button
+                              type="button"
+                              onClick={() => handleUpdateStudentLevelChange(std.id, std.suggestedLevel!)}
+                              className="text-[10px] text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200/80 font-medium text-left truncate cursor-pointer hover:bg-indigo-100 transition-colors"
+                              title="Áp dụng mức độ gợi ý theo dữ liệu cải thiện kết quả"
+                            >
+                              💡 Gợi ý: Mức {std.suggestedLevel} (áp dụng)
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <span className="font-mono font-black text-amber-800 bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200/50 flex items-center gap-1 w-fit">
+                          💎 {diamondBalance}
                         </span>
-                      ) : (
-                        <span className="text-slate-400 italic">—</span>
-                      )}
-                    </td>
-                    <td className="py-2.5 px-3 font-mono text-slate-600">{std.email}</td>
-                    <td className="py-2.5 px-3 font-mono font-semibold text-indigo-700">{std.studentCode || '—'}</td>
+                      </td>
+                      <td className="py-2.5 px-3 font-mono font-semibold text-indigo-700">{std.studentCode || '—'}</td>
                     <td className="py-2.5 px-3">
                       {std.gps ? (
                         <span className="font-mono text-[11px] text-slate-700 font-semibold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
@@ -501,10 +580,11 @@ export const QuanLyLopDayView: React.FC = () => {
                       </button>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
                 {classStudents.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-xs text-slate-400 italic">
+                    <td colSpan={9} className="py-8 text-center text-xs text-slate-400 italic">
                       Lớp này chưa có học sinh nào. Giáo viên có thể bấm "Thêm 1 học sinh" hoặc "Nhập danh sách Excel".
                     </td>
                   </tr>
@@ -826,6 +906,7 @@ export const QuanLyLopDayView: React.FC = () => {
                     onChange={e => setNewClassGrade(e.target.value)}
                     className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   >
+                    <option value="">-- (Để trống) --</option>
                     <option value="Khối 10">Khối 10</option>
                     <option value="Khối 11">Khối 11</option>
                     <option value="Khối 12">Khối 12</option>
@@ -838,6 +919,7 @@ export const QuanLyLopDayView: React.FC = () => {
                     onChange={e => setNewClassSubject(e.target.value)}
                     className="w-full py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
                   >
+                    <option value="">-- (Để trống) --</option>
                     <option value="Toán Học">Toán Học</option>
                     <option value="Vật Lý">Vật Lý</option>
                     <option value="Hóa Học">Hóa Học</option>

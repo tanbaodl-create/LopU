@@ -34,13 +34,25 @@ import {
   Tag,
   Award,
   Filter,
+  Gem,
+  Heart,
+  Network,
+  Zap,
+  Cloud,
+  LogOut,
+  LogIn,
 } from 'lucide-react';
 import { UserProfile, UserRole, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
+import { getDriveConnectionState } from '../../ConnectData/ConnectDrive';
+import { auth } from '../../../config/firebase';
+import { signOut } from 'firebase/auth';
 import {
   getUsers,
   saveUser,
   deleteUser,
   importUsersWithDeduplication,
+  adjustUserDiamonds,
+  adjustUserHearts,
 } from '../../ConnectData/ConnectFirestore';
 import { UserProfileModal } from './components/UserProfileModal';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
@@ -59,7 +71,21 @@ interface AdminImportReport {
   updated: number;
 }
 
-export const QuanLyNguoiDungView: React.FC = () => {
+export interface QuanLyNguoiDungViewProps {
+  currentRole?: UserRole;
+  onNavigateToView?: (viewId: any) => void;
+  driveEmail?: string;
+  onOpenDriveConnect?: () => void;
+  onChangeRole?: (role: UserRole) => void;
+}
+
+export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
+  currentRole,
+  onNavigateToView,
+  driveEmail,
+  onOpenDriveConnect,
+  onChangeRole,
+}) => {
   const [users, setUsers] = useState<ExtendedUserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   
@@ -74,6 +100,7 @@ export const QuanLyNguoiDungView: React.FC = () => {
   const [report, setReport] = useState<AdminImportReport | null>(null);
   const [isImporting, setIsImporting] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
 
   // Manual Add Modal - Standardized 14 Fields
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -114,28 +141,84 @@ export const QuanLyNguoiDungView: React.FC = () => {
 
   const loadData = async () => {
     const data = (await getUsers()) as ExtendedUserProfile[];
-    const superUsers = data.filter(u => isSuperadminProtected(u));
-    const nonSuperUsers = data.filter(u => !isSuperadminProtected(u));
+    const mapped = data.map(u => {
+      const emailLower = (u.email || '').trim().toLowerCase();
+      const isSuper = emailLower === 'tanbaodl@gmail.com' || emailLower === 'tanbaobg@gmail.com';
+      return {
+        ...u,
+        name: isSuper ? 'Đỗ Tấn Bảo' : (u.name || 'Người dùng'),
+        nickname: isSuper ? 'Th Bảo' : u.nickname,
+        isApproved: u.isApproved !== undefined ? u.isApproved : true,
+        gps: u.gps || (u.email.includes('bg') ? '21.273099, 106.194602' : u.email.includes('dl') ? '11.940419, 108.458313' : undefined),
+      };
+    });
 
-    if (nonSuperUsers.length > 0) {
-      for (const u of nonSuperUsers) {
-        try {
-          await deleteUser(u.id);
-        } catch (e) {
-          // bỏ qua lỗi
+    // Tự động gộp & dọn dẹp các tài khoản trùng lặp theo Email
+    // Đảm bảo tanbaodl@gmail.com và tanbaobg@gmail.com là superadmin Đỗ Tấn Bảo (Th Bảo)
+    const emailMap = new Map<string, ExtendedUserProfile>();
+    const duplicateIdsToDelete: string[] = [];
+
+    for (const u of mapped) {
+      const emailLower = (u.email || '').trim().toLowerCase();
+      if (!emailLower) {
+        emailMap.set(u.id, u);
+        continue;
+      }
+
+      if (emailLower === 'tanbaodl@gmail.com') {
+        if (!emailMap.has(emailLower)) {
+          emailMap.set(emailLower, {
+            ...u,
+            name: 'Đỗ Tấn Bảo',
+            nickname: 'Th Bảo',
+            role: 'superadmin',
+            roles: ['superadmin'],
+            isProtected: true,
+            isApproved: true,
+            diamonds: u.diamonds !== undefined ? u.diamonds : 1000,
+            hearts: u.hearts !== undefined ? u.hearts : 100,
+          });
+        } else {
+          duplicateIdsToDelete.push(u.id);
+        }
+      } else if (emailLower === 'tanbaobg@gmail.com') {
+        if (!emailMap.has(emailLower)) {
+          emailMap.set(emailLower, {
+            ...u,
+            name: 'Đỗ Tấn Bảo',
+            nickname: 'Th Bảo',
+            role: 'superadmin',
+            roles: ['superadmin'],
+            isProtected: true,
+            isApproved: true,
+            diamonds: u.diamonds !== undefined ? u.diamonds : 1000,
+            hearts: u.hearts !== undefined ? u.hearts : 100,
+          });
+        } else {
+          duplicateIdsToDelete.push(u.id);
+        }
+      } else {
+        if (!emailMap.has(emailLower)) {
+          emailMap.set(emailLower, u);
+        } else {
+          duplicateIdsToDelete.push(u.id);
         }
       }
     }
 
-    const standardizedSuperUsers = superUsers.map(u => ({
-      ...u,
-      nickname: u.nickname || (u.email.includes('bg') ? 'Bảo Bắc Giang' : 'Bảo Đà Lạt'),
-      isApproved: true,
-      gps: u.gps || (u.email.includes('bg') ? '21.273099, 106.194602' : '11.940419, 108.458313'),
-    }));
+    // Dọn sạch các id trùng lặp khỏi storage
+    for (const dupId of duplicateIdsToDelete) {
+      deleteUser(dupId).catch(() => {});
+    }
 
-    localStorage.setItem('lopu_demo_cleaned', 'true');
-    setUsers(standardizedSuperUsers);
+    const cleanedList = Array.from(emailMap.values());
+    if (duplicateIdsToDelete.length > 0) {
+      try {
+        localStorage.setItem('lopu_users_data', JSON.stringify(cleanedList));
+      } catch (e) {}
+    }
+
+    setUsers(cleanedList);
   };
 
   useEffect(() => {
@@ -215,6 +298,28 @@ export const QuanLyNguoiDungView: React.FC = () => {
     setEditingNicknameUserId(null);
     setNotification(`Cá nhân đã cập nhật Biệt danh thành công: "${updated.nickname || 'Chưa đặt'}"`);
     setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleAdjustDiamonds = async (user: ExtendedUserProfile, amount: number) => {
+    try {
+      const updatedUser = await adjustUserDiamonds(user.id, amount);
+      setUsers(users.map(u => u.id === user.id ? { ...u, diamonds: updatedUser.diamonds } : u));
+      setNotification(`Đã cập nhật ví Kim cương cho ${user.name}: ${amount > 0 ? '+' : ''}${amount} 💎 (Số dư mới: ${updatedUser.diamonds})`);
+      setTimeout(() => setNotification(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Không thể điều chỉnh Kim cương.');
+    }
+  };
+
+  const handleAdjustHearts = async (user: ExtendedUserProfile, amount: number) => {
+    try {
+      const updatedUser = await adjustUserHearts(user.id, amount);
+      setUsers(users.map(u => u.id === user.id ? { ...u, hearts: updatedUser.hearts } : u));
+      setNotification(`Đã cập nhật điểm Tim cho ${user.name}: ${amount > 0 ? '+' : ''}${amount} ❤️ (Điểm mới: ${updatedUser.hearts})`);
+      setTimeout(() => setNotification(null), 3000);
+    } catch (err: any) {
+      alert(err.message || 'Không thể điều chỉnh Tim.');
+    }
   };
 
   const handleApproveRole = async (user: ExtendedUserProfile, targetRole: UserRole) => {
@@ -670,6 +775,21 @@ export const QuanLyNguoiDungView: React.FC = () => {
     return matchSearch && matchRole && matchClass && matchSubject && matchTitle && matchGps;
   });
 
+  // Phân quyền bảo vệ: Phần sau thì admin và superadmin thấy: Quản trị tài khoản và phân quyền
+  if (currentRole && currentRole !== 'admin' && currentRole !== 'superadmin') {
+    return (
+      <div id="settings-users-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-amber-200 shadow-sm space-y-4">
+        <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto">
+          <Lock className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Truy Cập</h3>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Chỉ <strong>Quản trị viên (Admin)</strong> và <strong>Superadmin</strong> mới có quyền xem và thao tác tại phân hệ <strong>Quản trị tài khoản và phân quyền</strong>.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div id="settings-users-view" className="space-y-6">
       {/* Toast Notification */}
@@ -679,6 +799,185 @@ export const QuanLyNguoiDungView: React.FC = () => {
           <span>{notification}</span>
         </div>
       )}
+
+      {/* Cụm gôm các nút thông tin tài khoản: Drive, Điểm Kim cương, Điểm Tim, Dropdown Vai trò, Đăng xuất */}
+      {(() => {
+        const currentAuthUser = auth?.currentUser;
+        const currentProfile = users.find(u => u.email === currentAuthUser?.email) ||
+          users.find(u => u.email === 'tanbaodl@gmail.com') ||
+          users.find(u => u.role === 'superadmin');
+
+        const driveConn = getDriveConnectionState();
+        const isGoogleConnected = Boolean(currentAuthUser || driveConn.isConnected);
+        const activeConnectedAccount = currentAuthUser?.email || driveEmail || driveConn.email || currentProfile?.email || 'tanbaodl@gmail.com';
+
+        // Danh sách các vai trò trải nghiệm trong hệ thống
+        const rolesList: UserRole[] = [
+          'superadmin',
+          'admin',
+          'manager',
+          'teacher',
+          'assistant',
+          'student',
+          'parent',
+          'guest',
+        ];
+
+        const ROLE_NAMES: Record<UserRole, string> = {
+          superadmin: '👑 Superadmin',
+          admin: '⚙️ Quản trị viên',
+          manager: '👔 Quản lý môn',
+          teacher: '👨‍🏫 Giáo viên',
+          assistant: '🤝 Trợ giảng',
+          student: '🎓 Học sinh',
+          parent: '👨‍👩‍👧 Phụ huynh',
+          guest: '👤 Khách',
+        };
+
+        return (
+          <div
+            id="panel-account-cluster-bar"
+            className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl text-white shadow-md flex flex-wrap items-center justify-between gap-3 border border-indigo-800/40 relative z-20"
+          >
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/20 text-indigo-200 border border-indigo-400/30 uppercase tracking-wide">
+                Tài khoản & Phân quyền
+              </span>
+              <span className="text-xs font-semibold text-slate-300 truncate max-w-[200px]">
+                {currentProfile?.name || currentAuthUser?.displayName || 'Quản trị hệ thống'}
+              </span>
+            </div>
+
+            {/* Cụm gôm các mục theo trạng thái kết nối Google */}
+            {!isGoogleConnected ? (
+              /* 1. Khi CHƯA kết nối tài khoản Google: CHỈ có chữ Đăng nhập */
+              <div className="flex items-center">
+                <button
+                  id="btn-cluster-login"
+                  onClick={() => onOpenDriveConnect && onOpenDriveConnect()}
+                  title="Đăng nhập tài khoản Google"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-xs transition-colors cursor-pointer"
+                >
+                  <LogIn className="w-3.5 h-3.5" />
+                  <span>Đăng nhập</span>
+                </button>
+              </div>
+            ) : (
+              /* 2. Khi ĐÃ kết nối: [tài khoản kết nối] (bỏ chữ Drive:) và dropdown xổ xuống */
+              <div className="relative">
+                <button
+                  id="btn-cluster-account-dropdown"
+                  onClick={() => setShowAccountDropdown(prev => !prev)}
+                  title={`Tài khoản kết nối: ${activeConnectedAccount}`}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-indigo-400/30 shadow-xs transition-all cursor-pointer"
+                >
+                  <User className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+                  <span className="font-bold truncate max-w-[150px] sm:max-w-[200px]">
+                    {activeConnectedAccount}
+                  </span>
+                  <ChevronDown className={`w-3.5 h-3.5 text-indigo-300 transition-transform ${showAccountDropdown ? 'rotate-180' : ''}`} />
+                </button>
+
+                {/* Dropdown xổ xuống chứa: Vai trò, Điểm Kim cương, Điểm Tim, Đăng xuất */}
+                {showAccountDropdown && (
+                  <div
+                    id="dropdown-account-menu"
+                    className="absolute right-0 top-full mt-2 w-72 bg-slate-900 border border-indigo-700/60 rounded-2xl p-3.5 shadow-2xl space-y-3 z-50 text-white"
+                  >
+                    {/* Header tài khoản trong dropdown */}
+                    <div className="border-b border-slate-800 pb-2.5">
+                      <div className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                        Tài khoản kết nối
+                      </div>
+                      <div className="text-xs font-bold text-white truncate mt-0.5">
+                        {activeConnectedAccount}
+                      </div>
+                    </div>
+
+                    {/* Nút sửa thông tin tài khoản của chính mình (14 trường) */}
+                    <button
+                      id="btn-edit-my-profile"
+                      type="button"
+                      onClick={() => {
+                        if (currentProfile) {
+                          setDetailModalUser(currentProfile);
+                          setShowAccountDropdown(false);
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 border border-indigo-400/40 transition-colors cursor-pointer shadow-xs"
+                      title="Chỉnh sửa thông tin hồ sơ của chính mình (14 trường)"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-indigo-300 shrink-0" />
+                      <span>Sửa thông tin của tôi (14 trường)</span>
+                    </button>
+
+                    {/* 1. Vai trò của tài khoản */}
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-400 block">
+                        Vai trò tài khoản:
+                      </label>
+                      <select
+                        id="select-account-role-cluster"
+                        value={currentRole}
+                        onChange={e => {
+                          onChangeRole && onChangeRole(e.target.value as UserRole);
+                        }}
+                        className="w-full bg-slate-800 hover:bg-slate-750 text-white text-xs font-bold py-2 px-2.5 rounded-xl border border-slate-700 shadow-xs focus:ring-2 focus:ring-indigo-400 cursor-pointer"
+                      >
+                        {rolesList.map(role => (
+                          <option key={role} value={role} className="bg-slate-900 text-white">
+                            {ROLE_NAMES[role] || role}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 2. Điểm kim cương & điểm Tim */}
+                    <div className="grid grid-cols-2 gap-2 pt-0.5">
+                      <div className="flex items-center gap-2 p-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs">
+                        <span className="text-base leading-none">💎</span>
+                        <div>
+                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Kim cương</div>
+                          <div className="font-mono font-bold text-amber-300">
+                            {currentProfile?.diamonds !== undefined ? currentProfile.diamonds : 0}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 p-2 bg-slate-800/80 border border-slate-700/60 rounded-xl text-xs">
+                        <span className="text-base leading-none">❤️</span>
+                        <div>
+                          <div className="text-[10px] text-slate-400 uppercase font-semibold">Điểm Tim</div>
+                          <div className="font-mono font-bold text-rose-300">
+                            {currentProfile?.hearts !== undefined ? currentProfile.hearts : 0}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 3. Nút Đăng xuất */}
+                    <div className="pt-1 border-t border-slate-800">
+                      <button
+                        id="btn-cluster-signout"
+                        onClick={async () => {
+                          if (auth) {
+                            await signOut(auth);
+                            window.location.reload();
+                          }
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 border border-rose-500/30 transition-colors cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                        <span>Đăng xuất</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Deduplication Report Banner */}
       {report && (
@@ -1272,7 +1571,137 @@ export const QuanLyNguoiDungView: React.FC = () => {
                               </div>
                               <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
                                 <span className="text-slate-400 block text-[10px] font-bold uppercase">14. Chức Danh Trong Lớp</span>
-                                <span className="font-bold text-amber-700">{titlesList.join(', ')}</span>
+                                <strong className="font-bold text-amber-700">{titlesList.join(', ')}</strong>
+                              </div>
+                            </div>
+
+                            {/* DƯỚI ĐÂY LÀ KHU VỰC QUẢN LÝ VÍ KIM CƯƠNG 💎 & TIM ❤️ */}
+                            <div className="pt-3 border-t border-slate-100 mt-2.5">
+                              <span className="font-bold text-[11px] text-slate-800 flex items-center gap-1.5 uppercase tracking-wide mb-2">
+                                <Sparkles className="w-4 h-4 text-amber-500" />
+                                Quản Lý Tài Chính & Điểm Thưởng (Hệ Thống Tiền Số & Uy Tín)
+                              </span>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Cột ví Kim Cương */}
+                                <div className="p-3 bg-amber-50/50 border border-amber-200/60 rounded-xl flex items-center justify-between gap-4">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1 text-xs font-bold text-amber-900">
+                                      <Gem className="w-4 h-4 text-amber-600 shrink-0" />
+                                      <span>Số Dư Kim Cương (Tiền Số Học Phí)</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500">
+                                      Dùng để mua tài liệu tự học có trả phí, đăng ký tài nguyên đặc biệt.
+                                    </p>
+                                    <div className="text-lg font-extrabold text-amber-700 font-mono">
+                                      {u.diamonds !== undefined ? u.diamonds : 0} <span className="text-xs font-bold">💎</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1.5 shrink-0">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleAdjustDiamonds(u, 50)}
+                                        className="px-2 py-1 text-[10px] font-black bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors cursor-pointer"
+                                        title="Cộng 50 Kim cương"
+                                      >
+                                        +50 💎
+                                      </button>
+                                      <button
+                                        onClick={() => handleAdjustDiamonds(u, 100)}
+                                        className="px-2 py-1 text-[10px] font-black bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors cursor-pointer"
+                                        title="Cộng 100 Kim cương"
+                                      >
+                                        +100 💎
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleAdjustDiamonds(u, -50)}
+                                        disabled={(u.diamonds || 0) < 50}
+                                        className="px-2 py-1 text-[10px] font-black bg-rose-50 border border-rose-200 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Trừ 50 Kim cương"
+                                      >
+                                        -50 💎
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          const num = prompt('Nhập số Kim cương cần cộng/trừ (ví dụ: 200 hoặc -150):');
+                                          if (num) {
+                                            const parsed = parseInt(num, 10);
+                                            if (!isNaN(parsed) && parsed !== 0) {
+                                              handleAdjustDiamonds(u, parsed);
+                                            }
+                                          }
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                                        title="Điều chỉnh tùy chỉnh"
+                                      >
+                                        Khác...
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Cột Điểm Tim */}
+                                <div className="p-3 bg-rose-50/40 border border-rose-200/50 rounded-xl flex items-center justify-between gap-4">
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-1 text-xs font-bold text-rose-950">
+                                      <Heart className="w-4 h-4 text-rose-600 shrink-0 fill-rose-500" />
+                                      <span>Điểm Tim Thưởng (Đánh Giá Học Tập)</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500">
+                                      Tặng trực tiếp khi đạt điểm cao môn Toán, hoàn thành chuyên đề xuất sắc.
+                                    </p>
+                                    <div className="text-lg font-extrabold text-rose-700 font-mono">
+                                      {u.hearts !== undefined ? u.hearts : 0} <span className="text-xs font-bold">❤️</span>
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-col gap-1.5 shrink-0">
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleAdjustHearts(u, 5)}
+                                        className="px-2 py-1 text-[10px] font-black bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors cursor-pointer"
+                                        title="Tặng 5 Tim"
+                                      >
+                                        +5 ❤️
+                                      </button>
+                                      <button
+                                        onClick={() => handleAdjustHearts(u, 15)}
+                                        className="px-2 py-1 text-[10px] font-black bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors cursor-pointer"
+                                        title="Tặng 15 Tim (Chuyên đề xuất sắc)"
+                                      >
+                                        +15 ❤️
+                                      </button>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button
+                                        onClick={() => handleAdjustHearts(u, -5)}
+                                        disabled={(u.hearts || 0) < 5}
+                                        className="px-2 py-1 text-[10px] font-black bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                        title="Trừ 5 Tim"
+                                      >
+                                        -5 ❤️
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          const num = prompt('Nhập số Tim cần cộng/trừ (ví dụ: 10 hoặc -5):');
+                                          if (num) {
+                                            const parsed = parseInt(num, 10);
+                                            if (!isNaN(parsed) && parsed !== 0) {
+                                              handleAdjustHearts(u, parsed);
+                                            }
+                                          }
+                                        }}
+                                        className="px-2 py-1 text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+                                        title="Tặng tùy chỉnh"
+                                      >
+                                        Khác...
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen,
   Lock,
@@ -13,8 +13,8 @@ import {
   ExternalLink,
   Check,
 } from 'lucide-react';
-import { ClassItem, ClassLesson } from '../../../services/storageTypes';
-import { getClasses, updateProgress } from '../../ConnectData/ConnectFirestore';
+import { ClassItem, ClassLesson, UserProfile, TeacherDocument } from '../../../services/storageTypes';
+import { getClasses, updateProgress, getUsers, getTeacherDocuments, purchaseDocumentWithDiamonds, rewardStudentDiamonds } from '../../ConnectData/ConnectFirestore';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
 
 interface LearningClassesViewProps {
@@ -30,6 +30,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [completedLessonIds, setCompletedLessonIds] = useState<Set<string>>(new Set<string>());
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Student specific data for Wallet 💎 & Monetization
+  const [studentProfile, setStudentProfile] = useState<UserProfile | null>(null);
+  const [publishedDocuments, setPublishedDocuments] = useState<TeacherDocument[]>([]);
 
   // GPS Google Maps State
   const [showGpsModal, setShowGpsModal] = useState<boolean>(false);
@@ -74,6 +78,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     setTimeout(() => setNotification(null), 4000);
   };
 
+  const loadStudentAndDocs = async () => {
+    const allUsers = await getUsers();
+    const student = allUsers.find(u => u.id === currentStudentId) || null;
+    setStudentProfile(student);
+
+    const allDocs = await getTeacherDocuments();
+    setPublishedDocuments(allDocs);
+  };
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
@@ -88,6 +101,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           setSelectedLessonId(list[0].lessons[0].id);
         }
       }
+      await loadStudentAndDocs();
       setLoading(false);
     }
     loadData();
@@ -96,6 +110,12 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const currentClass = classes.find(c => c.id === selectedClassId) || classes[0];
   const unlockedLessons = currentClass ? currentClass.lessons.filter(l => l.isUnlocked) : [];
   const currentLesson = currentClass?.lessons.find(l => l.id === selectedLessonId);
+
+  // Filter documents published to this class
+  const currentClassDocuments = useMemo(() => {
+    if (!selectedClassId) return [];
+    return publishedDocuments.filter(doc => doc.publishedToClasses && doc.publishedToClasses.includes(selectedClassId));
+  }, [publishedDocuments, selectedClassId]);
 
   const handleClassChange = (classId: string) => {
     setSelectedClassId(classId);
@@ -106,15 +126,37 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     }
   };
 
+  const handlePurchaseDoc = async (docId: string, title: string) => {
+    const res = await purchaseDocumentWithDiamonds(currentStudentId, docId);
+    if (res.success) {
+      setNotification(res.message);
+      await loadStudentAndDocs(); // Reload student diamonds and documents status
+    } else {
+      alert(res.message);
+    }
+  };
+
   const handleToggleComplete = async (lesson: ClassLesson) => {
     const isCompleted = completedLessonIds.has(lesson.id);
     const nextSet = new Set(completedLessonIds);
     if (isCompleted) {
       nextSet.delete(lesson.id);
-      setNotification(`Đã hủy đánh dấu hoàn thành bài học "${lesson.title}".`);
+      // Subtract reward to avoid abuse
+      const res = await rewardStudentDiamonds(currentStudentId, -10, `hủy hoàn thành tài liệu "${lesson.title}"`);
+      if (res.success && res.diamonds !== undefined) {
+        setStudentProfile(prev => prev ? { ...prev, diamonds: res.diamonds } : null);
+      }
+      setNotification(`Đã hủy đánh dấu hoàn thành tài liệu "${lesson.title}".`);
     } else {
       nextSet.add(lesson.id);
-      setNotification(`Tuyệt vời! Đã hoàn thành bài học "${lesson.title}". Tiến độ đã cập nhật vào Firestore.`);
+      // Award 10 diamonds (Gamification!)
+      const res = await rewardStudentDiamonds(currentStudentId, 10, `hoàn thành xuất sắc tài liệu "${lesson.title}"`);
+      if (res.success && res.diamonds !== undefined) {
+        setStudentProfile(prev => prev ? { ...prev, diamonds: res.diamonds } : null);
+        setNotification(`Tuyệt vời! Đã hoàn thành tài liệu "${lesson.title}". Bạn được cộng thưởng +10 💎 vào ví!`);
+      } else {
+        setNotification(`Tuyệt vời! Đã hoàn thành tài liệu "${lesson.title}". Tiến độ đã cập nhật vào Firestore.`);
+      }
     }
     setCompletedLessonIds(nextSet);
 
@@ -153,9 +195,9 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     return (
       <div id="learning-classes-view" className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <BookOpen className="w-12 h-12 text-slate-300 mx-auto" />
-        <h3 className="text-base font-bold text-slate-900">Toàn Bộ Dữ Liệu Lớp Học & Bài Học Demo Đã Được Làm Sạch</h3>
+        <h3 className="text-base font-bold text-slate-900">Chưa có lớp học hoặc chưa có tài liệu</h3>
         <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
-          Hệ thống hiện đang ở trạng thái sạch 100%, sẵn sàng để triển khai lên Vercel/GitHub và nạp dữ liệu thật. Giáo viên có thể truy cập module <strong>Quản Lý Lớp Dạy</strong> để khởi tạo lớp học và bài giảng mới.
+          Hiện tại chưa có lớp học nào được khởi tạo hoặc gán cho bạn. Giáo viên có thể truy cập module <strong>Quản Lý Lớp Dạy</strong> để tạo lớp mới và tải lên tài liệu học tập.
         </p>
       </div>
     );
@@ -187,6 +229,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   onChange={e => handleClassChange(e.target.value)}
                   className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 text-slate-900 text-sm font-semibold py-2.5 px-3.5 pr-9 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors"
                 >
+                  <option value="">-- (Để trống) --</option>
                   {classes.map(c => (
                     <option key={c.id} value={c.id}>
                       {c.code} — {c.name} ({c.teacherName})
@@ -253,6 +296,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 onChange={e => setSelectedLessonId(e.target.value)}
                 className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 text-slate-900 text-sm font-semibold py-2.5 px-3.5 pr-9 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors"
               >
+                <option value="">-- (Để trống) --</option>
                 {currentClass?.lessons.map(lesson => (
                   <option key={lesson.id} value={lesson.id} disabled={!lesson.isUnlocked}>
                     {lesson.isUnlocked ? '🟢 [ĐÃ MỞ]' : '🔒 [KHÓA]'} {lesson.title} ({lesson.unit})
@@ -262,7 +306,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3.5 pointer-events-none" />
             </div>
             <p className="mt-1.5 text-xs text-slate-500">
-              Chỉ các bài giảng được giáo viên mở khóa mới có thể truy cập tài liệu và nội dung.
+              Chỉ các tài liệu/bài học được giáo viên mở khóa mới có thể truy cập nội dung.
             </p>
           </div>
         </div>
@@ -322,7 +366,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               {/* Interactive Lesson Body & Study Guide */}
               <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Mục tiêu cốt lõi bài giảng:
+                  Mục tiêu cốt lõi của tài liệu:
                 </h3>
                 <ul className="space-y-2 text-xs text-slate-700">
                   <li className="flex items-start gap-2">
@@ -338,6 +382,23 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     <span>Hoàn thành bài tập tự luyện và đối chiếu lời giải chi tiết của giáo viên.</span>
                   </li>
                 </ul>
+
+                {/* Cấu trúc gói bài dạy & Media tài nguyên tương đối */}
+                <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                  <span className="font-bold text-slate-700">Gói tài nguyên chuyên đề:</span>
+                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-indigo-700 font-semibold">
+                    📄 KienThuc.html
+                  </span>
+                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-emerald-700 font-semibold">
+                    📁 Media/HinhAnh
+                  </span>
+                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-purple-700 font-semibold">
+                    📁 Media/AmThanh
+                  </span>
+                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-rose-700 font-semibold">
+                    📁 Media/Video
+                  </span>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -368,6 +429,72 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     <Download className="w-3.5 h-3.5" /> Tải tài liệu PDF
                   </button>
                 </div>
+              </div>
+
+              {/* TÀI LIỆU CHUYÊN ĐỀ LỚP HỌC (Miễn phí & Thương mại) */}
+              <div className="pt-4 border-t border-slate-100 space-y-3">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  📁 Tài liệu chuyên đề lớp học:
+                </h3>
+
+                {currentClassDocuments.length === 0 ? (
+                  <p className="text-xs italic text-slate-400">Chưa có tài liệu chuyên đề nào được phát hành đến lớp học này.</p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {currentClassDocuments.map(doc => {
+                      const isFree = !doc.isForSale;
+                      const isOwned = isFree || (doc.purchasedUserIds && doc.purchasedUserIds.includes(currentStudentId));
+
+                      return (
+                        <div key={doc.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between gap-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded text-[9px] font-bold">
+                                {doc.chuyenDe || 'Chuyên đề'}
+                              </span>
+                              {isFree ? (
+                                <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
+                                  🆓 Free
+                                </span>
+                              ) : isOwned ? (
+                                <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded text-[9px]">
+                                  🟢 Đã mua
+                                </span>
+                              ) : (
+                                <span className="bg-amber-50 text-amber-800 font-black px-1.5 py-0.5 rounded text-[9px] font-mono">
+                                  💎 {doc.priceDiamonds}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="text-xs font-bold text-slate-800 line-clamp-2">{doc.title}</h4>
+                            <p className="text-[10px] text-slate-400">Định dạng: {doc.fileType.toUpperCase()} • Dung lượng: {doc.fileSize}</p>
+                          </div>
+
+                          <div className="pt-1 border-t border-slate-100/50 flex justify-end">
+                            {isOwned ? (
+                              <button
+                                onClick={() => {
+                                  alert(`Tải tài liệu "${doc.title}" thành công từ Google Drive!`);
+                                }}
+                                className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Download className="w-3 h-3" />
+                                <span>Tải tài liệu</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handlePurchaseDoc(doc.id, doc.title)}
+                                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all cursor-pointer shadow-3xs"
+                              >
+                                <span>Mua bằng {doc.priceDiamonds} 💎</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -472,7 +599,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       ) : (
         <div className="p-12 text-center bg-white rounded-2xl border border-slate-200">
           <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <p className="text-slate-600 font-medium">Chưa có bài học nào được chọn hoặc lớp chưa mở khóa bài giảng.</p>
+          <p className="text-slate-600 font-medium">Chưa có bài học nào được chọn hoặc lớp chưa mở khóa tài liệu.</p>
         </div>
       )}
 

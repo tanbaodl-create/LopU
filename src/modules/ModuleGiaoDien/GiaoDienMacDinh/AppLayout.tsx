@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './Header';
 import { SidebarDrawer } from './SidebarDrawer';
 import { DynamicViewContainer, ViewId } from '../Navigation';
-import { UserRole } from '../../../services/storageTypes';
+import { UserRole, UserProfile } from '../../../services/storageTypes';
+import { auth, isFirebaseConfigured } from '../../../config/firebase';
+import { onAuthStateChanged, signOut, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { syncGoogleAuthUserToFirestore, getUsers } from '../../ConnectData/ConnectFirestore';
 import {
   connectGoogleDrive,
   disconnectGoogleDrive,
@@ -11,7 +14,6 @@ import {
   downloadFileJson,
   DriveStoredFile,
 } from '../../ConnectData/ConnectDrive';
-import { isFirebaseConfigured } from '../../../config/firebase';
 import { Cloud, X, CheckCircle2, Download } from 'lucide-react';
 
 interface AppLayoutProps {
@@ -24,6 +26,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [currentRole, setCurrentRole] = useState<UserRole>('student');
+  const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+
+  // Real Google Auth states
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // Google Drive & Firestore connection state
   const [isDriveConnected, setIsDriveConnected] = useState<boolean>(false);
@@ -31,6 +39,101 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [showDriveModal, setShowDriveModal] = useState<boolean>(false);
   const [driveFiles, setDriveFiles] = useState<DriveStoredFile[]>([]);
   const [driveModalMessage, setDriveModalMessage] = useState<string | null>(null);
+
+  // Subscribe to real Google Auth state changed
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) {
+      setIsAuthLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      if (user) {
+        try {
+          const emailLower = (user.email || '').toLowerCase();
+          const isSA = emailLower === 'tanbaodl@gmail.com' || emailLower === 'tanbaobg@gmail.com';
+          const desiredRole: UserRole = isSA
+            ? 'superadmin'
+            : (emailLower.includes('admin')
+              ? 'admin'
+              : (emailLower.includes('teacher')
+                ? 'teacher'
+                : 'student'));
+          
+          const profile = await syncGoogleAuthUserToFirestore({
+            uid: user.uid,
+            email: user.email || '',
+            displayName: user.displayName || (isSA ? (emailLower.includes('dl') ? 'Superadmin Tân Bảo (ĐL)' : 'Superadmin Tân Bảo (BG)') : undefined),
+            desiredRole: desiredRole,
+          });
+          const finalProfile = isSA ? { ...profile, role: 'superadmin' as UserRole, isProtected: true } : profile;
+          setCurrentUserProfile(finalProfile);
+          setCurrentRole(finalProfile.role);
+          setDriveEmail(user.email || '');
+          setIsDriveConnected(true);
+        } catch (err) {
+          console.warn('Failed to sync authenticated Google user to Firestore:', err);
+        }
+      } else {
+        setFirebaseUser(null);
+      }
+      setIsAuthLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch / Sync profile depending on current role or authenticated state
+  useEffect(() => {
+    async function fetchProfile() {
+      if (firebaseUser) {
+        try {
+          const users = await getUsers();
+          const emailLower = (firebaseUser.email || '').toLowerCase();
+          const isSA = emailLower === 'tanbaodl@gmail.com' || emailLower === 'tanbaobg@gmail.com';
+          const found = users.find(u => 
+            u.id === firebaseUser.uid || 
+            (emailLower && (u.email || '').toLowerCase() === emailLower)
+          );
+          if (found) {
+            const finalFound = isSA ? { ...found, role: 'superadmin' as UserRole, isProtected: true } : found;
+            setCurrentUserProfile(finalFound);
+            // Không ghi đè currentRole ở đây để giữ nguyên vai trò người dùng vừa chuyển đổi từ dropdown
+          }
+        } catch (err) {
+          console.warn('Failed to fetch real profile:', err);
+        }
+        return;
+      }
+
+      // Revert to mock profiles when offline or not logged in
+      try {
+        const users = await getUsers();
+        let userId = 'u_hs01'; // Mặc định học sinh Lê Minh Khang
+        if (currentRole === 'superadmin') userId = 'u_superadmin_2'; // Superadmin Tân Bảo (ĐL)
+        else if (currentRole === 'admin') userId = 'u_admin';
+        else if (currentRole === 'teacher') userId = 'u_gv01'; // Mặc định giáo viên Nguyễn Văn An
+        
+        const found = users.find(u => u.id === userId);
+        if (found) {
+          setCurrentUserProfile(found);
+        }
+      } catch (err) {
+        console.warn('Failed to fetch profile in layout:', err);
+      }
+    }
+    fetchProfile();
+
+    const handleRefresh = () => {
+      fetchProfile();
+    };
+    window.addEventListener('lopu_wallet_refresh', handleRefresh);
+
+    return () => {
+      window.removeEventListener('lopu_wallet_refresh', handleRefresh);
+    };
+  }, [currentRole, firebaseUser]);
 
   useEffect(() => {
     // Subscribe to Google Drive connection changes
@@ -68,6 +171,64 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     setTimeout(() => setDriveModalMessage(null), 3000);
   };
 
+  const handleChangeRole = async (newRole: UserRole) => {
+    setCurrentRole(newRole);
+    if (firebaseUser && currentUserProfile) {
+      try {
+        const updatedProfile = {
+          ...currentUserProfile,
+          role: newRole,
+          updatedAt: new Date().toLocaleString('vi-VN'),
+        };
+        setCurrentUserProfile(updatedProfile);
+        await syncGoogleAuthUserToFirestore({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email || '',
+          desiredRole: newRole,
+          displayName: firebaseUser.displayName || undefined,
+        });
+      } catch (err) {
+        console.warn('Failed to update real user role in backend:', err);
+      }
+    }
+  };
+
+  const handleSignInGoogle = async () => {
+    setAuthError(null);
+    if (auth && isFirebaseConfigured) {
+      try {
+        const provider = new GoogleAuthProvider();
+        provider.addScope('https://www.googleapis.com/auth/drive.file');
+        provider.addScope('https://www.googleapis.com/auth/drive');
+        await signInWithPopup(auth, provider);
+      } catch (err: any) {
+        console.error('Failed to sign in with Google:', err);
+        const errMsg = err?.message || String(err);
+        const errCode = err?.code || '';
+        if (errCode === 'auth/unauthorized-domain' || errMsg.includes('auth/unauthorized-domain') || errMsg.includes('unauthorized-domain')) {
+          setAuthError('unauthorized-domain');
+        } else {
+          setAuthError(errMsg);
+        }
+      }
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (auth && isFirebaseConfigured) {
+      try {
+        await signOut(auth);
+        setFirebaseUser(null);
+        setCurrentUserProfile(null);
+        setCurrentRole('student');
+        setIsDriveConnected(false);
+        setDriveEmail('tanbaodl@gmail.com');
+      } catch (err) {
+        console.error('Failed to sign out:', err);
+      }
+    }
+  };
+
   return (
     <div id="app-layout" className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-900">
       {/* 1. Header with 3-line hamburger, brand, active view breadcrumbs and status indicators */}
@@ -75,12 +236,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         onOpenSidebar={() => setSidebarOpen(true)}
         activeView={activeView}
         currentRole={currentRole}
-        onChangeRole={setCurrentRole}
+        onChangeRole={handleChangeRole}
         isDriveConnected={isDriveConnected}
         driveEmail={driveEmail}
         isFirestoreLive={isFirebaseConfigured}
         onConnectDrive={handleOpenDriveModal}
         onSelectView={setActiveView}
+        currentUserProfile={currentUserProfile}
+        firebaseUser={firebaseUser}
+        onSignInGoogle={handleSignInGoogle}
+        onSignOut={handleSignOut}
       />
 
       {/* 2. Sidebar Drawer (Left edge slide-in, backdrop, 2-level accordion menu) */}
@@ -90,7 +255,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         activeView={activeView}
         onSelectView={viewId => setActiveView(viewId)}
         currentRole={currentRole}
-        onChangeRole={setCurrentRole}
+        onChangeRole={handleChangeRole}
         isDriveConnected={isDriveConnected}
         driveEmail={driveEmail}
         isFirestoreLive={isFirebaseConfigured}
@@ -102,24 +267,31 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         <DynamicViewContainer
           activeView={activeView}
           currentRole={currentRole}
+          onChangeRole={handleChangeRole}
           onOpenDriveConnect={handleOpenDriveModal}
           onNavigateToView={viewId => setActiveView(viewId)}
           driveEmail={driveEmail}
+          currentUserProfile={currentUserProfile}
+          firebaseUser={firebaseUser}
         />
       </main>
 
-      {/* 4. Footer */}
-      <footer id="app-footer" className="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 font-medium">
-            <span className="font-extrabold text-slate-900">LopU Modular</span>
-            <span>•</span>
-            <span>Kiến trúc phân chia theo 4 Phân hệ Role-Driven</span>
-          </div>
-          <div className="flex items-center gap-3 text-[11px] text-slate-600">
-            <span>Firestore: {isFirebaseConfigured ? 'Live Cloud' : 'Offline Reactive'}</span>
-            <span>•</span>
-            <span>Google Drive: <code className="font-mono text-indigo-600">drive.file</code></span>
+      {/* 4. Footer: Danh ngôn giáo dục mang ý nghĩa cố gắng, kiên trì sẽ thành công chạy từ phải sang trái, mỗi buổi của ngày là 1 câu */}
+      <footer id="app-footer" className="bg-white border-t border-slate-200 py-2.5 overflow-hidden select-none">
+        <div className="w-full overflow-hidden whitespace-nowrap relative">
+          <div className="animate-marquee inline-block text-xs font-medium text-slate-700 tracking-wide">
+            {(() => {
+              const hour = new Date().getHours();
+              if (hour >= 5 && hour < 12) {
+                return '🌅 Buổi Sáng: «Học tập không phải là đích đến mà là hành trình của lòng kiên trì. Mỗi nỗ lực hôm nay là nền móng vững chắc cho thành công rực rỡ ngày mai. Hãy kiên tâm vững bước!»';
+              } else if (hour >= 12 && hour < 14) {
+                return '☀️ Buổi Trưa: «Nghị lực và sự bền bỉ chiến thắng tất cả mọi trở ngại. Người kiên trì tích lũy kiến thức từng chút một chính là người chạm đến đỉnh vinh quang.»';
+              } else if (hour >= 14 && hour < 18) {
+                return '🌇 Buổi Chiều: «Đường dài vạn dặm bắt đầu từ từng bước chân kiên định. Chỉ cần không dừng lại, sự kiên trì vượt khó trong học tập chắc chắn sẽ mở rộng cánh cửa tương lai.»';
+              } else {
+                return '🌙 Buổi Tối: «Cần cù bù thông minh, kiên trì ắt thành công. Những giờ phút miệt mài gieo hạt giống tri thức hôm nay sẽ biến mọi ước mơ của bạn thành hiện thực rạng ngời.»';
+              }
+            })()}
           </div>
         </div>
       </footer>
@@ -284,6 +456,107 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 className="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               >
                 Đóng cửa sổ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. Firebase Auth Error / Unauthorized Domain Modal */}
+      {authError && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
+                  <X className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base text-slate-900">
+                    Lỗi xác thực Google Auth
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {authError === 'unauthorized-domain' ? 'Tên miền chưa được cấp phép trong Firebase' : 'Đã có lỗi xảy ra'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAuthError(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 font-bold text-lg cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {authError === 'unauthorized-domain' ? (
+              <div className="space-y-4 text-xs text-slate-600">
+                <div className="p-3 bg-amber-50 border border-amber-200 text-amber-950 rounded-xl leading-relaxed">
+                  ⚠️ <strong>Lỗi auth/unauthorized-domain:</strong> Firebase Authentication chặn các yêu cầu đăng nhập từ tên miền ứng dụng hiện tại vì nó chưa được liệt kê trong danh sách được phép (Authorized Domains).
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="font-bold text-slate-800 text-[13px]">Các bước cấp phép tên miền trong Firebase:</h4>
+                  <ol className="list-decimal pl-4 space-y-1.5 leading-relaxed text-slate-600">
+                    <li>Truy cập vào <strong>Firebase Console</strong> dự án của bạn.</li>
+                    <li>Vào mục <strong>Authentication</strong> ➔ Tab <strong>Settings</strong> (Cài đặt).</li>
+                    <li>Ở danh sách cột trái, chọn <strong>Authorized domains</strong> (Tên miền được ủy quyền).</li>
+                    <li>Bấm nút <strong>Add domain</strong> (Thêm tên miền) và sao chép/dán hai tên miền bên dưới vào:</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-2.5 pt-1">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Tên miền Development:</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value="ais-dev-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app"
+                        className="flex-1 font-mono text-[11px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-700 outline-none select-all"
+                      />
+                      <button
+                        onClick={() => navigator.clipboard.writeText("ais-dev-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app")}
+                        className="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg font-bold hover:bg-indigo-100 cursor-pointer"
+                      >
+                        Sao chép
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Tên miền Production / Share:</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value="ais-pre-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app"
+                        className="flex-1 font-mono text-[11px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-700 outline-none select-all"
+                      />
+                      <button
+                        onClick={() => navigator.clipboard.writeText("ais-pre-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app")}
+                        className="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg font-bold hover:bg-indigo-100 cursor-pointer"
+                      >
+                        Sao chép
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-rose-50 border border-rose-100 text-rose-800 text-xs rounded-xl">
+                <span className="font-semibold block">Chi tiết lỗi:</span>
+                <code className="block mt-1 font-mono bg-white p-2 rounded border border-rose-200 text-[11px] overflow-x-auto select-all">
+                  {authError}
+                </code>
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+              <button
+                onClick={() => setAuthError(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+              >
+                Đóng
               </button>
             </div>
           </div>

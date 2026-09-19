@@ -14,6 +14,8 @@ import {
   Network,
   Zap,
   BookMarked,
+  Coins,
+  FileText,
 } from 'lucide-react';
 
 export type ViewId =
@@ -21,8 +23,10 @@ export type ViewId =
   | 'learning-seating'
   | 'learning-schedule'
   | 'learning-join'
+  | 'teaching-soanthao'
   | 'teaching-management'
   | 'teaching-documents'
+  | 'teaching-monetization'
   | 'teaching-students'
   | 'reports-progress'
   | 'settings-users'
@@ -91,6 +95,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: Users,
     subItems: [
       {
+        id: 'teaching-soanthao',
+        label: 'Tài liệu',
+        badge: 'Word 💎',
+        icon: FileText,
+        description: 'Trình soạn thảo tài liệu khoa học kiểu Word, công thức Toán LaTeX, bảng biểu và lưu Drive phân cấp',
+      },
+      {
         id: 'teaching-management',
         label: 'Quản lý lớp dạy & Sơ đồ lớp',
         badge: 'Excel & Sơ đồ',
@@ -103,6 +114,13 @@ export const MENU_GROUPS: MenuGroup[] = [
         badge: 'Drive cá nhân',
         icon: FolderLock,
         description: 'Tủ sách cá nhân & Phát hành bài giảng - lưu trữ Google Drive cá nhân',
+      },
+      {
+        id: 'teaching-monetization',
+        label: 'Thương mại & Phát hành tài liệu',
+        badge: 'Kim Cương 💎',
+        icon: Coins,
+        description: 'Cấu hình giá bán Kim Cương, phát hành tài liệu lớp học miễn phí và theo dõi doanh thu',
       },
       {
         id: 'teaching-students',

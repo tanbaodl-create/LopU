@@ -1,14 +1,19 @@
 import React from 'react';
-import { GraduationCap, Sparkles, BookOpen, Clock } from 'lucide-react';
+import { GraduationCap, Sparkles } from 'lucide-react';
+import { UserProfile } from '../../../services/storageTypes';
 
 interface GiaoDienHocSinhLayoutProps {
   children: React.ReactNode;
   activeViewTitle?: string;
+  currentUserProfile?: UserProfile | null;
+  firebaseUser?: any;
 }
 
 export const GiaoDienHocSinhLayout: React.FC<GiaoDienHocSinhLayoutProps> = ({
   children,
   activeViewTitle = 'Không gian học tập',
+  currentUserProfile,
+  firebaseUser,
 }) => {
   return (
     <div className="w-full space-y-4">
@@ -34,12 +39,6 @@ export const GiaoDienHocSinhLayout: React.FC<GiaoDienHocSinhLayoutProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 self-stretch sm:self-auto text-xs text-slate-600">
-          <div className="flex items-center gap-1.5 bg-white/90 border border-sky-200/60 px-3 py-1.5 rounded-xl shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-            <span className="font-medium text-slate-700">Tài khoản: HS Nguyễn Văn An (10A1)</span>
-          </div>
-        </div>
       </div>
 
       {/* Nội dung giao diện chính của module Học sinh */}

@@ -22,6 +22,16 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // PIN Join Requests collection
+    match /pin_requests/{requestId} {
+      allow read, write: if true;
+    }
+
+    // Teacher Documents collection
+    match /documents/{docId} {
+      allow read, write: if true;
+    }
+
     // Default deny for all other paths
     match /{document=**} {
       allow read, write: if false;

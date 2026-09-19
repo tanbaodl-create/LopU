@@ -25,9 +25,12 @@ import {
   UserCog,
   Eye,
   Zap,
+  Coins,
+  FileText,
 } from 'lucide-react';
 import { ViewId } from '../Navigation';
 import { PhanTichLenh } from './PhanTichLenh';
+import { UserRole } from '../../../services/storageTypes';
 
 interface SubmoduleItem {
   id: string;
@@ -58,6 +61,7 @@ interface ModuleNode {
 }
 
 interface HuongDanWebViewProps {
+  currentRole?: UserRole;
   onNavigateToView?: (viewId: ViewId) => void;
 }
 
@@ -79,23 +83,23 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'LopHoc',
-        name: 'LopHoc (Lớp học & GPS Lớp Học)',
+        name: 'LopHoc (Lớp học & Bài giảng)',
         folderPath: 'src/modules/ModuleHocSinh/LopHoc',
-        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, tích hợp nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định và Vệ tinh, nộp bài tập và cập nhật tiến độ học tập cá nhân.',
-        purpose: 'Học tập & GPS lớp học',
+        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, tích hợp nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định và Vệ tinh, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đã loại bỏ hoàn toàn banner trùng lặp bên dưới thanh ngang trên cùng, đưa người dùng vào thẳng bộ lọc bài học.',
+        purpose: 'Học tập trực tiếp, loại bỏ tiêu đề lặp lại dưới thanh ngang',
         viewId: 'learning-classes',
         icon: BookOpen,
-        tags: ['Bài học', 'lấy tọa độ GPS', 'Bản đồ Mặc định & Vệ tinh', 'Tiến độ', 'Sẵn sàng Vercel'],
+        tags: ['Bài học', 'lấy tọa độ GPS', 'Giao diện tối giản', 'Bỏ banner trùng'],
       },
       {
         id: 'SoDoLop',
-        name: 'SoDoLop (Xuất PNG A4 lề 2cm, chức danh 11pt, biệt danh hàng 4 tối ưu)',
+        name: 'SoDoLop (Truy vấn & Tải file SoDoLop_*.json từ Drive myApp\\LopU\\SoDoLop, Xuất PNG A4 lề 2cm)',
         folderPath: 'src/modules/ModuleHocSinh/SoDoLop',
-        description: 'Sơ đồ lớp chuẩn hóa đầu vào định dạng mới, hỗ trợ đầy đủ chức danh VTM (Văn Thể Mỹ) và tải file không trùng tên. Tự động xuất file ảnh PNG sơ đồ lớp với kích thước khớp khít khổ giấy A4 chuẩn trừ đi lề 2cm mỗi bên khi copy vào Word. Hỗ trợ bàn 2 người giãn ra 2 đầu bàn cực chuẩn, áp dụng lưới tọa độ 4 hàng 3 cột định vị chuẩn chỉ: Chức danh 11pt, Biệt danh chiếm trọn vẹn hàng 4 rộng rãi sắc nét.',
-        purpose: 'Khắc phục mất bàn bằng minHeight, Chức danh 11pt, Biệt danh rộng rãi hàng 4',
+        description: 'Sơ đồ lớp chuẩn hóa đầu vào định dạng mới, hỗ trợ đầy đủ chức danh VTM (Văn Thể Mỹ). Tải và lưu trữ chuẩn xác vào thư mục Google Drive: myApp\\LopU\\SoDoLop theo định dạng SoDoLop_[TênLớp]_Tuan[STT].json (ví dụ: SoDoLop_10A1_Tuan1.json). Cho phép quét trực tiếp từ Drive thực tế để tải về và nạp cấu trúc sơ đồ lớp lên ứng dụng. ĐÃ XÓA SẠCH DỮ LIỆU DEMO BAN ĐẦU để người dùng nhập dữ liệu thực tế. Tự động xuất file ảnh PNG sơ đồ lớp với kích thước khớp khít khổ giấy A4 chuẩn trừ đi lề 2cm mỗi bên khi copy vào Word.',
+        purpose: 'Đồng bộ hai chiều Google Drive myApp\\LopU\\SoDoLop, Nạp file SoDoLop_*.json, Xuất PNG A4 lề 2cm, Chức danh 11pt, Biệt danh hàng 4',
         viewId: 'learning-seating',
         icon: LayoutGrid,
-        tags: ['PNG A4 lề 2cm', 'Điều hành-Đoàn 12pt', 'Sát khung viền', 'Viền đen nét căng', 'Đồng bộ Realtime'],
+        tags: ['Drive myApp\\LopU\\SoDoLop', 'Nạp SoDoLop_*.json', 'Đã xóa sạch demo', 'PNG A4 lề 2cm', 'Điều hành-Đoàn 12pt', 'Sát khung viền', 'Viền đen nét căng', 'Đồng bộ Realtime'],
       },
       {
         id: 'ThoiKhoaBieu',
@@ -136,13 +140,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyLopDay',
-        name: 'QuanLyLopDay (Quản lý lớp dạy, Nhãn chức danh chỉ chữ, GVCN/SĐT 2 hàng)',
+        name: 'QuanLyLopDay (Quản lý lớp dạy & Nghiệp vụ giảng dạy)',
         folderPath: 'src/modules/ModuleGiaoVien/QuanLyLopDay',
-        description: 'Nhãn chức danh học sinh chỉ hiển thị chữ không đóng khung tránh tràn chữ; chia riêng 2 hàng GVCN và SĐT; bỏ chữ BẢNG ở Bảng. Hỗ trợ đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt PIN.',
-        purpose: 'Quản lý lớp dạy, Nhãn chức danh dạng chữ, Tách 2 hàng GVCN/SĐT',
+        description: '(Chỉ Giáo viên trở lên mới thấy). Nghiệp vụ giảng dạy & quản lý lớp dạy: Nhãn chức danh dạng chữ không đóng khung, chia riêng 2 hàng GVCN và SĐT; đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt mã PIN. Đồng bộ số dư Ví Kim Cương 💎.',
+        purpose: 'Nghiệp vụ giảng dạy cho Giáo viên trở lên & Quản lý lớp',
         viewId: 'teaching-management',
         icon: CheckCircle2,
-        tags: ['Nhãn chức danh dạng chữ', 'GVCN/SĐT 2 hàng', 'Đổi tên lớp', 'Đổi Cửa ⇄ Bàn GV', 'GPS Ba Gia'],
+        tags: ['Quyền Giáo viên+', 'Nghiệp vụ giảng dạy', 'Ví Kim Cương 💎', 'GPS Ba Gia', 'Đổi tên lớp'],
       },
       {
         id: 'NhapHocSinh',
@@ -165,13 +169,33 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'TaiLieuCaNhan',
-        name: 'TaiLieuCaNhan (Tài liệu dạy học Drive 4 cấp, Hỏi Ghi Đè Trùng Lặp)',
+        name: 'TaiLieuCaNhan (Tài liệu cá nhân Drive, Công thức KaTeX đẹp & Mở sẵn công thức cần sửa trong MathType)',
         folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Giáo viên tạo các bộ tài liệu dạy học lưu tự động trên Google Drive cá nhân trong thư mục mặc định myApp\\LopU theo cấu trúc 4 cấp độ: Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề. Tích hợp kiểm tra trùng tên tài liệu khi lưu, hiển thị cảnh báo cho phép ghi đè lên tài liệu cũ nếu người dùng xác nhận.',
-        purpose: 'Kho tài nguyên giáo án Drive myApp\\LopU & Hỏi ghi đè',
+        description: 'Quản lý bộ tài liệu dạy học Google Drive cá nhân. Tích hợp bộ dịch công thức toán học KaTeX/MathJax hiển thị sắc nét chuẩn xuất bản ($...$). Kích vào bất kỳ công thức nào để mở ngay công thức đó trong cửa sổ chèn công thức MathType (không bị cửa sổ trống) để chỉnh sửa trực quan nhanh chóng và giữ nguyên nút sửa. Hỗ trợ hệ thống câu hỏi với điểm mặc định chuẩn Bộ GD&ĐT: Trắc nghiệm lựa chọn (0.25đ); Trắc nghiệm đúng sai 4 ý (1 ý: 0.1đ, 2 ý: 0.25đ, 3 ý: 0.5đ, 4 ý: 1.0đ); Câu trả lời ngắn (0.5đ). Lời giải luôn nằm liền sau từng câu hỏi. Chuẩn hóa đường dẫn tương đối (Giải pháp 5: ./Media/...).',
+        purpose: 'Hiển thị công thức toán KaTeX chuẩn đẹp, Mở sẵn công thức cần sửa trong cửa sổ MathType, Giữ nút sửa sau chèn, Điểm chuẩn Bộ GD&ĐT, Lời giải liền sau câu',
         viewId: 'teaching-documents',
         icon: FolderLock,
-        tags: ['myApp\\LopU', 'Chương-Bài-Vấn đề-Chuyên đề', 'Hỏi ghi đè file', 'Kiểm tra trùng tên', 'Google Workspace OAuth'],
+        tags: ['Công thức KaTeX/MathJax đẹp', 'Mở sẵn công thức trong MathType', 'Giữ nút sửa công thức', 'Điểm TN 0.25đ / ĐS / Ngắn 0.5đ', 'Lời giải liền sau câu', 'Cú pháp Câu n - Đáp án - Lời giải', 'Relative Path (GP5)'],
+      },
+      {
+        id: 'SoanThao',
+        name: 'SoanThao / Tài liệu (Menu View: Tách câu, Toàn bộ, Xem PPT & Dịch công thức KaTeX/MathJax)',
+        folderPath: 'src/modules/ModuleGiaoVien/SoanThao',
+        description: 'Trình soạn thảo văn bản kiểu Word chuyên nghiệp với Nút "View" 3 tùy chọn: 1) Tách câu (soạn từng câu, mức 1-6, phân nhóm Bắt buộc/Khuyến khích, điểm chuẩn tự động, hiển thị công thức đẹp và nút kích sửa cho cả 4 ý đúng/sai); 2) Toàn bộ (xem toàn bộ đề thi chuẩn cú pháp: "Câu n. nội dung \\n Đáp án: \\n Lời giải \\n nội dung lời giải"); 3) Xem PPT (trình chiếu PowerPoint hiện lần lượt đề bài và bấm hiện lời giải liền sau câu hỏi). Toàn bộ công thức toán học hiển thị chuẩn xác qua KaTeX/MathJax.',
+        purpose: 'Nút View Menu: Tách câu / Toàn bộ / Xem PPT, Công thức toán học dịch chuẩn đẹp KaTeX, Cú pháp chuẩn Word (Câu n - Đáp án - Lời giải)',
+        viewId: 'teaching-soanthao',
+        icon: FileText,
+        tags: ['Menu View (Tách câu / Toàn bộ / PPT)', 'KaTeX / MathJax', 'Kích sửa công thức', 'Lời giải liền sau câu hỏi', 'Cú pháp chuẩn Word', 'Điểm chuẩn 0.25đ/ĐS/0.5đ'],
+      },
+      {
+        id: 'ThuongMaiTaiLieu',
+        name: 'ThuongMaiTaiLieu (Thương mại & Phát hành tài liệu riêng biệt)',
+        folderPath: 'src/modules/ModuleGiaoVien/ThuongMaiTaiLieu',
+        description: 'Phân hệ thương mại độc lập: Cấu hình tài liệu cấp miễn phí cho các lớp học (🆓) hoặc bán thu phí bằng Kim Cương (💎). Theo dõi số lượt mua, doanh thu tích lũy và phản hồi Tim ❤️ từ học sinh.',
+        purpose: 'Quản trị giá bán Kim Cương, phân quyền phân phối và tối ưu hóa doanh thu',
+        viewId: 'teaching-monetization',
+        icon: Coins,
+        tags: ['Ví Kim Cương 💎', 'Phát hành miễn phí 🆓', 'Theo dõi lượt mua', 'Lưu đồng bộ Firestore'],
       },
     ],
   },
@@ -192,33 +216,33 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyNguoiDung',
-        name: 'QuanLyNguoiDung (Google Auth, 14 Trường Thông Tin, Hỏi Ghi Đè Trùng Tên)',
+        name: 'QuanLyNguoiDung (Quản trị tài khoản & Tự sửa thông tin Superadmin)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Đã làm sạch dữ liệu demo (giữ 2 Superadmin). Chuẩn hóa 14 trường thông tin người dùng lưu Firestore. Tích hợp nút "lấy tọa độ GPS" liên kết bản đồ Leaflet. Hỗ trợ kiểm tra trùng tên tài khoản khi tạo thủ công và hỏi người dùng có ghi đè ghi đè dữ liệu cũ hay không.',
-        purpose: 'Quản lý tài khoản 14 trường, GPS & Hỏi ghi đè trùng',
+        description: 'Quản trị tài khoản và phân quyền cho Admin và Superadmin. Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi" trong dropdown tài khoản kết nối mà không bị ghi đè.',
+        purpose: 'Quản trị tài khoản, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo (Th Bảo) & Tự sửa hồ sơ',
         viewId: 'settings-users',
         icon: UserCog,
-        tags: ['14 Trường Firestore', 'Kiểm tra trùng tên', 'Hỏi ghi đè', 'lấy tọa độ GPS', 'Import/Export Excel'],
+        tags: ['Đỗ Tấn Bảo (Th Bảo)', 'Superadmin tự sửa hồ sơ', 'Dropdown vai trò trải nghiệm', '14 Trường Firestore', 'Deduplicate tanbaodl@gmail.com'],
       },
       {
         id: 'BaoCaoGiamSat',
-        name: 'BaoCaoGiamSat (Báo cáo & Giám sát tiến độ học tập)',
+        name: 'BaoCaoGiamSat (Giám sát tiến độ & Doanh số tài liệu 💎)',
         folderPath: 'src/modules/ModuleQuanTri/BaoCaoGiamSat',
-        description: 'Tổng hợp thống kê tỷ lệ hoàn thành bài giảng, điểm trung bình và liên kết bảng điểm lưu trữ trên Google Drive của giáo viên từng lớp.',
-        purpose: 'Thống kê & Giám sát',
+        description: 'Tổng hợp thống kê tỷ lệ hoàn thành bài giảng, điểm trung bình và liên kết bảng điểm lưu trữ trên Google Drive. Đặc biệt tích hợp "Báo cáo thương mại & Doanh số tài liệu" hiển thị tổng doanh thu Kim Cương 💎 và số lượt mua thực tế.',
+        purpose: 'Thống kê, Giám sát & Doanh thu Kim Cương 💎',
         viewId: 'reports-progress',
         icon: LineChart,
-        tags: ['Thống kê', 'Tiến độ', 'Drive GV mở lớp'],
+        tags: ['Thống kê', 'Tiến độ', 'Doanh thu Kim Cương 💎', 'Lượt mua tài liệu'],
       },
       {
         id: 'PhanQuyenLopHoc',
-        name: 'PhanQuyenLopHoc (Phân công GV, PIN bảo mật & Quyền ghi Google Drive)',
+        name: 'PhanQuyenLopHoc (Phân công GV & Quản lý mã PIN)',
         folderPath: 'src/modules/ModuleQuanTri/PhanQuyenLopHoc',
-        description: 'Cấu hình phân quyền lớp học, phân công Giáo viên phụ trách theo môn học, quản lý mã PIN bảo mật lớp học và điều phối quyền mở lớp cho Quản trị & Quản lý. Tích hợp bảng giám sát quyền ghi Google Drive, thông báo chuẩn xác chế độ kết nối (Sandbox hoặc Real Connection thực tế) trực quan.',
-        purpose: 'Phân công GV & Bảo mật lớp',
+        description: '(Phần sau thì Admin và Superadmin thấy: Quản trị tài khoản và phân quyền). Cấu hình phân quyền lớp học, phân công Giáo viên phụ trách theo môn học, quản lý mã PIN bảo mật lớp học và điều phối quyền mở lớp.',
+        purpose: 'Phân quyền lớp học cho Admin và Superadmin',
         viewId: 'settings-permissions',
         icon: KeyRound,
-        tags: ['Mã PIN', 'Phân công GV', 'Giám sát Quyền Ghi Drive', 'Sandbox / Real Connection'],
+        tags: ['Admin & Superadmin', 'Mã PIN', 'Phân công GV', 'Giám sát Quyền Ghi Drive'],
       },
     ],
   },
@@ -239,12 +263,12 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'GiaoDienMacDinh',
-        name: 'GiaoDienMacDinh (Khung Layout, Header, Sidebar)',
+        name: 'GiaoDienMacDinh (Khung Layout, Header, Chân trang Danh ngôn Giáo dục)',
         folderPath: 'src/modules/ModuleGiaoDien/GiaoDienMacDinh',
-        description: 'Chứa khung layout cơ bản AppLayout, Header sticky có switch vai trò và thanh SidebarDrawer 2 cấp mở rộng.',
-        purpose: 'Khung xương ứng dụng',
+        description: 'Chứa khung layout cơ bản AppLayout. Header sticky gôm cụm điều khiển tài khoản: khi chưa kết nối Google chỉ có chữ Đăng nhập; khi đã kết nối hiện [tài khoản kết nối] với dropdown gồm vai trò, điểm Kim cương 💎, Tim ❤️ và Đăng xuất. CHÂN TRANG ĐƯỢC ĐỔI THÀNH CÁC CÂU DANH NGÔN GIÁO DỤC mang ý nghĩa kiên trì, nỗ lực chạy chữ từ phải sang trái (marquee), mỗi buổi trong ngày (Sáng, Trưa, Chiều, Tối) hiển thị 1 câu truyền cảm hứng.',
+        purpose: 'Khung xương ứng dụng, Header gôm cụm tài khoản & Chân trang danh ngôn giáo dục chạy chữ',
         icon: Layers,
-        tags: ['AppLayout', 'Header', 'SidebarDrawer'],
+        tags: ['AppLayout', 'Chân trang danh ngôn marquee', 'Từng buổi trong ngày', 'Header gôm cụm nút', 'Dropdown vai trò'],
       },
       {
         id: 'GiaoDienHocSinh',
@@ -275,22 +299,22 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'Navigation',
-        name: 'Navigation (Cấu hình Menu & Dynamic Container)',
+        name: 'Navigation (Cấu hình Menu, NavigationContainer & Kiểm soát Phân quyền RBAC)',
         folderPath: 'src/modules/ModuleGiaoDien/Navigation',
-        description: 'Định nghĩa menuConfig dạng phân cấp và DynamicViewContainer phân phối view tương ứng với mã ViewId.',
-        purpose: 'Bộ điều hướng động',
+        description: 'Định nghĩa menuConfig dạng phân cấp, NavigationContainer và DynamicViewContainer. Tích hợp cửa sổ soạn thảo Word nâng cao với menu "Chèn" (menu xổ xuống gồm bảng, Toán LaTeX, hình ảnh, file, thư mục e-learning) và menu "Canh lề" (menu xổ xuống gồm trái, giữa, phải, đều 2 bên); dropdown cỡ chữ đặt ngay sau chữ U gạch chân hiển thị ngắn gọn "22px" (mặc định 22px). Dropdown vai trò tài khoản linh hoạt.',
+        purpose: 'Bộ điều hướng động, Cửa sổ Word nâng cao với Menu Chèn/Canh lề & Dropdown cỡ chữ chuẩn',
         icon: Compass,
-        tags: ['menuConfig', 'DynamicViewContainer', 'Routing'],
+        tags: ['menuConfig', 'NavigationContainer', 'Word Editor menu Chèn/Canh lề', 'Cỡ chữ 22px sau U', 'RBAC Guard'],
       },
       {
         id: 'HuongDanWeb',
-        name: 'HuongDanWeb (Sơ đồ cây, Phân tích lệnh & Lưu Prompt Chuẩn)',
+        name: 'HuongDanWeb (Sơ đồ cây, Phân tích lệnh & Kho Prompt chuẩn)',
         folderPath: 'src/modules/ModuleGiaoDien/HuongDanWeb',
-        description: 'Trực quan hóa sơ đồ cây phân cấp toàn bộ module; bộ phân tích lệnh siêu tốc bóc tách module; và đặc biệt là Kho lưu trữ Prompt Lệnh Chuẩn gồm 2 dropdown phụ thuộc hỗ trợ lấy nhanh prompt lập trình (Chỉ mở cho Dev).',
-        purpose: 'Kiến trúc cây, Phân tích lệnh & Kho Prompt cho Dev',
+        description: '(Phần sau chỉ Superadmin mới thấy: Hướng dẫn web và sơ đồ cây). Sơ đồ cây module phân cấp, bộ phân tích & tạo lệnh AI siêu tốc bóc tách module và Kho prompt chuẩn hỗ trợ phát triển dự án.',
+        purpose: 'Đặc quyền Superadmin: Sơ đồ cây module, Phân tích lệnh & Kho Prompt',
         viewId: 'guide-tree',
         icon: Network,
-        tags: ['Sơ đồ cây', 'Bóc tách module', 'Lưu Prompt Chuẩn', '2 Dropdown phụ thuộc', 'Phân quyền Dev'],
+        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích & Tạo lệnh AI', 'Kho Prompt Chuẩn'],
       },
     ],
   },
@@ -311,27 +335,42 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'ConnectDrive',
-        name: 'ConnectDrive (Google Drive API & Thư mục mặc định myApp\\LopU)',
+        name: 'ConnectDrive (Google Drive API, Gói Tài Liệu & Bảo Mật Giáo Viên)',
         folderPath: 'src/modules/ConnectData/ConnectDrive',
-        description: 'Tích hợp Google Drive API lưu trữ bảng điểm và tài liệu dạy học vào thư mục mặc định myApp\\LopU với cấu trúc phân cấp 4 tầng (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề).',
-        purpose: 'Thư mục Drive myApp\\LopU & Bảng điểm GV',
+        description: 'Hệ thống đồng bộ hóa Google Drive của giáo viên. Đường dẫn chuẩn 7 cấp độ: myApp / LopU / TaiLieu / [Tên tài liệu] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề]. Hỗ trợ gói bài dạy Chuyên đề gồm KienThuc.html, Luyentap [STT].json, và DanhGia [STT].json. Tự động khởi tạo và lưu trữ tệp đa phương tiện vào các thư mục Media\\HinhAnh, Media\\AmThanh, Media\\Video ngay bên trong thư mục Chuyên đề chứa file KienThuc.html. Áp dụng Giải pháp 5: Chuẩn hóa đường dẫn tương đối (./Media/...) trong file JSON để gói tài liệu hoạt động 100% độc lập khi chuyển máy hoặc chạy sandbox cho học sinh.',
+        purpose: 'Soạn thảo tài liệu khoa học, Gói tệp Chuyên đề, Media\\... & Đường dẫn tương đối JSON (Giải pháp 5)',
         icon: Cloud,
-        tags: ['myApp\\LopU', 'OAuth GSI', 'Chương-Bài-Vấn đề-Chuyên đề', 'Bảng điểm Drive GV'],
+        tags: ['Giải pháp 5 JSON Media', 'Đường dẫn tương đối ./Media/...', 'Bảo mật Drive GV', 'Media\\HinhAnh', 'Media\\AmThanh', 'Media\\Video', 'KienThuc.html', 'Luyentap', 'DanhGia'],
       },
       {
         id: 'ConnectFirestore',
         name: 'ConnectFirestore (Firebase & Khóa chính Google)',
         folderPath: 'src/modules/ConnectData/ConnectFirestore',
-        description: 'Hệ thống Firestore thời gian thực với sơ đồ blueprint (`firebase-blueprint.json`), quy tắc bảo mật `firestore.rules`, khóa chính là tài khoản Google (Email/UID), xử lý ngoại lệ theo chuẩn FirestoreErrorInfo với cơ chế phản hồi tự động Offline-First qua LocalStorage.',
-        purpose: 'Cơ sở dữ liệu tập trung',
+        description: 'Hệ thống Firestore thời gian thực với sơ đồ blueprint (`firebase-blueprint.json`), quy tắc bảo mật `firestore.rules`. Tích hợp cơ chế Offline-First lưu trữ LocalStorage ngay lập tức, tự động đồng bộ ngầm khi khôi phục mạng qua Sync Queue. Đặc biệt, ĐÃ XÓA SẠCH DỮ LIỆU DEMO, CHỈ DÙNG DỮ LIỆU THẬT CỦA NGƯỜI DÙNG để đảm bảo môi trường sạch sẽ, chuyên nghiệp.',
+        purpose: 'Cơ sở dữ liệu tập trung, Offline-First ngầm, Conflict Resolution, Xóa dữ liệu Demo & XOR Encryption',
         icon: Database,
-        tags: ['Google Key', 'RBAC 8 vai trò', 'Superadmin Lock', 'Offline-First'],
+        tags: ['No Demo Data', 'Conflict Resolution', 'Offline Sync Queue', 'XOR Encryption', 'Google Key', 'RBAC 8 vai trò', 'Superadmin Lock'],
       },
     ],
   },
 ];
 
-export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ onNavigateToView }) => {
+export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, onNavigateToView }) => {
+  // Phân quyền bảo vệ: Phần sau chỉ superadmin mới thấy: Hướng dẫn web và sơ đồ cây (Sơ đồ cây module, phân tích & tạo lệnh AI; kho prompt chuẩn)
+  if (currentRole && currentRole !== 'superadmin') {
+    return (
+      <div id="guide-tree-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-indigo-200 shadow-sm space-y-4">
+        <div className="w-14 h-14 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center mx-auto">
+          <FolderTree className="w-7 h-7" />
+        </div>
+        <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Superadmin</h3>
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Chỉ <strong>Superadmin</strong> mới có quyền xem và thao tác tại phân hệ <strong>Hướng dẫn web và sơ đồ cây (Sơ đồ cây module, phân tích & tạo lệnh AI; kho prompt chuẩn)</strong>.
+        </p>
+      </div>
+    );
+  }
+
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedModuleFilter, setSelectedModuleFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'nested-tree' | 'split-explorer' | 'table' | 'prompt-assistant'>('nested-tree');

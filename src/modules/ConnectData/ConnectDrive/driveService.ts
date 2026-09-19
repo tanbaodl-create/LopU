@@ -1,5 +1,6 @@
 import { googleClientConfig, isGoogleClientConfigured, auth, isFirebaseConfigured } from '../../../config/firebase';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { decryptData, enqueueSyncTask } from '../ConnectDataShared';
 import {
   StudentGradeRecord,
   ClassSeatingPlan,
@@ -50,37 +51,7 @@ function getStoredDriveFiles(): DriveStoredFile[] {
   try {
     const raw = localStorage.getItem(DRIVE_FILES_STORAGE_KEY);
     if (!raw) {
-      // Seed initial Drive files representing hybrid sync
-      const seed: DriveStoredFile[] = [
-        {
-          id: 'drive_gr_10a1',
-          name: 'LopU_BangDiem_10A1_ToanHoc.json',
-          mimeType: 'application/json',
-          category: 'teacher_grades',
-          size: '42 KB',
-          modifiedTime: new Date(Date.now() - 3600000 * 5).toLocaleString('vi-VN'),
-          classId: 'class_10a1',
-          content: INITIAL_STUDENT_GRADES,
-        },
-        {
-          id: 'drive_sc_personal',
-          name: 'LopU_ThoiKhoaBieu_CaNhan_2025.json',
-          mimeType: 'application/json',
-          category: 'personal_schedule',
-          size: '18 KB',
-          modifiedTime: new Date(Date.now() - 3600000 * 24).toLocaleString('vi-VN'),
-          content: INITIAL_SCHEDULE,
-        },
-        {
-          id: 'drive_lib_doc1',
-          name: 'LopU_TuSach_BatDangThuc_Cauchy.gdoc',
-          mimeType: 'application/vnd.google-apps.document',
-          category: 'teacher_library',
-          size: '2.4 MB',
-          modifiedTime: new Date(Date.now() - 3600000 * 48).toLocaleString('vi-VN'),
-          content: INITIAL_TEACHER_DOCS[0],
-        },
-      ];
+      const seed: DriveStoredFile[] = [];
       localStorage.setItem(DRIVE_FILES_STORAGE_KEY, JSON.stringify(seed));
       return seed;
     }
@@ -241,14 +212,8 @@ export async function saveTeacherGradesToDrive(
   }
   saveStoredDriveFiles(files);
 
-  // If live token exists and real Google endpoint reachable:
-  if (isDriveConnected && currentAccessToken && isGoogleClientConfigured) {
-    try {
-      await uploadFileToGoogleDriveApi(fileItem.name, fileItem.content, 'application/json');
-    } catch (e) {
-      console.warn('Google Drive direct upload notice:', e);
-    }
-  }
+  // Queue background sync (under the hood encrypts the file before cloud transmission)
+  enqueueSyncTask('drive', 'driveUpload', 'teacher_grades', fileItem.id, grades);
 
   return { success: true, fileId: fileItem.id, fileName: fileItem.name };
 }
@@ -275,6 +240,10 @@ export async function saveTeacherAttendanceToDrive(
 
   files.unshift(fileItem);
   saveStoredDriveFiles(files);
+
+  // Queue background sync
+  enqueueSyncTask('drive', 'driveUpload', 'teacher_attendance', fileItem.id, attendanceList);
+
   return { success: true, fileId: fileItem.id, fileName };
 }
 
@@ -303,6 +272,10 @@ export async function savePersonalScheduleToDrive(
     files.unshift(fileItem);
   }
   saveStoredDriveFiles(files);
+
+  // Queue background sync
+  enqueueSyncTask('drive', 'driveUpload', 'personal_schedule', fileItem.id, schedule);
+
   return { success: true, fileId: fileItem.id, fileName };
 }
 
@@ -331,6 +304,10 @@ export async function savePersonalSeatingPlanToDrive(
     files.unshift(fileItem);
   }
   saveStoredDriveFiles(files);
+
+  // Queue background sync
+  enqueueSyncTask('drive', 'driveUpload', 'personal_seating', fileItem.id, plan);
+
   return { success: true, fileId: fileItem.id, fileName };
 }
 
@@ -353,17 +330,38 @@ export async function saveLessonDocToDrive(
 
   files.unshift(fileItem);
   saveStoredDriveFiles(files);
+
+  // Queue background sync
+  enqueueSyncTask('drive', 'driveUpload', 'teacher_library', fileItem.id, docItem);
+
   return { success: true, fileId: fileItem.id, fileName };
 }
 
 // List all files created/saved by LopU in Google Drive
 export async function listAppFilesFromDrive(): Promise<DriveStoredFile[]> {
-  return getStoredDriveFiles();
+  const files = getStoredDriveFiles();
+  return files.map(file => {
+    if (file.content && (file.content as any)._encrypted && (file.content as any).data) {
+      try {
+        return {
+          ...file,
+          content: decryptData((file.content as any).data)
+        };
+      } catch (err) {
+        console.warn('Decryption failed for listed drive file:', err);
+      }
+    }
+    return file;
+  });
 }
 
 // Download file content
 export function downloadFileJson(file: DriveStoredFile): void {
-  const blob = new Blob([JSON.stringify(file.content, null, 2)], { type: 'application/json' });
+  let content = file.content;
+  if (content && (content as any)._encrypted && (content as any).data) {
+    content = decryptData((content as any).data);
+  }
+  const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

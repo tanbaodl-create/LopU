@@ -24,6 +24,9 @@ import {
   submitPinRequest,
   reviewPinRequest,
   seedInitialDataIfNeeded,
+  adjustUserDiamonds,
+  getTeacherDocuments,
+  saveTeacherDocument,
 } from './firestoreService';
 
 export const firestoreUserService = {
@@ -160,6 +163,101 @@ export async function syncGoogleAuthUserToFirestore(googleUser: {
 
   await firestoreUserService.save(profileData);
   return profileData;
+}
+
+/**
+ * Học sinh mua tài liệu có phí bằng Kim Cương 💎
+ */
+export async function purchaseDocumentWithDiamonds(
+  studentId: string,
+  docId: string
+): Promise<{ success: boolean; message: string; diamondsLeft?: number }> {
+  try {
+    const users = await getUsers();
+    const student = users.find(u => u.id === studentId);
+    if (!student) {
+      return { success: false, message: 'Tài khoản học sinh không tồn tại trên hệ thống.' };
+    }
+
+    const docs = await getTeacherDocuments();
+    const doc = docs.find(d => d.id === docId);
+    if (!doc) {
+      return { success: false, message: 'Tài liệu không tồn tại hoặc đã bị gỡ.' };
+    }
+
+    const price = doc.priceDiamonds ?? 0;
+    const currentDiamonds = student.diamonds ?? 0;
+
+    if (currentDiamonds < price) {
+      return {
+        success: false,
+        message: `Tài khoản của bạn không đủ Kim Cương (Hiện có: ${currentDiamonds} 💎, Giá tài liệu: ${price} 💎). Vui lòng tích cực học tập để tích lũy thêm!`
+      };
+    }
+
+    // Ghi nhận học sinh vào danh sách đã mua (purchasedUserIds)
+    const currentPurchased = doc.purchasedUserIds ?? [];
+    if (currentPurchased.includes(studentId)) {
+      return { success: true, message: 'Bạn đã sở hữu tài liệu này rồi!', diamondsLeft: currentDiamonds };
+    }
+
+    const updatedPurchased = [...currentPurchased, studentId];
+    const updatedDoc = {
+      ...doc,
+      purchasedUserIds: updatedPurchased,
+      updatedAt: new Date().toLocaleString('vi-VN'),
+    };
+
+    // Khấu trừ kim cương của học sinh
+    const updatedStudent = await adjustUserDiamonds(studentId, -price);
+
+    // Lưu tài liệu mới
+    await saveTeacherDocument(updatedDoc);
+
+    // Cộng kim cương cho tác giả giáo viên (nếu có authorId)
+    if (doc.authorId && doc.authorId !== studentId) {
+      try {
+        await adjustUserDiamonds(doc.authorId, price);
+      } catch (err) {
+        console.warn('Không thể chuyển kim cương cho giáo viên:', err);
+      }
+    }
+
+    return {
+      success: true,
+      message: `Mua thành công tài liệu "${doc.title}"! Đã khấu trừ ${price} 💎. Cảm ơn bạn đã ủng hộ tác giả!`,
+      diamondsLeft: updatedStudent.diamonds
+    };
+  } catch (error) {
+    console.error('Lỗi khi mua tài liệu:', error);
+    return { success: false, message: 'Đã xảy ra lỗi trong quá trình giao dịch bằng Kim Cương.' };
+  }
+}
+
+/**
+ * Thưởng thêm Kim Cương 💎 cho học sinh dựa trên tiêu chí hoàn thành bài học / điểm tốt (Gamification)
+ */
+export async function rewardStudentDiamonds(
+  studentId: string,
+  amount: number,
+  reason: string
+): Promise<{ success: boolean; diamonds?: number; message: string }> {
+  try {
+    const student = await firestoreUserService.getById(studentId);
+    if (!student) {
+      return { success: false, message: 'Học sinh không tồn tại.' };
+    }
+
+    const updated = await adjustUserDiamonds(studentId, amount);
+    return {
+      success: true,
+      diamonds: updated.diamonds,
+      message: `Chúc mừng! Bạn được cộng +${amount} 💎 vì ${reason}.`
+    };
+  } catch (error) {
+    console.error('Lỗi cộng thưởng kim cương:', error);
+    return { success: false, message: 'Lỗi cộng thưởng kim cương.' };
+  }
 }
 
 export { seedInitialDataIfNeeded };

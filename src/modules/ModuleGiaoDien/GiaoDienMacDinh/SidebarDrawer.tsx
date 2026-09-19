@@ -39,18 +39,38 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
   const isDevEmail = driveEmail === 'tanbaobg@gmail.com' || driveEmail === 'tanbaodl@gmail.com' || driveEmail === 'teacher.google@lopu.edu.vn';
 
   const filteredMenuGroups = useMemo(() => {
-    return MENU_GROUPS.map(group => {
+    return MENU_GROUPS.filter(group => {
+      // 1. Chỉ superadmin mới thấy: Hướng dẫn web và sơ đồ cây (Sơ đồ cây module, phân tích & tạo lệnh AI; kho prompt chuẩn)
+      if (group.id === 'guide') {
+        return currentRole === 'superadmin';
+      }
+      // 2. Admin và superadmin thấy: Quản trị tài khoản và phân quyền
+      if (group.id === 'settings' || group.id === 'reports') {
+        return currentRole === 'superadmin' || currentRole === 'admin';
+      }
+      // 3. Giáo viên trở lên mới thấy: Nghiệp vụ giảng dạy
+      if (group.id === 'teaching') {
+        return (
+          currentRole === 'superadmin' ||
+          currentRole === 'admin' ||
+          currentRole === 'manager' ||
+          currentRole === 'teacher'
+        );
+      }
+      // Mặc định (Không gian học tập): Tất cả vai trò đều thấy
+      return true;
+    }).map(group => {
       return {
         ...group,
         subItems: group.subItems.filter(sub => {
           if (sub.id === 'guide-prompts-saved') {
-            return isDevEmail;
+            return currentRole === 'superadmin';
           }
           return true;
         })
       };
     }).filter(group => group.subItems.length > 0);
-  }, [isDevEmail]);
+  }, [currentRole]);
 
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>(() => ({
     learning: true,
@@ -145,51 +165,6 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
-        </div>
-
-        {/* Role Quick Switcher inside Drawer */}
-        <div className="px-4 pt-3 pb-2 bg-slate-100/60 border-b border-slate-200">
-          <div className="flex items-center justify-between text-xs text-slate-700 mb-1.5 font-medium">
-            <span>Vai trò trải nghiệm:</span>
-            <span className="capitalize font-semibold text-indigo-700">
-              {currentRole === 'teacher' ? 'Giáo viên' : currentRole === 'student' ? 'Học sinh' : 'Quản trị viên'}
-            </span>
-          </div>
-          <div className="grid grid-cols-3 gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-xs">
-            <button
-              id="role-btn-student"
-              onClick={() => onChangeRole('student')}
-              className={`py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                currentRole === 'student'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              Học sinh
-            </button>
-            <button
-              id="role-btn-teacher"
-              onClick={() => onChangeRole('teacher')}
-              className={`py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                currentRole === 'teacher'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              Giáo viên
-            </button>
-            <button
-              id="role-btn-admin"
-              onClick={() => onChangeRole('admin')}
-              className={`py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
-                currentRole === 'admin'
-                  ? 'bg-indigo-600 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              Admin
-            </button>
-          </div>
         </div>
 
         {/* Accordion Menu List (Level 1 & Level 2) */}
