@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   LayoutGrid,
   KeyRound,
@@ -172,7 +172,13 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
   // Sửa tên lớp & Đổi vị trí Cửa ⇄ Bàn GV
   const [doorOnLeft, setDoorOnLeft] = useState<boolean>(true);
   const [editingClassName, setEditingClassName] = useState<string>('');
-  const [teacherNameState, setTeacherNameState] = useState<string>('Thầy Nguyễn Văn An');
+  const [teacherNameState, setTeacherNameState] = useState<string>(currentRole === 'student' ? '' : 'Thầy Nguyễn Văn An');
+
+  useEffect(() => {
+    if (currentRole === 'student') {
+      setTeacherNameState('');
+    }
+  }, [currentRole]);
   const [teacherPhoneState, setTeacherPhoneState] = useState<string>('0912.345.678');
 
   const loadAllData = async () => {
@@ -334,6 +340,16 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
   };
 
   // Phân quyền bảo vệ: Phần sau thì Giáo viên trở lên mới thấy: Nghiệp vụ giảng dạy
+  const teacherClassOptions = useMemo(() => {
+    const teacherProfile = userProfiles.find(u => u.role === 'teacher' || u.role === 'superadmin' || u.roles?.includes('teacher'));
+    if (teacherProfile && Array.isArray(teacherProfile.classIds) && teacherProfile.classIds.length > 0) {
+      const classSet = new Set(teacherProfile.classIds.map(c => c.trim().toLowerCase()));
+      const filtered = classes.filter(c => classSet.has(c.code.toLowerCase()) || classSet.has(c.name.toLowerCase()) || classSet.has(c.id.toLowerCase()));
+      return filtered;
+    }
+    return classes;
+  }, [classes, userProfiles]);
+
   if (currentRole && !['superadmin', 'admin', 'manager', 'teacher'].includes(currentRole)) {
     return (
       <div id="teaching-management-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-emerald-200 shadow-sm space-y-4">
@@ -393,12 +409,15 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
             onChange={e => handleClassChange(e.target.value)}
             className="text-xs font-bold bg-slate-50 text-slate-800 py-2 px-3 rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer"
           >
-            <option value="">-- (Để trống) --</option>
-            {classes.map(c => (
-              <option key={c.id} value={c.id}>
-                {c.code} — {c.name}
-              </option>
-            ))}
+            {teacherClassOptions.length === 0 ? (
+              <option value="">-- (Danh sách rỗng) --</option>
+            ) : (
+              teacherClassOptions.map((c: ClassItem) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} — {c.name}
+                </option>
+              ))
+            )}
           </select>
 
           {/* Nút Xem GPS Bản đồ Lớp Học (THPT Ba Gia) */}

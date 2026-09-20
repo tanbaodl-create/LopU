@@ -117,6 +117,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     return publishedDocuments.filter(doc => doc.publishedToClasses && doc.publishedToClasses.includes(selectedClassId));
   }, [publishedDocuments, selectedClassId]);
 
+  // Rà soát danh sách "Các Lớp Dạy/Học" từ Hồ Sơ Chi Tiết (14 Trường Thông Tin Người Dùng)
+  const userClassOptions = useMemo(() => {
+    if (studentProfile && Array.isArray(studentProfile.classIds) && studentProfile.classIds.length > 0) {
+      const classSet = new Set(studentProfile.classIds.map(c => c.trim().toLowerCase()));
+      return classes.filter(c => classSet.has(c.code.toLowerCase()) || classSet.has(c.name.toLowerCase()) || classSet.has(c.id.toLowerCase()));
+    }
+    return []; // Không có thì danh sách tùy chọn là rỗng chứ không được tự ý thêm vào
+  }, [classes, studentProfile]);
+
   const handleClassChange = (classId: string) => {
     setSelectedClassId(classId);
     const target = classes.find(c => c.id === classId);
@@ -229,12 +238,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   onChange={e => handleClassChange(e.target.value)}
                   className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 text-slate-900 text-sm font-semibold py-2.5 px-3.5 pr-9 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors"
                 >
-                  <option value="">-- (Để trống) --</option>
-                  {classes.map(c => (
-                    <option key={c.id} value={c.id}>
-                      {c.code} — {c.name} ({c.teacherName})
-                    </option>
-                  ))}
+                  {userClassOptions.length === 0 ? (
+                    <option value="">-- (Danh sách rỗng) --</option>
+                  ) : (
+                    userClassOptions.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.code} — {c.name} ({c.teacherName})
+                      </option>
+                    ))
+                  )}
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3.5 pointer-events-none" />
               </div>

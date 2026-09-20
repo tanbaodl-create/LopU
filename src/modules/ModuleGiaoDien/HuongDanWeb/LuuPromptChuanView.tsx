@@ -20,6 +20,84 @@ const DEFAULT_PROMPT_GROUPS: PromptGroup[] = [
     name: 'Toán và E-learning',
     items: [
       {
+        id: 'lam-chuyen-de',
+        name: 'Làm chuyên đề',
+        prompt: `Đóng vai là một chuyên gia sư phạm môn Toán THPT. Hãy giúp tôi soạn tài liệu chuyên đề bám sát chương trình giáo dục phổ thông 2018 (sách Kết nối tri thức).
+
+QUY TRÌNH LÀM VIỆC TƯƠNG TÁC (BẮT BUỘC TUÂN THỦ TỪNG BƯỚC):
+Bạn tuyệt đối không được tự ý soạn toàn bộ tài liệu ngay lập tức. Hãy thực hiện tuần tự theo 4 bước sau, ở mỗi bước PHẢI DỪNG LẠI VÀ CHỜ TÔI PHẢN HỒI rồi mới được chuyển sang bước tiếp theo.
+
+BƯỚC 1: Hỏi Tên chuyên đề
+
+Bạn hãy hỏi tôi: "Chào thầy, thầy muốn soạn chuyên đề hoặc dạng bài toán nào hôm nay?"
+
+[DỪNG LẠI VÀ CHỜ TÔI NHẬP TÊN CHUYÊN ĐỀ]
+
+BƯỚC 2: Đề xuất Dàn ý và Mô tả mức độ
+Dựa vào tên chuyên đề tôi vừa cung cấp, bạn hãy đề xuất:
+
+Dàn ý các mục lý thuyết trọng tâm (Mục 1, Mục 2,...).
+
+Mô tả chi tiết 4 mức độ nhận thức áp dụng riêng cho chuyên đề này:
+
+M1: Biết
+
+M2: Hiểu
+
+M3: Vận dụng
+
+M4: Vận dụng cao
+
+Hãy mời tôi nhận xét, thay đổi hoặc chốt phương án.
+
+[DỪNG LẠI VÀ CHỜ TÔI CHỐT DÀN Ý & MỨC ĐỘ]
+
+BƯỚC 3: Đề xuất Ma trận câu hỏi
+Sau khi tôi chốt Bước 2, bạn hãy đề xuất Ma trận số lượng câu hỏi cho 2 phần (Lưu ý: Bỏ hoàn toàn phần "Ví dụ rèn luyện" ở phần Luyện tập, chỉ còn bài tập):
+
+PHẦN B. LUYỆN TẬP TẠI LỚP: Số lượng câu Trắc nghiệm 4 lựa chọn, Trắc nghiệm Đúng/Sai, Trả lời ngắn.
+
+PHẦN C. RÈN LUYỆN TẠI NHÀ: Số lượng câu Trắc nghiệm 4 lựa chọn, Trắc nghiệm Đúng/Sai, Trả lời ngắn (Đề xuất lồng ghép câu hỏi mô hình hóa thực tế nếu có).
+
+Hãy mời tôi nhận xét, thay đổi số lượng hoặc chốt ma trận.
+
+[DỪNG LẠI VÀ CHỜ TÔI CHỐT MA TRẬN]
+
+BƯỚC 4: Xuất toàn bộ tài liệu
+CHỈ SAU KHI tôi chốt Ma trận ở Bước 3, bạn mới tiến hành soạn thảo 100% nội dung tài liệu chi tiết và xuất ra ĐÚNG ĐỊNH DẠNG DƯỚI ĐÂY:
+
+YÊU CẦU TUYỆT ĐỐI VỀ ĐỊNH DẠNG VÀ CẤU TRÚC Ở BƯỚC 4:
+1. Định dạng văn bản (Bắt buộc):
+
+KHÔNG sử dụng các ký tự định dạng Markdown (như dấu thăng #, dấu sao *, gạch ngang -). Chỉ xuất văn bản thuần túy (plain text) để không bị lỗi khi dán vào Word.
+
+Toàn bộ công thức, biểu thức, ký hiệu toán học và biến số (kể cả đứng độc lập trong câu chữ) BẮT BUỘC phải được bọc trong cặp dấu $ đơn. Tuyệt đối không dùng dấu đô la kép $$.
+
+Cấu trúc trình bày bài tập:
+Câu [Số thứ tự]. (M1/M2/M3/M4) [Nội dung câu hỏi]
+Lời giải
+[Nội dung lập luận, phân tích và giải chi tiết]
+Đáp án: [Kết quả cuối cùng].
+
+2. Cấu trúc nội dung:
+PHẦN A. LÝ THUYẾT TRỌNG TÂM:
+
+Triển khai theo đúng dàn ý đã chốt ở Bước 2.
+
+QUAN TRỌNG: Ngay sau phần trình bày lý thuyết của mỗi Mục, BẮT BUỘC phải có các Ví dụ (Ví dụ 1, Ví dụ 2...) minh họa trực tiếp cho lý thuyết đó kèm lời giải chi tiết.
+
+PHẦN B. LUYỆN TẬP TẠI LỚP:
+
+Soạn đúng số lượng và thể loại câu hỏi theo Ma trận đã chốt ở Bước 3. (Gồm: I. Trắc nghiệm lựa chọn; II. Trắc nghiệm Đúng/Sai; III. Trả lời ngắn).
+
+PHẦN C. RÈN LUYỆN TẠI NHÀ:
+
+Soạn đúng số lượng và thể loại câu hỏi theo Ma trận đã chốt ở Bước 3. (Gồm: I. Trắc nghiệm lựa chọn; II. Trắc nghiệm Đúng/Sai; III. Trả lời ngắn).
+
+Bây giờ, hãy thực hiện BƯỚC 1!`,
+        description: 'Prompt quy trình 4 bước tương tác sư phạm Toán THPT biên soạn tài liệu chuyên đề bám sát SGK Kết nối tri thức 2018 (Dàn ý, Ma trận, Lý thuyết kèm ví dụ & Bài tập Luyện tập/Rèn luyện).'
+      },
+      {
         id: 'math-elearning-ppt',
         name: 'Tạo Web Side',
         prompt: `Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
@@ -148,7 +226,7 @@ export const LuuPromptChuanView: React.FC = () => {
 
           {/* Dropdown 1: Nhóm Prompt */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold text-slate-700 block">Chọn nhóm module:</label>
+            <label className="text-xs font-bold text-slate-700 block">Chọn nhóm yêu cầu:</label>
             <select
               value={selectedGroupId}
               onChange={handleGroupChange}

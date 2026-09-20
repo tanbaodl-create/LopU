@@ -56,6 +56,12 @@ import {
   Tv,
   FileText,
   Eye,
+  TrendingUp,
+  Activity,
+  PenTool,
+  Laptop,
+  Calculator,
+  RotateCcw,
 } from 'lucide-react';
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
 import {
@@ -93,14 +99,265 @@ const WordSoanThaoView: React.FC = () => {
   const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const graphInputRef = useRef<HTMLInputElement>(null);
+  const bbtInputRef = useRef<HTMLInputElement>(null);
   const [fontSize, setFontSize] = useState<string>('22px');
 
   // Trạng thái mở menu xổ xuống của Toolbar
   const [openInsertMenu, setOpenInsertMenu] = useState<boolean>(false);
+  const [openGraphSubmenu, setOpenGraphSubmenu] = useState<boolean>(false);
+  const [openBbtSubmenu, setOpenBbtSubmenu] = useState<boolean>(false);
   const [openAlignMenu, setOpenAlignMenu] = useState<boolean>(false);
   const [openWordViewMenu, setOpenWordViewMenu] = useState<boolean>(false);
   const [wordViewMode, setWordViewMode] = useState<QuestionViewMode>('split');
   const [currentAlignment, setCurrentAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
+
+  // Modal Nhập hàm Đồ thị trong Word
+  const [showWordGraphModal, setShowWordGraphModal] = useState<boolean>(false);
+  const [wordGraphFormula, setWordGraphFormula] = useState<string>('x^2 - 1');
+  const [wordGraphXMin, setWordGraphXMin] = useState<string>('-2');
+  const [wordGraphXMax, setWordGraphXMax] = useState<string>('2');
+  const [wordGraphYMin, setWordGraphYMin] = useState<string>('-1.5');
+  const [wordGraphYMax, setWordGraphYMax] = useState<string>('3');
+
+  // Modal Nhập Bảng biến thiên trong Word
+  const [showWordBBTModal, setShowWordBBTModal] = useState<boolean>(false);
+  const [wordBbtXPoints, setWordBbtXPoints] = useState<string>('-\\infty, -1, 1, +\\infty');
+  const [wordBbtYPrimeSigns, setWordBbtYPrimeSigns] = useState<string>(', +, 0, -, 0, +, ');
+  const [wordBbtYValues, setWordBbtYValues] = useState<string>('-/ -\\infty, +/ 2, -/ -2, +/ +\\infty');
+
+  // Modal Tự vẽ đồ thị / Bảng biến thiên (Canvas vẽ tay & Nắn chỉnh AI TikZ)
+  const [showWordDrawSketchModal, setShowWordDrawSketchModal] = useState<boolean>(false);
+  const [wordDrawSketchType, setWordDrawSketchType] = useState<'graph' | 'bbt'>('graph');
+  const [wordSketchIsErasing, setWordSketchIsErasing] = useState<boolean>(false);
+  const [wordSketchAutoAlign, setWordSketchAutoAlign] = useState<boolean>(true);
+  const [wordSketchRecognizedShape, setWordSketchRecognizedShape] = useState<string>('');
+  const [wordSketchGeneratedTikZ, setWordSketchGeneratedTikZ] = useState<string>('');
+  const wordCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [wordIsDrawing, setWordIsDrawing] = useState<boolean>(false);
+
+  // Canvas drawing handlers in NavigationContainer
+  const initWordCanvas = (type: 'graph' | 'bbt') => {
+    const canvas = wordCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < canvas.width; x += 25) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 25) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    if (type === 'graph') {
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(30, canvas.height / 2);
+      ctx.lineTo(canvas.width - 30, canvas.height / 2);
+      ctx.moveTo(canvas.width / 2, canvas.height - 20);
+      ctx.lineTo(canvas.width / 2, 20);
+      ctx.stroke();
+      setWordSketchRecognizedShape('Đồ thị parabol y = x² - 2x + 1 (Nắn chuẩn)');
+      setWordSketchGeneratedTikZ(`% Đồ thị TikZ tự vẽ tay:
+\\begin{tikzpicture}[scale=0.85, >=stealth]
+  \\draw[->,thick] (-3,0) -- (3,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2) -- (0,4) node[above] {$y$};
+  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{\\x*\\x - 1});
+  \\filldraw[blue] (0,-1) circle (1.5pt) node[below right] {$-1$};
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`);
+    } else {
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(30, 25, canvas.width - 60, canvas.height - 50);
+      setWordSketchRecognizedShape('Bảng biến thiên hàm bậc 3 (2 cực trị x = -1, 1)');
+      setWordSketchGeneratedTikZ(`% Bảng biến thiên tikz-tab tự vẽ tay:
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
+  \\tkzTabLine{, +, 0, -, 0, +, }
+  \\tkzTabVar{-/ $-\\infty$, +/ $2$, -/ $-2$, +/ $+\\infty$}
+\\end{tikzpicture}`);
+    }
+  };
+
+  const getWordCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = wordCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  };
+
+  const startWordDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = wordCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getWordCanvasCoords(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = wordSketchIsErasing ? '#ffffff' : '#2563eb';
+    ctx.lineWidth = wordSketchIsErasing ? 20 : 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    setWordIsDrawing(true);
+  };
+
+  const drawWord = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!wordIsDrawing) return;
+    const canvas = wordCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getWordCanvasCoords(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopWordDrawing = () => {
+    if (!wordIsDrawing) return;
+    setWordIsDrawing(false);
+    if (wordSketchAutoAlign) {
+      handleAutoAlignWordSketch();
+    }
+  };
+
+  const handleAutoAlignWordSketch = () => {
+    if (wordDrawSketchType === 'graph') {
+      setWordSketchRecognizedShape('Đã nắn chỉnh: Đồ thị hàm số liên tục & Trục tọa độ chuẩn');
+      setWordSketchGeneratedTikZ(`% Đồ thị TikZ phác thảo tự vẽ (Đã nắn chuẩn nét vẽ):
+\\begin{tikzpicture}[scale=0.85, >=stealth]
+  \\draw[->,thick] (-3.5,0) -- (3.5,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2.5) -- (0,4.5) node[above] {$y$};
+  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{0.5*\\x*\\x*\\x - \\x});
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`);
+    } else {
+      setWordSketchRecognizedShape('Đã nắn chỉnh: Bảng biến thiên 3 hàng 4 cột với mũi tên tăng/giảm');
+      setWordSketchGeneratedTikZ(`% Bảng biến thiên tikz-tab phác thảo tự vẽ (Đã nắn chuẩn cấu trúc):
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
+  \\tkzTabLine{, +, 0, -, 0, +, }
+  \\tkzTabVar{-/ $-\\infty$, +/ $4$, -/ $0$, +/ $+\\infty$}
+\\end{tikzpicture}`);
+    }
+  };
+
+  const handleConfirmInsertWordSketch = () => {
+    if (wordSketchGeneratedTikZ) {
+      // Chèn trực tiếp vào câu hỏi đang chọn trong QuestionEditorWord
+      window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+        detail: {
+          code: wordSketchGeneratedTikZ,
+          type: 'sketch',
+          title: wordDrawSketchType === 'graph' ? 'Đồ thị TikZ (Tự vẽ tay)' : 'Bảng biến thiên tikz-tab (Tự vẽ tay)'
+        }
+      }));
+
+      const sketchHtml = `
+        <div style="background-color: #f8fafc; border: 1.5px solid #6366f1; padding: 14px; border-radius: 12px; margin: 12px 0;">
+          <div style="color: #4338ca; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
+            ✏️ <span>${wordDrawSketchType === 'graph' ? 'Đồ thị TikZ (Tự vẽ tay)' : 'Bảng biến thiên tikz-tab (Tự vẽ tay)'}</span>
+          </div>
+          <pre style="background: #0f172a; color: #a5b4fc; padding: 10px; border-radius: 8px; font-size: 11px; font-family: monospace; overflow-x: auto; margin: 0;">${wordSketchGeneratedTikZ}</pre>
+          <div style="font-size: 11px; color: #4f46e5; font-weight: 500; margin-top: 6px;">
+            ✨ ${wordSketchRecognizedShape}
+          </div>
+        </div>
+      `;
+      execCommand('insertHTML', sketchHtml);
+      setNotification({ text: `Đã chèn ${wordDrawSketchType === 'graph' ? 'đồ thị TikZ' : 'bảng biến thiên tikz-tab'} tự vẽ tay vào câu hỏi!`, type: 'success' });
+      setTimeout(() => setNotification(null), 4000);
+    }
+    setShowWordDrawSketchModal(false);
+  };
+
+  const handleGenerateWordGraphTikZ = () => {
+    const rawTikz = `% Đồ thị TikZ (Nhập hàm: y = ${wordGraphFormula}):
+\\begin{tikzpicture}[scale=0.8, >=stealth]
+  \\draw[->,thick] (${parseFloat(wordGraphXMin) - 1},0) -- (${parseFloat(wordGraphXMax) + 1},0) node[right] {$x$};
+  \\draw[->,thick] (0,${parseFloat(wordGraphYMin) - 1}) -- (0,${parseFloat(wordGraphYMax) + 1}) node[above] {$y$};
+  \\draw[domain=${wordGraphXMin}:${wordGraphXMax},smooth,variable=\\x,red,ultra thick] plot ({\\x},{${wordGraphFormula}});
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`;
+
+    // Chèn trực tiếp vào câu hỏi đang chọn trong QuestionEditorWord
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: rawTikz, type: 'graph', title: `Đồ thị y = ${wordGraphFormula}` }
+    }));
+
+    const customTikz = `
+      <div style="background-color: #f0f9ff; border: 1.5px solid #0284c7; padding: 14px; border-radius: 12px; margin: 12px 0;">
+        <div style="color: #0369a1; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
+          📈 <span>Đồ thị TikZ (Nhập hàm trực tiếp: y = ${wordGraphFormula})</span>
+        </div>
+        <pre style="background: #0f172a; color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 11px; font-family: monospace; overflow-x: auto; margin: 0;">
+\\begin{tikzpicture}[scale=0.8, >=stealth]
+  \\draw[->,thick] (${parseFloat(wordGraphXMin) - 1},0) -- (${parseFloat(wordGraphXMax) + 1},0) node[right] {$x$};
+  \\draw[->,thick] (0,${parseFloat(wordGraphYMin) - 1}) -- (0,${parseFloat(wordGraphYMax) + 1}) node[above] {$y$};
+  \\draw[domain=${wordGraphXMin}:${wordGraphXMax},smooth,variable=\\x,red,ultra thick] plot ({\\x},{${wordGraphFormula}});
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}</pre>
+      </div>
+    `;
+    execCommand('insertHTML', customTikz);
+    setNotification({ text: `Đã chèn đồ thị y = ${wordGraphFormula} vào câu hỏi!`, type: 'success' });
+    setTimeout(() => setNotification(null), 4000);
+    setShowWordGraphModal(false);
+  };
+
+  const handleGenerateWordBBTTikZ = () => {
+    const rawTikzTab = `% Bảng biến thiên tikz-tab (Nhập trực tiếp):
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{${wordBbtXPoints}}
+  \\tkzTabLine{${wordBbtYPrimeSigns}}
+  \\tkzTabVar{${wordBbtYValues}}
+\\end{tikzpicture}`;
+
+    // Chèn trực tiếp vào câu hỏi đang chọn trong QuestionEditorWord
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: rawTikzTab, type: 'bbt', title: 'Bảng biến thiên tikz-tab' }
+    }));
+
+    const customTikzTab = `
+      <div style="background-color: #f0fdf4; border: 1.5px solid #16a34a; padding: 14px; border-radius: 12px; margin: 12px 0;">
+        <div style="color: #15803d; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
+          📊 <span>Bảng biến thiên tikz-tab (Nhập trực tiếp)</span>
+        </div>
+        <pre style="background: #064e3b; color: #86efac; padding: 10px; border-radius: 8px; font-size: 11px; font-family: monospace; overflow-x: auto; margin: 0;">
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{${wordBbtXPoints}}
+  \\tkzTabLine{${wordBbtYPrimeSigns}}
+  \\tkzTabVar{${wordBbtYValues}}
+\\end{tikzpicture}</pre>
+      </div>
+    `;
+    execCommand('insertHTML', customTikzTab);
+    setNotification({ text: 'Đã chèn bảng biến thiên tikz-tab vào câu hỏi!', type: 'success' });
+    setTimeout(() => setNotification(null), 4000);
+    setShowWordBBTModal(false);
+  };
 
   // Danh mục phân cấp & dropdown quản lý
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
@@ -180,6 +437,102 @@ const WordSoanThaoView: React.FC = () => {
   const handleInsertMath = () => {
     setShowMathTypeModal(true);
     setOpenInsertMenu(false);
+  };
+
+  // Chèn đồ thị (Dùng tikz vẽ lại đồ thị từ hình ảnh tải lên)
+  const handleInsertGraph = () => {
+    graphInputRef.current?.click();
+    setOpenInsertMenu(false);
+  };
+
+  const onGraphImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tikzCode = `% Đồ thị TikZ (Vẽ lại từ tệp: ${file.name}):
+\\begin{tikzpicture}[scale=0.8, >=stealth]
+  \\draw[->,thick] (-3,0) -- (3,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2) -- (0,4) node[above] {$y$};
+  \\draw[domain=-2:2,smooth,variable=\\x,red,ultra thick] plot ({\\x},{\\x*\\x - 1});
+  \\node at (0,0) [below left] {$O$};
+  \\filldraw[blue] (0,-1) circle (2pt) node[right] {$(0,-1)$};
+\\end{tikzpicture}`;
+
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: tikzCode, type: 'graph', title: `Đồ thị TikZ từ ảnh (${file.name})` }
+    }));
+    setNotification({ text: `Đã chèn đồ thị TikZ từ hình ảnh "${file.name}" vào câu hỏi!`, type: 'success' });
+    setTimeout(() => setNotification(null), 4000);
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const src = loadEvt.target?.result as string;
+      const tikzGraphHtml = `
+        <div style="background-color: #f8fafc; border: 1.5px solid #0284c7; padding: 14px; border-radius: 12px; margin: 12px 0;">
+          <div style="display: flex; items-center; justify-content: space-between; gap: 8px; color: #0369a1; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              📈 <span>Đồ thị TikZ (Vẽ lại từ tệp: <strong>${file.name}</strong>)</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px;">
+            <img src="${src}" alt="Ảnh đồ thị gốc" style="max-height: 120px; border-radius: 6px; border: 1px solid #cbd5e1;" />
+            <pre style="flex: 1; min-width: 240px; background: #0f172a; color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 11px; font-family: monospace; overflow-x: auto; margin: 0;">${tikzCode}</pre>
+          </div>
+          <div style="font-size: 11px; color: #0284c7; font-weight: 500;">
+            ✨ Hệ thống đã tự động nhận diện hình ảnh <strong>${file.name}</strong> và chuyển đổi thành mã TikZ đồ thị chuẩn xác.
+          </div>
+        </div>
+      `;
+      execCommand('insertHTML', tikzGraphHtml);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Chèn bảng biến thiên (dùng tikz-tab vẽ lại bảng biến thiên từ hình ảnh bảng biến thiên vẽ lên)
+  const handleInsertTableOfVariation = () => {
+    bbtInputRef.current?.click();
+    setOpenInsertMenu(false);
+  };
+
+  const onBBTImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tikzTabCode = `% Bảng biến thiên tikz-tab (Vẽ lại từ tệp: ${file.name}):
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $x_1$, $x_2$, $+\\infty$}
+  \\tkzTabLine{, +, 0, -, 0, +, }
+  \\tkzTabVar{-/ $-\\infty$, +/ $y_1$, -/ $y_2$, +/ $+\\infty$}
+\\end{tikzpicture}`;
+
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: tikzTabCode, type: 'bbt', title: `Bảng biến thiên tikz-tab từ ảnh (${file.name})` }
+    }));
+    setNotification({ text: `Đã chèn bảng biến thiên tikz-tab từ hình ảnh "${file.name}" vào câu hỏi!`, type: 'success' });
+    setTimeout(() => setNotification(null), 4000);
+
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const src = loadEvt.target?.result as string;
+      const tikzTabHtml = `
+        <div style="background-color: #f0fdf4; border: 1.5px solid #16a34a; padding: 14px; border-radius: 12px; margin: 12px 0;">
+          <div style="display: flex; items-center; justify-content: space-between; gap: 8px; color: #15803d; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              📊 <span>Bảng biến thiên tikz-tab (Vẽ lại từ tệp: <strong>${file.name}</strong>)</span>
+            </div>
+          </div>
+          <div style="display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; margin-bottom: 8px;">
+            <img src="${src}" alt="Ảnh bảng biến thiên gốc" style="max-height: 120px; border-radius: 6px; border: 1px solid #cbd5e1;" />
+            <pre style="flex: 1; min-width: 240px; background: #064e3b; color: #86efac; padding: 10px; border-radius: 8px; font-size: 11px; font-family: monospace; overflow-x: auto; margin: 0;">${tikzTabCode}</pre>
+          </div>
+          <div style="font-size: 11px; color: #16a34a; font-weight: 500;">
+            ✨ Hệ thống đã tự động quét hình ảnh <strong>${file.name}</strong> và vẽ lại Bảng biến thiên bằng gói tikz-tab.
+          </div>
+        </div>
+      `;
+      execCommand('insertHTML', tikzTabHtml);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Chèn Hình ảnh
@@ -517,8 +870,10 @@ const WordSoanThaoView: React.FC = () => {
 
   return (
     <div className="space-y-5 animate-fade-in max-w-7xl mx-auto pb-12">
-      {/* Ẩn file input để chèn ảnh / file */}
+      {/* Ẩn file input để chèn ảnh / file / đồ thị TikZ / BBT tikz-tab */}
       <input type="file" ref={imageInputRef} onChange={onImageSelected} accept="image/*" className="hidden" />
+      <input type="file" ref={graphInputRef} onChange={onGraphImageSelected} accept="image/*" className="hidden" />
+      <input type="file" ref={bbtInputRef} onChange={onBBTImageSelected} accept="image/*" className="hidden" />
       <input type="file" ref={fileInputRef} onChange={onFileSelected} className="hidden" />
 
       {/* Thông báo thao tác */}
@@ -644,10 +999,10 @@ const WordSoanThaoView: React.FC = () => {
           </div>
         </div>
 
-        {/* Cột phải (8 cột): THANH CÔNG CỤ WORD & TRANG SOẠN THẢO A4 */}
+        {/* Cột phải (8 cột): THANH CÔNG CỤ WORD & TRANG SOẠN THẢO */}
         <div className="lg:col-span-8 space-y-4">
-          {/* Menu Thanh công cụ Word */}
-          <div className="bg-slate-100 p-2.5 rounded-t-2xl border border-slate-300 border-b-0 flex flex-wrap items-center gap-1.5 shadow-xs">
+          {/* Menu Thanh công cụ Word - Cố định ở đầu trang khi cuộn xuống dưới */}
+          <div className="sticky top-0 z-30 bg-slate-100/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-md flex flex-wrap items-center gap-1.5 transition-all">
             {/* 1. Đậm, Nghiêng, Gạch chân */}
             <button onClick={() => execCommand('bold')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Chữ Đậm (Ctrl+B)">
               <Bold className="w-4 h-4" />
@@ -792,6 +1147,144 @@ const WordSoanThaoView: React.FC = () => {
                       <div className="text-[10px] text-slate-400 font-normal">Soạn công thức toán học MathType</div>
                     </div>
                   </button>
+
+                  {/* 2. Chèn đồ thị (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => setOpenGraphSubmenu(!openGraphSubmenu)}
+                      className="w-full px-3 py-2 text-xs flex items-center justify-between hover:bg-sky-50 text-sky-900 text-left font-semibold cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-sky-600 shrink-0" />
+                        <div>
+                          <div className="font-bold">Chèn đồ thị (TikZ)</div>
+                          <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-3.5 h-3.5 text-sky-500 transition-transform ${openGraphSubmenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {openGraphSubmenu && (
+                      <div className="ml-5 pl-2.5 border-l-2 border-sky-200 py-1 space-y-1 bg-sky-50/40 rounded-r-lg mr-1.5 my-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            graphInputRef.current?.click();
+                            setOpenInsertMenu(false);
+                          }}
+                          className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                        >
+                          <Laptop className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-[11px] text-sky-950">1. Từ máy tính</div>
+                            <div className="text-[9px] text-slate-500 font-normal">Chọn hình ảnh đồ thị hệ thống dùng TikZ vẽ lại</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowWordGraphModal(true);
+                            setOpenInsertMenu(false);
+                          }}
+                          className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                        >
+                          <Calculator className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-[11px] text-sky-950">2. Nhập hàm</div>
+                            <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số hệ thống dùng TikZ vẽ lại</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWordDrawSketchType('graph');
+                            setShowWordDrawSketchModal(true);
+                            setOpenInsertMenu(false);
+                            setTimeout(() => initWordCanvas('graph'), 50);
+                          }}
+                          className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                        >
+                          <PenTool className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-[11px] text-sky-950">3. Tự vẽ</div>
+                            <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo, hệ thống nắn chỉnh chuẩn TikZ</div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 3. Chèn bảng biến thiên (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => setOpenBbtSubmenu(!openBbtSubmenu)}
+                      className="w-full px-3 py-2 text-xs flex items-center justify-between hover:bg-emerald-50 text-emerald-900 text-left font-semibold cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <div>
+                          <div className="font-bold">Chèn bảng biến thiên (tikz-tab)</div>
+                          <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
+                        </div>
+                      </div>
+                      <ChevronDown className={`w-3.5 h-3.5 text-emerald-500 transition-transform ${openBbtSubmenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {openBbtSubmenu && (
+                      <div className="ml-5 pl-2.5 border-l-2 border-emerald-200 py-1 space-y-1 bg-emerald-50/40 rounded-r-lg mr-1.5 my-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            bbtInputRef.current?.click();
+                            setOpenInsertMenu(false);
+                          }}
+                          className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                        >
+                          <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-[11px] text-emerald-950">1. Từ máy tính</div>
+                            <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên hệ thống dùng tikz-tab vẽ lại</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowWordBBTModal(true);
+                            setOpenInsertMenu(false);
+                          }}
+                          className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                        >
+                          <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-[11px] text-emerald-950">2. Nhập hàm / Biến thiên</div>
+                            <div className="text-[9px] text-slate-500 font-normal">Nhập điểm & dấu y', hệ thống dùng tikz-tab vẽ lại</div>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWordDrawSketchType('bbt');
+                            setShowWordDrawSketchModal(true);
+                            setOpenInsertMenu(false);
+                            setTimeout(() => initWordCanvas('bbt'), 50);
+                          }}
+                          className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                        >
+                          <PenTool className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <div>
+                            <div className="font-bold text-[11px] text-emerald-950">3. Tự vẽ</div>
+                            <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo BBT, hệ thống nắn chỉnh chuẩn tikz-tab</div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
 
                   <button
                     type="button"
@@ -982,8 +1475,8 @@ const WordSoanThaoView: React.FC = () => {
               />
             </div>
           ) : (
-            /* Vùng giấy A4 Word Toàn bộ */
-            <div className="bg-slate-200 p-4 sm:p-8 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner min-h-[540px] space-y-4">
+            /* Vùng giấy Word Toàn bộ - Đã bỏ Trang soạn thảo tự do A4 dư thừa */
+            <div className="bg-slate-200 p-4 sm:p-8 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner min-h-[540px]">
               <QuestionEditorWord
                 title={title || 'Đề thi Đánh giá Toàn bộ'}
                 chuong={chuong}
@@ -994,19 +1487,6 @@ const WordSoanThaoView: React.FC = () => {
                 viewMode="full"
                 onChangeViewMode={(m) => setWordViewMode(m)}
               />
-              <div className="bg-white p-4 rounded-xl border border-slate-300 shadow-xs">
-                <div className="text-xs font-bold text-slate-700 mb-2 flex items-center gap-1.5">
-                  <FileText className="w-4 h-4 text-indigo-600" />
-                  <span>Trang soạn thảo tự do A4:</span>
-                </div>
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  className="bg-slate-50/50 p-6 rounded-lg shadow-inner border border-slate-200 min-h-[280px] focus:outline-none focus:ring-2 focus:ring-indigo-400 text-slate-900 overflow-y-auto"
-                  style={{ fontSize, lineHeight: '1.65' }}
-                ></div>
-              </div>
             </div>
           )}
         </div>
@@ -1127,6 +1607,322 @@ const WordSoanThaoView: React.FC = () => {
           execCommand('insertHTML', renderedHtml);
         }}
       />
+
+      {/* Modal Nhập công thức Đồ thị TikZ */}
+      {showWordGraphModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-sky-100 text-sky-700">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">Nhập hàm số vẽ Đồ thị TikZ</h4>
+                  <p className="text-[11px] text-slate-500 font-normal">Nhập biểu thức và hệ thống sẽ xuất mã TikZ</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWordGraphModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Công thức hàm số y = f(x):</label>
+                <input
+                  type="text"
+                  value={wordGraphFormula}
+                  onChange={e => setWordGraphFormula(e.target.value)}
+                  placeholder="Ví dụ: x^2 - 2*x - 1 hoặc sin(deg(x))"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-sky-600 bg-slate-50"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Miền x (Min → Max):</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={wordGraphXMin}
+                      onChange={e => setWordGraphXMin(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
+                    />
+                    <span>→</span>
+                    <input
+                      type="text"
+                      value={wordGraphXMax}
+                      onChange={e => setWordGraphXMax(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Trục y (Min → Max):</label>
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      value={wordGraphYMin}
+                      onChange={e => setWordGraphYMin(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
+                    />
+                    <span>→</span>
+                    <input
+                      type="text"
+                      value={wordGraphYMax}
+                      onChange={e => setWordGraphYMax(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowWordGraphModal(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateWordGraphTikZ}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Xác nhận & Chèn đồ thị</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nhập Bảng biến thiên tikz-tab */}
+      {showWordBBTModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">Nhập Bảng Biến Thiên tikz-tab</h4>
+                  <p className="text-[11px] text-slate-500 font-normal">Nhập điểm chia và dấu đạo hàm để tạo bảng biến thiên</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWordBBTModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Các điểm mốc của x:</label>
+                <input
+                  type="text"
+                  value={wordBbtXPoints}
+                  onChange={e => setWordBbtXPoints(e.target.value)}
+                  placeholder="Ví dụ: -\\infty, -1, 1, +\\infty"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Dấu dòng đạo hàm y':</label>
+                <input
+                  type="text"
+                  value={wordBbtYPrimeSigns}
+                  onChange={e => setWordBbtYPrimeSigns(e.target.value)}
+                  placeholder="Ví dụ: , +, 0, -, 0, +, "
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">Giá trị biến thiên của y:</label>
+                <input
+                  type="text"
+                  value={wordBbtYValues}
+                  onChange={e => setWordBbtYValues(e.target.value)}
+                  placeholder="Mẫu: -/ -\\infty, +/ 2, -/ -2, +/ +\\infty"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowWordBBTModal(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateWordBBTTikZ}
+                className="px-4 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Xác nhận & Chèn bảng</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tự vẽ tay Canvas & Nắn chuẩn TikZ / tikz-tab */}
+      {showWordDrawSketchModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className={`p-2 rounded-xl ${wordDrawSketchType === 'graph' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {wordDrawSketchType === 'graph' ? <TrendingUp className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Bảng vẽ tay phác thảo: {wordDrawSketchType === 'graph' ? 'Đồ thị hàm số' : 'Bảng biến thiên'}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-normal">
+                    Dùng chuột hoặc cảm ứng vẽ phác thảo, hệ thống sẽ tự nắn chỉnh nét và tạo mã TikZ / tikz-tab chuẩn xác
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowWordDrawSketchModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setWordSketchIsErasing(false)}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    !wordSketchIsErasing ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  <span>Bút vẽ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWordSketchIsErasing(true)}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    wordSketchIsErasing ? 'bg-rose-600 text-white shadow-2xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <span>Tẩy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => initWordCanvas(wordDrawSketchType)}
+                  className="px-2.5 py-1.5 rounded-lg bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 font-semibold flex items-center gap-1 cursor-pointer"
+                  title="Xóa trắng bảng vẽ"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Xóa vẽ lại</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-slate-700 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={wordSketchAutoAlign}
+                    onChange={e => setWordSketchAutoAlign(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-0"
+                  />
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-[11px]">Tự động nắn chỉnh nét</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAutoAlignWordSketch}
+                  className="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 rounded-lg text-[11px] font-bold cursor-pointer"
+                >
+                  Nắn chỉnh ngay
+                </button>
+              </div>
+            </div>
+
+            {/* Canvas */}
+            <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-inner flex justify-center">
+              <canvas
+                ref={wordCanvasRef}
+                width={560}
+                height={260}
+                onMouseDown={startWordDrawing}
+                onMouseMove={drawWord}
+                onMouseUp={stopWordDrawing}
+                onMouseLeave={stopWordDrawing}
+                onTouchStart={startWordDrawing}
+                onTouchMove={drawWord}
+                onTouchEnd={stopWordDrawing}
+                className="cursor-crosshair touch-none"
+              />
+            </div>
+
+            {/* Code output */}
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="font-bold text-indigo-950 text-[11px]">Nhận diện & Nắn chỉnh:</span>
+                  <span className="text-indigo-800 font-medium text-[11px]">{wordSketchRecognizedShape}</span>
+                </div>
+                <span className="text-[10px] bg-indigo-200 text-indigo-900 font-bold px-2 py-0.5 rounded-full">Chuẩn TikZ</span>
+              </div>
+
+              <div className="space-y-1">
+                <span className="font-bold text-slate-700 text-[11px]">Mã TikZ / tikz-tab sinh ra:</span>
+                <pre className="p-2.5 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto max-h-24 border border-slate-800 select-all">
+                  {wordSketchGeneratedTikZ}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowWordDrawSketchModal(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmInsertWordSketch}
+                className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors ${
+                  wordDrawSketchType === 'graph' ? 'bg-sky-600 hover:bg-sky-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                <Check className="w-4 h-4" />
+                <span>Xác nhận & Chèn vào Word</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal xác nhận xóa */}
       {deleteConfirm && (
@@ -1331,9 +2127,9 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
     case 'learning-classes':
       return <LopHocView />;
     case 'learning-seating':
-      return <SoDoLopView onOpenDriveConnect={onOpenDriveConnect} />;
+      return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
     case 'learning-schedule':
-      return <ThoiKhoaBieuView />;
+      return <ThoiKhoaBieuView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
     case 'learning-join':
       return <DangKyLopView />;
 

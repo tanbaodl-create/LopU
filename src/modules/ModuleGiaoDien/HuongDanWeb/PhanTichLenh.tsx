@@ -587,38 +587,34 @@ export const PhanTichLenh: React.FC<PhanTichLenhProps> = () => {
         )}
       </div>
 
-      {/* 3. Ô PROMPT LỆNH CHUẨN HÓA (NGƯỜI DÙNG SỬA ĐƯỢC + NÚT COPY LỆNH) */}
+      {/* 3. Ô PROMPT LỆNH (NGƯỜI DÙNG SỬA ĐƯỢC + NÚT COPY LỆNH BÊN TRÁI) */}
       <div className="bg-slate-900 text-white rounded-2xl border border-slate-800 p-5 sm:p-6 shadow-xl space-y-4">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800 flex-wrap gap-3">
-          <div className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-full bg-indigo-500 text-white text-xs font-bold flex items-center justify-center">
-              3
+          <div className="flex items-center gap-3">
+            {/* Chuyển nút Copy lệnh sang bên trái, thay thế cho số 3 có khoanh tròn */}
+            <button
+              type="button"
+              id="btn-copy-lenh-chuan-hoa"
+              onClick={handleCopyPrompt}
+              disabled={!promptValue.trim()}
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                isCopied
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white shadow-xs'
+              }`}
+            >
+              {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span>{isCopied ? 'Đã sao chép câu lệnh!' : 'Copy lệnh'}</span>
+            </button>
+
+            <span className="text-[11px] text-slate-400 italic">
+              (Người dùng có thể sửa trực tiếp trong ô này trước khi copy)
             </span>
-            <div>
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Terminal className="w-4 h-4 text-indigo-400" />
-                <span>Prompt Lệnh Chuẩn Hóa</span>
-              </h3>
-              <p className="text-[11px] text-slate-400">
-                Người dùng có thể sửa trực tiếp trong ô này trước khi copy
-              </p>
-            </div>
           </div>
 
-          <button
-            type="button"
-            id="btn-copy-lenh-chuan-hoa"
-            onClick={handleCopyPrompt}
-            disabled={!promptValue.trim()}
-            className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-              isCopied
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white shadow-xs'
-            }`}
-          >
-            {isCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            <span>{isCopied ? 'Đã sao chép câu lệnh!' : 'Copy lệnh'}</span>
-          </button>
+          <div className="text-[11px] text-slate-400 font-mono">
+            {promptValue ? `${promptValue.split('\n').length} dòng` : ''}
+          </div>
         </div>
 
         <div className="space-y-2">
@@ -632,9 +628,6 @@ export const PhanTichLenh: React.FC<PhanTichLenhProps> = () => {
           />
           <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
             <span>Dán câu lệnh đã copy vào khung chat AI để thực thi ngay lập tức mà không duyệt lại toàn bộ dự án.</span>
-            <span className="font-mono text-indigo-400">
-              {promptValue ? `${promptValue.split('\n').length} dòng` : ''}
-            </span>
           </div>
         </div>
       </div>

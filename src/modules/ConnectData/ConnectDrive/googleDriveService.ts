@@ -290,6 +290,14 @@ export async function saveSeatingChartToDrive(classId: string, seatingData: any,
       files.push(newFile);
     }
 
+    // Xóa khỏi danh sách đen đã xóa nếu đang lưu mới
+    try {
+      const deletedListRaw = localStorage.getItem('lopu_deleted_drive_files_v1') || '[]';
+      let deletedList: string[] = JSON.parse(deletedListRaw);
+      deletedList = deletedList.filter(item => item !== fileName && item !== fileId);
+      localStorage.setItem('lopu_deleted_drive_files_v1', JSON.stringify(deletedList));
+    } catch {}
+
     // Đồng bộ vào cả 2 key lưu trữ cục bộ để tương thích tuyệt đối
     localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
     localStorage.setItem('lopu_gdrive_files_v1', JSON.stringify(files));
@@ -408,6 +416,13 @@ export async function fetchDriveFileJsonContent(fileId: string, fallbackContent?
 export async function fetchSeatingChartsFromDrive(): Promise<DriveStoredFile[]> {
   const fileMap = new Map<string, DriveStoredFile>();
 
+  // 0. Đọc danh sách file đã xóa trên hệ thống (Blacklist)
+  const deletedRaw = localStorage.getItem('lopu_deleted_drive_files_v1') || '[]';
+  let deletedSet = new Set<string>();
+  try {
+    deletedSet = new Set(JSON.parse(deletedRaw));
+  } catch {}
+
   // 1. Quét từ các key LocalStorage
   const storageKeys = ['lopu_google_drive_files_v1', 'lopu_gdrive_files_v1'];
   for (const k of storageKeys) {
@@ -416,8 +431,10 @@ export async function fetchSeatingChartsFromDrive(): Promise<DriveStoredFile[]> 
       try {
         const files: DriveStoredFile[] = JSON.parse(raw);
         files.forEach(f => {
-          if (f.category === 'personal_seating' || f.name.startsWith('SoDoLop_') || f.name.includes('SoDoLop')) {
-            fileMap.set(f.name, f);
+          if (!deletedSet.has(f.id) && !deletedSet.has(f.name)) {
+            if (f.category === 'personal_seating' || f.name.startsWith('SoDoLop_') || f.name.includes('SoDoLop')) {
+              fileMap.set(f.name, f);
+            }
           }
         });
       } catch (e) {
@@ -446,6 +463,9 @@ export async function fetchSeatingChartsFromDrive(): Promise<DriveStoredFile[]> 
         const data = await res.json();
         if (data.files && Array.isArray(data.files)) {
           for (const item of data.files) {
+            if (deletedSet.has(item.id) || deletedSet.has(item.name)) {
+              continue;
+            }
             if (item.name.endsWith('.json') || item.name.startsWith('SoDoLop_')) {
               const existing = fileMap.get(item.name);
               const formattedSize = item.size ? `${(Number(item.size) / 1024).toFixed(1)} KB` : '15.4 KB';
@@ -471,6 +491,97 @@ export async function fetchSeatingChartsFromDrive(): Promise<DriveStoredFile[]> 
 
   const result = Array.from(fileMap.values());
   return result;
+}
+
+/**
+ * Xóa triệt để file trên toàn bộ hệ thống:
+ * 1. Xóa khỏi tất cả các vùng nhớ đệm LocalStorage (lopu_google_drive_files_v1, lopu_gdrive_files_v1)
+ * 2. Thêm vào danh sách blacklist đã xóa (lopu_deleted_drive_files_v1)
+ * 3. Xóa trực tiếp trên Google Drive REST API (theo fileId và fileName)
+ */
+export async function deleteDriveFileEverywhere(fileId: string, fileName?: string): Promise<{ success: boolean; message: string }> {
+  try {
+    // 1. Thêm vào danh sách Blacklist các file đã xóa
+    const deletedListRaw = localStorage.getItem('lopu_deleted_drive_files_v1') || '[]';
+    let deletedList: string[] = [];
+    try {
+      deletedList = JSON.parse(deletedListRaw);
+    } catch {
+      deletedList = [];
+    }
+    if (fileId && !deletedList.includes(fileId)) deletedList.push(fileId);
+    if (fileName && !deletedList.includes(fileName)) deletedList.push(fileName);
+    localStorage.setItem('lopu_deleted_drive_files_v1', JSON.stringify(deletedList));
+
+    // 2. Làm sạch tất cả các key lưu trữ cục bộ
+    const storageKeys = ['lopu_google_drive_files_v1', 'lopu_gdrive_files_v1'];
+    for (const k of storageKeys) {
+      const raw = localStorage.getItem(k);
+      if (raw) {
+        try {
+          const files: DriveStoredFile[] = JSON.parse(raw);
+          const filtered = files.filter(f => f.id !== fileId && (!fileName || f.name !== fileName));
+          localStorage.setItem(k, JSON.stringify(filtered));
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+
+    // 3. Xóa thực tế trên Google Drive API nếu có kết nối
+    const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+    if (token) {
+      // 3a. Xóa theo fileId nếu là id thực tế của Google Drive
+      if (fileId && !fileId.startsWith('local_') && !fileId.startsWith('gdrive_seat_') && !fileId.startsWith('seat_')) {
+        try {
+          await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log(`Đã xóa file trên Google Drive API (ID: ${fileId})`);
+        } catch (err) {
+          console.warn(`Lỗi xóa file Google Drive API ${fileId}:`, err);
+        }
+      }
+
+      // 3b. Tìm kiếm và xóa tất cả file có tên trùng khớp trên Drive
+      if (fileName) {
+        try {
+          const query = `name = '${fileName.replace(/'/g, "\\'")}' and trashed = false`;
+          const findUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+          const findRes = await fetch(findUrl, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (findRes.ok) {
+            const data = await findRes.json();
+            if (data.files && Array.isArray(data.files)) {
+              for (const f of data.files) {
+                try {
+                  await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}`, {
+                    method: 'DELETE',
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  console.log(`Đã quét và xóa triệt để file "${f.name}" (ID: ${f.id}) trên Drive`);
+                } catch (delErr) {
+                  console.warn(`Lỗi xóa file ${f.id}:`, delErr);
+                }
+              }
+            }
+          }
+        } catch (findErr) {
+          console.warn('Lỗi khi quét tìm file để xóa trên Drive:', findErr);
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `Đã xóa sạch file "${fileName || fileId}" khỏi dữ liệu cục bộ, Drive và hệ thống!`
+    };
+  } catch (err: any) {
+    console.error('Lỗi khi xóa file trên hệ thống:', err);
+    return { success: false, message: err?.message || 'Lỗi xóa file' };
+  }
 }
 
 /**
@@ -746,5 +857,14 @@ export async function saveAssessmentJsonToChuyenDeDrive(
     drivePath,
     dataWithRelativePaths: normalizedData,
   };
+}
+
+/**
+ * Đường dẫn lưu thời khóa biểu ở drive: myApp\LopU\ThoiKhoaBieu\TKB {Tên tài khoản} lần k
+ */
+export const TKB_DRIVE_FOLDER_PATH = 'myApp\\LopU\\ThoiKhoaBieu\\TKB {Tên tài khoản} lần k';
+
+export function getTkbDrivePath(accountName: string, weekNum: number | string): string {
+  return `myApp\\LopU\\ThoiKhoaBieu\\TKB ${accountName || 'Cá nhân'} lần ${weekNum || 1}.json`;
 }
 

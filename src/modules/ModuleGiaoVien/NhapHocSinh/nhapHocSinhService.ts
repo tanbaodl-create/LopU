@@ -103,3 +103,135 @@ export function chuanHoaChucDanhHocSinh(titles: string[]): string[] {
     .map(t => t.trim().toUpperCase())
     .filter(t => t && t !== 'STUDENT' && t !== 'THÀNH VIÊN' && allowedTitles.includes(t));
 }
+
+export interface FixedSeatPosition {
+  desk: number; // 1..6
+  row: number;  // 1 (Dãy 1) hoặc 2 (Dãy 2)
+  seatCol: number; // 1..4 (G1..G4)
+  label: string; // "bàn 6-dãy 1-G3"
+}
+
+export interface StudentFixedSeatRule {
+  studentNickname: string;
+  positions: FixedSeatPosition[];
+  rawText: string;
+}
+
+export interface SeatingRulesConfig {
+  avoidNearStudents: string; // VD: "Bảo; Tuấn; Minh" (các học sinh không được gần nhau, cách ít nhất 1 bạn theo dọc, ngang, xiên)
+  fixedSeatRules: StudentFixedSeatRule[];
+  studyPairs: string; // VD: "HS1 - HS2; HS3 - HS4" (Cặp đôi cùng tiến)
+}
+
+export const DEFAULT_SEATING_RULES: SeatingRulesConfig = {
+  avoidNearStudents: '',
+  fixedSeatRules: [],
+  studyPairs: '',
+};
+
+/**
+ * Chuẩn hóa và chuyển đổi định dạng vị trí: "bàn 6-dãy 1-G3" -> FixedSeatPosition
+ */
+export function parseSinglePosition(text: string): FixedSeatPosition | null {
+  const clean = text.trim().toLowerCase();
+  // Regex khớp các dạng: bàn 6-dãy 1-g3, b6-d1-g3, ban 6 - day 1 - g3
+  const match = clean.match(/b(?:àn)?\s*(\d+)\s*[-_–]\s*d(?:ãy)?\s*(\d+)\s*[-_–]\s*g\s*(\d+)/i);
+  if (match) {
+    const desk = parseInt(match[1], 10);
+    const row = parseInt(match[2], 10);
+    const seatCol = parseInt(match[3], 10);
+    if (desk >= 1 && desk <= 6 && (row === 1 || row === 2) && seatCol >= 1 && seatCol <= 4) {
+      return {
+        desk,
+        row,
+        seatCol,
+        label: `bàn ${desk}-dãy ${row}-G${seatCol}`,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Phân tích chuỗi nhiều vị trí: "bàn 6-dãy 1-G3; bàn 6-dãy 2-G1; Bàn 5-dãy 1-G2"
+ */
+export function parseMultiplePositions(raw: string): FixedSeatPosition[] {
+  if (!raw) return [];
+  const parts = raw.split(/[;,]+/).map(p => p.trim()).filter(Boolean);
+  const result: FixedSeatPosition[] = [];
+  for (const p of parts) {
+    const parsed = parseSinglePosition(p);
+    if (parsed && !result.some(r => r.desk === parsed.desk && r.row === parsed.row && r.seatCol === parsed.seatCol)) {
+      result.push(parsed);
+    }
+  }
+  return result;
+}
+
+/**
+ * Chuyển tọa độ Bàn, Dãy, Ghế thành chuỗi hiển thị chuẩn: "bàn 6-dãy 1-G3"
+ */
+export function formatFixedPosition(desk: number, row: number, seatCol: number): string {
+  return `bàn ${desk}-dãy ${row}-G${seatCol}`;
+}
+
+/**
+ * Chuẩn hóa và kiểm tra đồng bộ vị trí bàn cố định với số ghế thực tế từng bàn của sơ đồ lớp
+ */
+export function validateAndSyncFixedSeatPositions(
+  rules: SeatingRulesConfig,
+  getDeskCapacity?: (desk: number, row: number) => number
+): SeatingRulesConfig {
+  if (!rules || !rules.fixedSeatRules) return rules;
+
+  const updatedRules = rules.fixedSeatRules.map(rule => {
+    const validPositions = rule.positions.filter(pos => {
+      const maxSeats = getDeskCapacity ? getDeskCapacity(pos.desk, pos.row) : 4;
+      return pos.seatCol <= maxSeats;
+    });
+    return {
+      ...rule,
+      positions: validPositions,
+      rawText: validPositions.map(p => p.label).join('; '),
+    };
+  });
+
+  return {
+    ...rules,
+    fixedSeatRules: updatedRules,
+  };
+}
+
+/**
+ * Lấy cấu hình điều kiện xếp chỗ của lớp học từ LocalStorage / Cache
+ */
+export function getClassSeatingRules(classId: string): SeatingRulesConfig {
+  const key = `lopu_seating_rules_v1_${classId}`;
+  const raw = localStorage.getItem(key);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      return {
+        avoidNearStudents: parsed.avoidNearStudents || '',
+        fixedSeatRules: Array.isArray(parsed.fixedSeatRules) ? parsed.fixedSeatRules : [],
+        studyPairs: parsed.studyPairs || '',
+      };
+    } catch {}
+  }
+  return { ...DEFAULT_SEATING_RULES };
+}
+
+/**
+ * Lưu cấu hình điều kiện xếp chỗ của lớp học (Gồm 1. Không gần nhau, 2. Vị trí cố định, 3. Cặp đôi cùng tiến)
+ */
+export function saveClassSeatingRules(classId: string, rules: SeatingRulesConfig): void {
+  const key = `lopu_seating_rules_v1_${classId}`;
+  const cleanRules: SeatingRulesConfig = {
+    avoidNearStudents: (rules?.avoidNearStudents || '').trim(),
+    fixedSeatRules: Array.isArray(rules?.fixedSeatRules) ? rules.fixedSeatRules : [],
+    studyPairs: (rules?.studyPairs || '').trim(),
+  };
+  localStorage.setItem(key, JSON.stringify(cleanRules));
+}
+
+

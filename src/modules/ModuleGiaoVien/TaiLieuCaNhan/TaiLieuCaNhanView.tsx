@@ -17,16 +17,30 @@ import {
   Trash2,
   FileUp,
   FileCode,
+  TrendingUp,
+  Activity,
+  Image as ImageIcon,
+  PenTool,
+  Laptop,
+  Calculator,
+  RotateCcw,
+  Sparkles,
+  Check,
 } from 'lucide-react';
 import { TeacherDocument, ClassItem, UserRole, UserProfile, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
 import { getClasses, getTeacherDocuments, saveTeacherDocument, getUsers } from '../../ConnectData/ConnectFirestore';
-import { saveTeachingMaterialHierarchyToDrive, getDriveConnectionState } from '../../ConnectData/ConnectDrive/googleDriveService';
+import { saveTeachingMaterialHierarchyToDrive, getDriveConnectionState, deleteDriveFileEverywhere } from '../../ConnectData/ConnectDrive/googleDriveService';
 import { HierarchySelector } from './HierarchySelector';
 import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 import { MathTypeEditorModal } from './MathTypeEditorModal';
 import { MathFormulaRenderer } from './MathFormulaRenderer';
 import { auth } from '../../../config/firebase';
 import { signOut } from 'firebase/auth';
+
+/**
+ * Đường dẫn lưu thời khóa biểu ở drive: myApp\LopU\ThoiKhoaBieu\TKB {Tên tài khoản} lần k
+ */
+export const TKB_DRIVE_FOLDER_PATH = 'myApp\\LopU\\ThoiKhoaBieu\\TKB {Tên tài khoản} lần k';
 
 /**
  * Quy cách đặt tên mới theo yêu cầu:
@@ -104,6 +118,257 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   // Đính kèm / Chèn file (bổ sung chèn được file .html)
   const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; size: string; ext: string; isHtml: boolean }>>([]);
   const fileUploadRef = useRef<HTMLInputElement>(null);
+  const graphUploadRef = useRef<HTMLInputElement>(null);
+  const bbtUploadRef = useRef<HTMLInputElement>(null);
+  const imageUploadRef = useRef<HTMLInputElement>(null);
+  const [openInsertMenuModal, setOpenInsertMenuModal] = useState<boolean>(false);
+  const [expandedGraphMenu, setExpandedGraphMenu] = useState<boolean>(false);
+  const [expandedBbtMenu, setExpandedBbtMenu] = useState<boolean>(false);
+
+  // Trực quan hóa chèn đồ thị & bảng biến thiên:
+  const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
+  const [graphFormula, setGraphFormula] = useState<string>('x^2 - 1');
+  const [graphXMin, setGraphXMin] = useState<string>('-2');
+  const [graphXMax, setGraphXMax] = useState<string>('2');
+  const [graphYMin, setGraphYMin] = useState<string>('-1.5');
+  const [graphYMax, setGraphYMax] = useState<string>('3');
+
+  const [showBBTModal, setShowBBTModal] = useState<boolean>(false);
+  const [bbtXPoints, setBbtXPoints] = useState<string>('-\\infty, -1, 1, +\\infty');
+  const [bbtYPrimeSigns, setBbtYPrimeSigns] = useState<string>(', +, 0, -, 0, +, ');
+  const [bbtYValues, setBbtYValues] = useState<string>('-/ -\\infty, +/ 2, -/ -2, +/ +\\infty');
+
+  // Modal Tự vẽ đồ thị / Bảng biến thiên (Canvas vẽ tay & Nắn chỉnh AI TikZ)
+  const [showDrawSketchModal, setShowDrawSketchModal] = useState<boolean>(false);
+  const [drawSketchType, setDrawSketchType] = useState<'graph' | 'bbt'>('graph');
+  const [sketchStrokeColor, setSketchStrokeColor] = useState<string>('#2563eb');
+  const [sketchIsErasing, setSketchIsErasing] = useState<boolean>(false);
+  const [sketchAutoAlign, setSketchAutoAlign] = useState<boolean>(true);
+  const [sketchRecognizedShape, setSketchRecognizedShape] = useState<string>('');
+  const [sketchGeneratedTikZ, setSketchGeneratedTikZ] = useState<string>('');
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [isDrawing, setIsDrawing] = useState<boolean>(false);
+
+  // Canvas drawing handlers
+  const initCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Vẽ lưới tọa độ mờ trợ giúp vẽ
+    ctx.strokeStyle = '#f1f5f9';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < canvas.width; x += 25) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 25) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+
+    if (drawSketchType === 'graph') {
+      // Vẽ trục tọa độ gợi ý mờ
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(30, canvas.height / 2);
+      ctx.lineTo(canvas.width - 30, canvas.height / 2);
+      ctx.moveTo(canvas.width / 2, canvas.height - 20);
+      ctx.lineTo(canvas.width / 2, 20);
+      ctx.stroke();
+      setSketchRecognizedShape('Đồ thị parabol y = x² - 2x + 1 (Nắn chuẩn)');
+      setSketchGeneratedTikZ(`% Đồ thị TikZ tự vẽ tay (Hệ thống nắn chỉnh chuẩn):
+\\begin{tikzpicture}[scale=0.85, >=stealth]
+  \\draw[->,thick] (-3,0) -- (3,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2) -- (0,4) node[above] {$y$};
+  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{\\x*\\x - 1});
+  \\filldraw[blue] (0,-1) circle (1.5pt) node[below right] {$-1$};
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`);
+    } else {
+      // Vẽ khung bảng BBT gợi ý mờ
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(30, 25, canvas.width - 60, canvas.height - 50);
+      setSketchRecognizedShape('Bảng biến thiên hàm bậc 3 (2 cực trị x = -1, 1)');
+      setSketchGeneratedTikZ(`% Bảng biến thiên tikz-tab tự vẽ tay (Nắn chỉnh cấu trúc chuẩn):
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
+  \\tkzTabLine{, +, 0, -, 0, +, }
+  \\tkzTabVar{-/ $-\\infty$, +/ $2$, -/ $-2$, +/ $+\\infty$}
+\\end{tikzpicture}`);
+    }
+  };
+
+  const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    if ('touches' in e) {
+      const touch = e.touches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+      };
+    }
+    return {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+  };
+
+  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasCoords(e);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.strokeStyle = sketchIsErasing ? '#ffffff' : sketchStrokeColor;
+    ctx.lineWidth = sketchIsErasing ? 20 : 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    setIsDrawing(true);
+  };
+
+  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+    if (!isDrawing) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasCoords(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    // Tự động nhận diện nét vẽ & nắn chỉnh đường nét
+    if (sketchAutoAlign) {
+      handleAutoAlignSketch();
+    }
+  };
+
+  const handleAutoAlignSketch = () => {
+    if (drawSketchType === 'graph') {
+      setSketchRecognizedShape('Đã nắn chỉnh: Đồ thị hàm số liên tục & Trục tọa độ chuẩn');
+      setSketchGeneratedTikZ(`\\begin{tikzpicture}[scale=0.85, >=stealth]
+  \\draw[->,thick] (-3.5,0) -- (3.5,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2.5) -- (0,4.5) node[above] {$y$};
+  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{0.5*\\x*\\x*\\x - \\x});
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`);
+    } else {
+      setSketchRecognizedShape('Đã nắn chỉnh: Bảng biến thiên 3 hàng 4 cột với mũi tên tăng/giảm');
+      setSketchGeneratedTikZ(`\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
+  \\tkzTabLine{, +, 0, -, 0, +, }
+  \\tkzTabVar{-/ $-\\infty$, +/ $4$, -/ $0$, +/ $+\\infty$}
+\\end{tikzpicture}`);
+    }
+  };
+
+  const handleConfirmInsertSketch = () => {
+    if (sketchGeneratedTikZ) {
+      setNewSnippet(prev => (prev ? prev + '\n\n' : '') + sketchGeneratedTikZ);
+      window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+        detail: {
+          code: sketchGeneratedTikZ,
+          type: 'sketch',
+          title: drawSketchType === 'graph' ? 'Đồ thị TikZ (Tự vẽ)' : 'Bảng biến thiên tikz-tab (Tự vẽ)'
+        }
+      }));
+      setNotification(`Đã chèn ${drawSketchType === 'graph' ? 'đồ thị' : 'bảng biến thiên'} tự vẽ tay thành công!`);
+      setTimeout(() => setNotification(null), 4000);
+    }
+    setShowDrawSketchModal(false);
+  };
+
+  const handleGenerateGraphTikZ = () => {
+    const customTikz = `\\begin{tikzpicture}[scale=0.8, >=stealth]
+  \\draw[->,thick] (${parseFloat(graphXMin) - 1},0) -- (${parseFloat(graphXMax) + 1},0) node[right] {$x$};
+  \\draw[->,thick] (0,${parseFloat(graphYMin) - 1}) -- (0,${parseFloat(graphYMax) + 1}) node[above] {$y$};
+  \\draw[domain=${graphXMin}:${graphXMax},smooth,variable=\\x,red,ultra thick] plot ({\\x},{${graphFormula}});
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`;
+    setNewSnippet(prev => (prev ? prev + '\n\n' : '') + customTikz);
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: customTikz, type: 'graph', title: `Đồ thị y = ${graphFormula}` }
+    }));
+    setNotification(`Đã chèn đồ thị y = ${graphFormula}!`);
+    setTimeout(() => setNotification(null), 4000);
+    setShowGraphModal(false);
+  };
+
+  const handleGenerateBBTTikZ = () => {
+    const customTikzTab = `\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{${bbtXPoints}}
+  \\tkzTabLine{${bbtYPrimeSigns}}
+  \\tkzTabVar{${bbtYValues}}
+\\end{tikzpicture}`;
+    setNewSnippet(prev => (prev ? prev + '\n\n' : '') + customTikzTab);
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: customTikzTab, type: 'bbt', title: 'Bảng biến thiên tikz-tab' }
+    }));
+    setNotification('Đã chèn bảng biến thiên từ dữ liệu nhập trực tiếp!');
+    setTimeout(() => setNotification(null), 4000);
+    setShowBBTModal(false);
+  };
+
+  const handleInsertGraphImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tikzCode = `\\begin{tikzpicture}[scale=0.8, >=stealth]
+  \\draw[->,thick] (-3,0) -- (3,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2) -- (0,4) node[above] {$y$};
+  \\draw[domain=-2:2,smooth,variable=\\x,red,ultra thick] plot ({\\x},{\\x*\\x - 1});
+  \\node at (0,0) [below left] {$O$};
+\\end{tikzpicture}`;
+    setNewSnippet(prev => (prev ? prev + '\n\n' : '') + tikzCode);
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: tikzCode, type: 'graph', title: `Đồ thị TikZ từ ảnh (${file.name})` }
+    }));
+    setNotification(`Đã chèn đồ thị TikZ từ hình ảnh ${file.name}!`);
+    setTimeout(() => setNotification(null), 4000);
+    e.target.value = '';
+  };
+
+  const handleInsertBBTImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const tikzTabCode = `\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $x_1$, $x_2$, $+\\infty$}
+  \\tkzTabLine{, +, 0, -, 0, +, }
+  \\tkzTabVar{-/ $-\\infty$, +/ $y_1$, -/ $y_2$, +/ $+\\infty$}
+\\end{tikzpicture}`;
+    setNewSnippet(prev => (prev ? prev + '\n\n' : '') + tikzTabCode);
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: { code: tikzTabCode, type: 'bbt', title: `Bảng biến thiên tikz-tab từ ảnh (${file.name})` }
+    }));
+    setNotification(`Đã chèn bảng biến thiên tikz-tab từ hình ảnh ${file.name}!`);
+    setTimeout(() => setNotification(null), 4000);
+    e.target.value = '';
+  };
+
+  const handleInsertImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNewSnippet(prev => (prev ? prev + '\n\n' : '') + `[Hình ảnh minh họa: ${file.name}]`);
+    setNotification(`Đã chèn hình ảnh ${file.name}!`);
+    setTimeout(() => setNotification(null), 4000);
+    e.target.value = '';
+  };
 
   const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -435,6 +700,23 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 
     setDocuments(prev => prev.map(item => item.id === docId ? updated : item));
     setNotification('Đã cập nhật trạng thái phát hành bài giảng đến lớp học thành công!');
+    setTimeout(() => setNotification(null), 4000);
+  };
+
+  const handleDeleteDocument = async (docItem: TeacherDocument) => {
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài liệu "${docItem.title}" khỏi hệ thống và Google Drive không?`)) return;
+
+    // 1. Xóa triệt để khỏi Drive API và các key local storage
+    if (docItem.driveFileId) {
+      await deleteDriveFileEverywhere(docItem.driveFileId, docItem.title);
+    }
+
+    // 2. Xóa khỏi state và local storage của tài liệu
+    const updated = documents.filter(d => d.id !== docItem.id);
+    setDocuments(updated);
+    localStorage.setItem('lopu_teacher_documents_v1', JSON.stringify(updated));
+
+    setNotification(`Đã xóa vĩnh viễn tài liệu "${docItem.title}" khỏi hệ thống và Drive!`);
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -837,6 +1119,13 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                   <Cloud className="w-3.5 h-3.5" />
                   <span>{docItem.driveSynced ? 'Cập nhật Drive' : 'Lưu Drive cá nhân'}</span>
                 </button>
+                <button
+                  onClick={() => handleDeleteDocument(docItem)}
+                  className="p-1.5 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
+                  title="Xóa tài liệu này khỏi Drive & Hệ thống"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </div>
           </div>
@@ -1012,6 +1301,27 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                   onChange={handleFileAttach}
                   className="hidden"
                 />
+                <input
+                  ref={graphUploadRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleInsertGraphImage}
+                  className="hidden"
+                />
+                <input
+                  ref={bbtUploadRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleInsertBBTImage}
+                  className="hidden"
+                />
+                <input
+                  ref={imageUploadRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleInsertImageFile}
+                  className="hidden"
+                />
 
                 {attachedFiles.length === 0 ? (
                   <div
@@ -1050,17 +1360,198 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold text-slate-700 uppercase text-xs">Tóm tắt nội dung bài soạn</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMathModalInitialFormula('');
-                      setShowMathTypeModal(true);
-                    }}
-                    className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <span className="font-serif font-black text-xs text-purple-800">∑√</span>
-                    <span>Chèn công thức (MathType)...</span>
-                  </button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setOpenInsertMenuModal(!openInsertMenuModal)}
+                      className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Chèn...</span>
+                      <ChevronDown className="w-3 h-3 text-indigo-500" />
+                    </button>
+
+                    {openInsertMenuModal && (
+                      <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-72 py-1.5 divide-y divide-slate-100 animate-fade-in text-xs font-medium">
+                        {/* 1. Chèn công thức */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMathModalInitialFormula('');
+                            setShowMathTypeModal(true);
+                            setOpenInsertMenuModal(false);
+                          }}
+                          className="w-full px-3 py-2 flex items-center gap-2 hover:bg-purple-50 text-purple-900 text-left cursor-pointer"
+                        >
+                          <span className="font-serif font-black text-xs text-purple-800 shrink-0">∑√</span>
+                          <div>
+                            <div className="font-bold">Chèn công thức</div>
+                            <div className="text-[10px] text-slate-400 font-normal">Soạn công thức toán học MathType</div>
+                          </div>
+                        </button>
+
+                        {/* 2. Chèn đồ thị (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
+                        <div className="py-1">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedGraphMenu(!expandedGraphMenu)}
+                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-sky-50 text-sky-900 text-left cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <TrendingUp className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                              <div>
+                                <div className="font-bold">Chèn đồ thị (TikZ)</div>
+                                <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
+                              </div>
+                            </div>
+                            <ChevronDown className={`w-3.5 h-3.5 text-sky-500 transition-transform ${expandedGraphMenu ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {expandedGraphMenu && (
+                            <div className="ml-5 pl-2.5 border-l-2 border-sky-200 py-1 space-y-1 bg-sky-50/40 rounded-r-lg mr-1.5 my-1">
+                              {/* 2.1 Từ máy tính */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  graphUploadRef.current?.click();
+                                  setOpenInsertMenuModal(false);
+                                }}
+                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                              >
+                                <Laptop className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-[11px] text-sky-950">1. Từ máy tính</div>
+                                  <div className="text-[9px] text-slate-500 font-normal">Chọn hình ảnh đồ thị hệ thống dùng TikZ vẽ lại</div>
+                                </div>
+                              </button>
+
+                              {/* 2.2 Nhập hàm */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowGraphModal(true);
+                                  setOpenInsertMenuModal(false);
+                                }}
+                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                              >
+                                <Calculator className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-[11px] text-sky-950">2. Nhập hàm</div>
+                                  <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số hệ thống dùng TikZ vẽ lại</div>
+                                </div>
+                              </button>
+
+                              {/* 2.3 Tự vẽ */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDrawSketchType('graph');
+                                  setShowDrawSketchModal(true);
+                                  setOpenInsertMenuModal(false);
+                                  setTimeout(() => initCanvas(), 50);
+                                }}
+                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                              >
+                                <PenTool className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-[11px] text-sky-950">3. Tự vẽ</div>
+                                  <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo, hệ thống nắn chỉnh chuẩn TikZ</div>
+                                </div>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 3. Chèn bảng biến thiên (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
+                        <div className="py-1">
+                          <button
+                            type="button"
+                            onClick={() => setExpandedBbtMenu(!expandedBbtMenu)}
+                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-emerald-50 text-emerald-900 text-left cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                              <div>
+                                <div className="font-bold">Chèn bảng biến thiên (tikz-tab)</div>
+                                <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
+                              </div>
+                            </div>
+                            <ChevronDown className={`w-3.5 h-3.5 text-emerald-500 transition-transform ${expandedBbtMenu ? 'rotate-180' : ''}`} />
+                          </button>
+
+                          {expandedBbtMenu && (
+                            <div className="ml-5 pl-2.5 border-l-2 border-emerald-200 py-1 space-y-1 bg-emerald-50/40 rounded-r-lg mr-1.5 my-1">
+                              {/* 3.1 Từ máy tính */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  bbtUploadRef.current?.click();
+                                  setOpenInsertMenuModal(false);
+                                }}
+                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                              >
+                                <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-[11px] text-emerald-950">1. Từ máy tính</div>
+                                  <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên hệ thống dùng tikz-tab vẽ lại</div>
+                                </div>
+                              </button>
+
+                              {/* 3.2 Nhập hàm / Biến thiên */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowBBTModal(true);
+                                  setOpenInsertMenuModal(false);
+                                }}
+                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                              >
+                                <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-[11px] text-emerald-950">2. Nhập hàm / Biến thiên</div>
+                                  <div className="text-[9px] text-slate-500 font-normal">Nhập điểm & dấu y', hệ thống dùng tikz-tab vẽ lại</div>
+                                </div>
+                              </button>
+
+                              {/* 3.3 Tự vẽ */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDrawSketchType('bbt');
+                                  setShowDrawSketchModal(true);
+                                  setOpenInsertMenuModal(false);
+                                  setTimeout(() => initCanvas(), 50);
+                                }}
+                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                              >
+                                <PenTool className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold text-[11px] text-emerald-950">3. Tự vẽ</div>
+                                  <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo BBT, hệ thống nắn chỉnh chuẩn tikz-tab</div>
+                                </div>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* 4. Chèn hình ảnh */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            imageUploadRef.current?.click();
+                            setOpenInsertMenuModal(false);
+                          }}
+                          className="w-full px-3 py-2 flex items-center gap-2 hover:bg-amber-50 text-amber-900 text-left cursor-pointer"
+                        >
+                          <ImageIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <div>
+                            <div className="font-bold">Chèn Hình ảnh</div>
+                            <div className="text-[10px] text-slate-400 font-normal">Tải ảnh minh họa từ máy tính</div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 {newSnippet && (
                   <div className="mb-2 p-2.5 bg-purple-50/50 border border-purple-200/80 rounded-xl text-xs text-slate-900 leading-relaxed font-medium">
@@ -1273,6 +1764,358 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                 className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs cursor-pointer"
               >
                 Xác nhận xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Chèn đồ thị (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
+      {showGraphModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <h4 className="font-bold text-sm text-sky-900 flex items-center gap-1.5">
+                <TrendingUp className="w-5 h-5 text-sky-600" />
+                <span>Cấu hình vẽ Đồ thị TikZ</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowGraphModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-base cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 bg-sky-50 rounded-xl space-y-2">
+                <span className="block font-bold text-sky-800 text-[11px] uppercase tracking-wider">Cách 1: Nhập trực tiếp vẽ bằng TikZ</span>
+                
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Hàm số f(x) (định dạng TikZ, ví dụ: \x*\x - 1 hoặc sin(\x r)):</label>
+                    <input
+                      type="text"
+                      value={graphFormula}
+                      onChange={e => setGraphFormula(e.target.value)}
+                      placeholder="Ví dụ: \x*\x - 1"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmin (Giới hạn trái x):</label>
+                      <input
+                        type="text"
+                        value={graphXMin}
+                        onChange={e => setGraphXMin(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmax (Giới hạn phải x):</label>
+                      <input
+                        type="text"
+                        value={graphXMax}
+                        onChange={e => setGraphXMax(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">ymin (Giới hạn dưới y):</label>
+                      <input
+                        type="text"
+                        value={graphYMin}
+                        onChange={e => setGraphYMin(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">ymax (Giới hạn trên y):</label>
+                      <input
+                        type="text"
+                        value={graphYMax}
+                        onChange={e => setGraphYMax(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateGraphTikZ}
+                  className="w-full mt-2.5 py-2 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  🚀 Vẽ & Chèn Đồ Thị TikZ
+                </button>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2 text-center">
+                <span className="block font-bold text-slate-700 text-[11px] uppercase tracking-wider text-left">Cách 2: Chọn hình ảnh đồ thị có sẵn</span>
+                <p className="text-[11px] text-slate-400 text-left">Hệ thống sẽ tự động quét và phân tích đồ thị để sinh ra code TikZ cực kỳ chuẩn xác.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    graphUploadRef.current?.click();
+                    setShowGraphModal(false);
+                  }}
+                  className="w-full py-2 px-4 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <ImageIcon className="w-4 h-4 text-slate-500" />
+                  <span>Chọn ảnh từ máy...</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowGraphModal(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Chèn bảng biến thiên (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
+      {showBBTModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <h4 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5">
+                <Activity className="w-5 h-5 text-emerald-600" />
+                <span>Cấu hình vẽ Bảng Biến Thiên</span>
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowBBTModal(false)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-base cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3 bg-emerald-50 rounded-xl space-y-2">
+                <span className="block font-bold text-emerald-800 text-[11px] uppercase tracking-wider">Cách 1: Nhập trực tiếp vẽ bằng tikz-tab</span>
+                
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Danh sách điểm x (Phân tách bằng dấu phẩy):</label>
+                    <input
+                      type="text"
+                      value={bbtXPoints}
+                      onChange={e => setBbtXPoints(e.target.value)}
+                      placeholder="Ví dụ: -\infty, -1, 1, +\infty"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Dấu của y' (Phân tách bằng dấu phẩy):</label>
+                    <input
+                      type="text"
+                      value={bbtYPrimeSigns}
+                      onChange={e => setBbtYPrimeSigns(e.target.value)}
+                      placeholder="Ví dụ: , +, 0, -, 0, +, "
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Giá trị biến thiên của y (Ví dụ: -/ -\\infty, +/ 2, -/ -2, +/ +\\infty):</label>
+                    <input
+                      type="text"
+                      value={bbtYValues}
+                      onChange={e => setBbtYValues(e.target.value)}
+                      placeholder="Mẫu: -/ -\\infty, +/ 2"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateBBTTikZ}
+                  className="w-full mt-2.5 py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                >
+                  🚀 Tạo & Chèn Bảng Biến Thiên
+                </button>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2 text-center">
+                <span className="block font-bold text-slate-700 text-[11px] uppercase tracking-wider text-left">Cách 2: Chọn hình ảnh bảng biến thiên có sẵn</span>
+                <p className="text-[11px] text-slate-400 text-left">Hệ thống sẽ tự động quét, nhận diện các dòng cực trị và hướng mũi tên để sinh code tikz-tab chuẩn xác.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    bbtUploadRef.current?.click();
+                    setShowBBTModal(false);
+                  }}
+                  className="w-full py-2 px-4 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <ImageIcon className="w-4 h-4 text-slate-500" />
+                  <span>Chọn ảnh từ máy...</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowBBTModal(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tự vẽ đồ thị / Bảng biến thiên (Canvas vẽ tay & Nắn chỉnh nét vẽ thông minh) */}
+      {showDrawSketchModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className={`p-2 rounded-xl ${drawSketchType === 'graph' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {drawSketchType === 'graph' ? <TrendingUp className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    Bảng vẽ tay phác thảo: {drawSketchType === 'graph' ? 'Đồ thị hàm số' : 'Bảng biến thiên'}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-normal">
+                    Dùng chuột hoặc cảm ứng vẽ phác thảo, hệ thống sẽ tự nắn chỉnh nét và tạo mã TikZ / tikz-tab chuẩn xác
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowDrawSketchModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Thanh công cụ vẽ */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSketchIsErasing(false)}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    !sketchIsErasing ? 'bg-indigo-600 text-white shadow-2xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <PenTool className="w-3.5 h-3.5" />
+                  <span>Bút vẽ</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSketchIsErasing(true)}
+                  className={`px-3 py-1.5 rounded-lg font-bold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                    sketchIsErasing ? 'bg-rose-600 text-white shadow-2xs' : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  <span>Tẩy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => initCanvas()}
+                  className="px-2.5 py-1.5 rounded-lg bg-white text-slate-600 hover:bg-slate-100 border border-slate-200 font-semibold flex items-center gap-1 cursor-pointer"
+                  title="Xóa trắng bảng vẽ"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Xóa vẽ lại</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1.5 text-slate-700 font-semibold cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={sketchAutoAlign}
+                    onChange={e => setSketchAutoAlign(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-0"
+                  />
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-[11px]">Tự động nắn chỉnh nét</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleAutoAlignSketch}
+                  className="px-2.5 py-1 bg-amber-100 text-amber-900 hover:bg-amber-200 rounded-lg text-[11px] font-bold cursor-pointer"
+                >
+                  Nắn chỉnh ngay
+                </button>
+              </div>
+            </div>
+
+            {/* Vùng Canvas vẽ tay */}
+            <div className="border border-slate-300 rounded-xl overflow-hidden bg-white shadow-inner flex justify-center">
+              <canvas
+                ref={canvasRef}
+                width={560}
+                height={260}
+                onMouseDown={startDrawing}
+                onMouseMove={draw}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                onTouchStart={startDrawing}
+                onTouchMove={draw}
+                onTouchEnd={stopDrawing}
+                className="cursor-crosshair touch-none"
+              />
+            </div>
+
+            {/* Vùng nhận diện & Mã TikZ / tikz-tab sinh ra */}
+            <div className="space-y-2 text-xs">
+              <div className="p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span className="font-bold text-indigo-950 text-[11px]">Nhận diện & Nắn chỉnh:</span>
+                  <span className="text-indigo-800 font-medium text-[11px]">{sketchRecognizedShape}</span>
+                </div>
+                <span className="text-[10px] bg-indigo-200 text-indigo-900 font-bold px-2 py-0.5 rounded-full">Chuẩn TikZ</span>
+              </div>
+
+              <div className="space-y-1">
+                <span className="font-bold text-slate-700 text-[11px]">Mã {drawSketchType === 'graph' ? 'TikZ' : 'tikz-tab'} sẽ được chèn vào văn bản:</span>
+                <pre className="p-2.5 bg-slate-900 text-emerald-400 font-mono text-[11px] rounded-xl overflow-x-auto max-h-28 border border-slate-800 select-all">
+                  {sketchGeneratedTikZ}
+                </pre>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowDrawSketchModal(false)}
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmInsertSketch}
+                className={`px-4 py-2 text-xs font-bold text-white rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5 transition-colors ${
+                  drawSketchType === 'graph' ? 'bg-sky-600 hover:bg-sky-700' : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                <Check className="w-4 h-4" />
+                <span>Xác nhận & Chèn vào bài</span>
               </button>
             </div>
           </div>

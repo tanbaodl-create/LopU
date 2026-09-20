@@ -41,6 +41,7 @@ import {
   Cloud,
   LogOut,
   LogIn,
+  Calendar,
 } from 'lucide-react';
 import { UserProfile, UserRole, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
 import { getDriveConnectionState } from '../../ConnectData/ConnectDrive';
@@ -56,6 +57,8 @@ import {
 } from '../../ConnectData/ConnectFirestore';
 import { UserProfileModal } from './components/UserProfileModal';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
+
+export const TKB_DRIVE_FOLDER_PATH = 'myApp\\LopU\\ThoiKhoaBieu\\TKB {Tên tài khoản} lần k';
 
 export interface ExtendedUserProfile extends UserProfile {
   nickname?: string;
@@ -114,11 +117,11 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
   const [newAssignedSubject, setNewAssignedSubject] = useState<string>(''); // Môn phụ trách nếu là QL
   const [newPhone, setNewPhone] = useState<string>(''); // 8. SĐT
   const [newHomeAddress, setNewHomeAddress] = useState<string>(''); // 9. Địa chỉ nhà
-  const [newClassIds, setNewClassIds] = useState<string>('10A1, 10A2'); // 10. Các Lớp dạy/học
-  const [newSubjects, setNewSubjects] = useState<string>('Toán Học, Vật Lý'); // 11. Các môn dạy/học
-  const [newManagedSubjects, setNewManagedSubjects] = useState<string>('Toán Học'); // 12. Môn quản lý
-  const [newGroupOrTeam, setNewGroupOrTeam] = useState<string>('Tổ 1'); // 13. Phân nhóm/tổ
-  const [newClassTitle, setNewClassTitle] = useState<string>('LT'); // 14. Chức danh trong lớp (LT, PHT, VTM, PLĐ, CĐ, BT, PBT, UV, TT, TP)
+  const [newClassIds, setNewClassIds] = useState<string>(''); // 10. Các Lớp dạy/học
+  const [newSubjects, setNewSubjects] = useState<string>(''); // 11. Các môn dạy/học
+  const [newManagedSubjects, setNewManagedSubjects] = useState<string>(''); // 12. Môn quản lý
+  const [newGroupOrTeam, setNewGroupOrTeam] = useState<string>(''); // 13. Phân nhóm/tổ
+  const [newClassTitle, setNewClassTitle] = useState<string>(''); // 14. Chức danh trong lớp (LT, PHT, VTM, PLĐ, CĐ, BT, PBT, UV, TT, TP)
 
   // Chỉnh sửa Tên (Chỉ Quản lý / Quản trị mới sửa được)
   const [editingNameUserId, setEditingNameUserId] = useState<string | null>(null);
@@ -138,6 +141,51 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
   // Mở rộng hiển thị trực tiếp dòng & Modal Xem/Sửa trọn bộ 14 trường thông tin
   const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   const [detailModalUser, setDetailModalUser] = useState<ExtendedUserProfile | null>(null);
+
+  // Modal thêm Thời khóa biểu con em / người thân từ quản trị người dùng
+  const [showAddTkbModal, setShowAddTkbModal] = useState<boolean>(false);
+  const [newTkbName, setNewTkbName] = useState<string>('');
+  const [newTkbRelation, setNewTkbRelation] = useState<'child' | 'sibling' | 'student' | 'other'>('child');
+  const [newTkbClassName, setNewTkbClassName] = useState<string>('10A1');
+  const [newTkbSchool, setNewTkbSchool] = useState<string>('');
+
+  const handleCreateUserTkb = () => {
+    if (!newTkbName.trim()) {
+      alert('Vui lòng nhập tên người thân hoặc tên hồ sơ Thời khóa biểu.');
+      return;
+    }
+    const relationLabels: Record<string, string> = {
+      child: 'Con',
+      sibling: 'Em',
+      student: 'Học sinh',
+      other: 'Người thân',
+    };
+    const newId = `profile_${Date.now()}`;
+    const newProfile = {
+      id: newId,
+      name: newTkbName.trim(),
+      relation: newTkbRelation,
+      relationLabel: relationLabels[newTkbRelation] || 'Người thân',
+      className: newTkbClassName.trim() || '10A1',
+      school: newTkbSchool.trim() || undefined,
+      colorScheme: 'indigo',
+      createdAt: new Date().toISOString().split('T')[0],
+      schedule: [],
+    };
+    const storageKey = 'lopu_user_family_timetables_v2';
+    const existing = localStorage.getItem(storageKey);
+    let list = [];
+    if (existing) {
+      try { list = JSON.parse(existing); } catch (e) {}
+    }
+    const updated = Array.isArray(list) ? [...list, newProfile] : [newProfile];
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+    setShowAddTkbModal(false);
+    setNewTkbName('');
+    setNewTkbSchool('');
+    setNotification(`Đã tạo hồ sơ Thời khóa biểu "${newProfile.name}" cho người dùng/con em thành công!`);
+    setTimeout(() => setNotification(null), 4000);
+  };
 
   const loadData = async () => {
     const data = (await getUsers()) as ExtendedUserProfile[];
@@ -1086,6 +1134,17 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
               <span>Thêm tài khoản</span>
             </button>
 
+            {/* Add Family Timetable Button */}
+            <button
+              id="btn-add-family-tkb-admin"
+              onClick={() => setShowAddTkbModal(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-xs transition-colors cursor-pointer"
+              title="Thêm Thời khóa biểu cho người thân (Con, Em...) để theo dõi"
+            >
+              <Calendar className="w-3.5 h-3.5" />
+              <span>Thêm TKB (Con, Em...)</span>
+            </button>
+
             {/* Clear Demo Users Button */}
             <button
               id="btn-clear-demo-users"
@@ -1966,6 +2025,125 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL THÊM THỜI KHÓA BIỂU CON EM / NGƯỜI THÂN */}
+      {showAddTkbModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Thêm Thời Khóa Biểu Theo Dõi
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Thêm lịch học của con, em hoặc học sinh để tiện quản lý theo dõi
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddTkbModal(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  1. Mối quan hệ
+                </label>
+                <div className="grid grid-cols-4 gap-2">
+                  {[
+                    { id: 'child', label: 'Con', icon: Heart },
+                    { id: 'sibling', label: 'Em', icon: Sparkles },
+                    { id: 'student', label: 'Học sinh', icon: GraduationCap },
+                    { id: 'other', label: 'Khác', icon: Users },
+                  ].map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => setNewTkbRelation(r.id as any)}
+                      className={`p-2 rounded-xl font-bold flex flex-col items-center gap-1 border transition-all cursor-pointer ${
+                        newTkbRelation === r.id
+                          ? 'bg-amber-50 border-amber-400 text-amber-900 shadow-2xs'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <r.icon className="w-4 h-4" />
+                      <span>{r.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-slate-700 block mb-1">
+                  2. Tên học sinh / Tên người thân
+                </label>
+                <input
+                  type="text"
+                  value={newTkbName}
+                  onChange={e => setNewTkbName(e.target.value)}
+                  placeholder="Ví dụ: Con - Đỗ Bảo Khang..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:bg-white focus:outline-hidden focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    3. Lớp học
+                  </label>
+                  <input
+                    type="text"
+                    value={newTkbClassName}
+                    onChange={e => setNewTkbClassName(e.target.value)}
+                    placeholder="Ví dụ: 10A1, 6A2..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 text-xs focus:bg-white focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    4. Trường học (tùy chọn)
+                  </label>
+                  <input
+                    type="text"
+                    value={newTkbSchool}
+                    onChange={e => setNewTkbSchool(e.target.value)}
+                    placeholder="Ví dụ: THPT Ba Gia..."
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-medium text-slate-800 text-xs focus:bg-white focus:outline-hidden focus:border-amber-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
+              <button
+                type="button"
+                onClick={() => setShowAddTkbModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateUserTkb}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-950 bg-amber-500 hover:bg-amber-600 shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Lưu Thời Khóa Biểu</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

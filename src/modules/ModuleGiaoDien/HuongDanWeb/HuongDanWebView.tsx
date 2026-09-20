@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { ViewId } from '../Navigation';
 import { PhanTichLenh } from './PhanTichLenh';
+import { LuuPromptChuanView } from './LuuPromptChuanView';
 import { UserRole } from '../../../services/storageTypes';
 
 interface SubmoduleItem {
@@ -93,23 +94,23 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'SoDoLop',
-        name: 'SoDoLop (Truy vấn & Tải file SoDoLop_*.json từ Drive myApp\\LopU\\SoDoLop, Xuất PNG A4 lề 2cm)',
+        name: 'SoDoLop (Sơ Đồ Lớp - Xếp Chỗ Ngồi, Nạp Vào Sơ Đồ, Tối Giản Nút Bấm, Lưu Kèm 3 Điều Kiện Cài Đặt)',
         folderPath: 'src/modules/ModuleHocSinh/SoDoLop',
-        description: 'Sơ đồ lớp chuẩn hóa đầu vào định dạng mới, hỗ trợ đầy đủ chức danh VTM (Văn Thể Mỹ). Tải và lưu trữ chuẩn xác vào thư mục Google Drive: myApp\\LopU\\SoDoLop theo định dạng SoDoLop_[TênLớp]_Tuan[STT].json (ví dụ: SoDoLop_10A1_Tuan1.json). Cho phép quét trực tiếp từ Drive thực tế để tải về và nạp cấu trúc sơ đồ lớp lên ứng dụng. ĐÃ XÓA SẠCH DỮ LIỆU DEMO BAN ĐẦU để người dùng nhập dữ liệu thực tế. Tự động xuất file ảnh PNG sơ đồ lớp với kích thước khớp khít khổ giấy A4 chuẩn trừ đi lề 2cm mỗi bên khi copy vào Word.',
-        purpose: 'Đồng bộ hai chiều Google Drive myApp\\LopU\\SoDoLop, Nạp file SoDoLop_*.json, Xuất PNG A4 lề 2cm, Chức danh 11pt, Biệt danh hàng 4',
+        description: 'Sơ đồ lớp học tối giản & thông minh: Bỏ nút "Auto Xếp nhanh" và "Đồng bộ phân tổ"; đổi tên nút "Auto Xếp theo Điều kiện" thành "Xếp chỗ ngồi" và "Nạp lại Danh sách" thành "Nạp vào sơ đồ". Tích hợp đầy đủ 3 điều kiện xếp chỗ (Không gần nhau, Vị trí cố định, Cặp đôi cùng tiến) kèm tự động lưu/phục hồi từ Drive.',
+        purpose: 'Sơ đồ lớp tinh gọn với nút Xếp chỗ ngồi, Nạp vào sơ đồ và tự động phục hồi 3 điều kiện cài đặt xếp chỗ',
         viewId: 'learning-seating',
         icon: LayoutGrid,
-        tags: ['Drive myApp\\LopU\\SoDoLop', 'Nạp SoDoLop_*.json', 'Đã xóa sạch demo', 'PNG A4 lề 2cm', 'Điều hành-Đoàn 12pt', 'Sát khung viền', 'Viền đen nét căng', 'Đồng bộ Realtime'],
+        tags: ['Xếp chỗ ngồi', 'Nạp vào sơ đồ', 'Tối giản nút bấm', 'Lưu kèm 3 điều kiện cài đặt', 'Drive myApp\\LopU\\SoDoLop'],
       },
       {
         id: 'ThoiKhoaBieu',
-        name: 'ThoiKhoaBieu (Thời khóa biểu)',
+        name: 'ThoiKhoaBieu (Thời Khóa Biểu - Lấy Tùy Chọn Lớp Từ 14 Trường Thông Tin Hồ Sơ Chi Tiết)',
         folderPath: 'src/modules/ModuleHocSinh/ThoiKhoaBieu',
-        description: 'Bảng thời khóa biểu 7 cột hoặc 3 cột thu gọn (Hôm nay, Ngày mai, Ngày kia); ô tiết học 3 hàng chi tiết (môn, lớp, GV, giờ, ghi chú), nhãn CK/HT, tự động gộp tiết kề nhau <=20 phút và chọn/nhập lớp.',
-        purpose: 'Thời gian biểu',
+        description: 'Module Thời Khóa Biểu: Dropdown 5 "Tên lớp" rà soát trực tiếp thông tin từ trường Các Lớp Dạy/Học (14 trường thông tin người dùng trong Hồ sơ chi tiết). Nếu chưa thiết lập thì danh sách tùy chọn là rỗng chứ không tự ý thêm danh mục mặc định. Mặc định các trường Phòng học, Ghi chú trống.',
+        purpose: 'Thời khóa biểu đồng bộ chính xác danh sách lớp từ 14 trường thông tin người dùng và phân quyền linh hoạt',
         viewId: 'learning-schedule',
         icon: Calendar,
-        tags: ['Lịch 7 cột / 3 cột', 'CK/HT', 'Kề <=20p', 'Drive export'],
+        tags: ['Rà soát 14 trường thông tin', 'Các Lớp Dạy/Học', 'Tùy chọn lớp rỗng nếu chưa có', 'Không tự ý thêm lớp giả'],
       },
       {
         id: 'DangKyLop',
@@ -140,52 +141,52 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyLopDay',
-        name: 'QuanLyLopDay (Quản lý lớp dạy & Nghiệp vụ giảng dạy)',
+        name: 'QuanLyLopDay (Quản lý lớp dạy & Nghiệp vụ giảng dạy, Phân quyền xem TikZ)',
         folderPath: 'src/modules/ModuleGiaoVien/QuanLyLopDay',
-        description: '(Chỉ Giáo viên trở lên mới thấy). Nghiệp vụ giảng dạy & quản lý lớp dạy: Nhãn chức danh dạng chữ không đóng khung, chia riêng 2 hàng GVCN và SĐT; đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt mã PIN. Đồng bộ số dư Ví Kim Cương 💎.',
-        purpose: 'Nghiệp vụ giảng dạy cho Giáo viên trở lên & Quản lý lớp',
+        description: '(Chỉ Giáo viên trở lên mới thấy). Nghiệp vụ giảng dạy & quản lý lớp dạy: Mỗi hàng tương ứng 1 tiết / ca dạy của giáo viên; Phân quyền xem TikZ (nút chép mã & xem TikZ chỉ hiển thị cho Giáo viên, ẩn với Học sinh); Nhãn chức danh dạng chữ không đóng khung, chia riêng 2 hàng GVCN và SĐT; đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt mã PIN. Đồng bộ số dư Ví Kim Cương 💎.',
+        purpose: 'Nghiệp vụ giảng dạy cho Giáo viên trở lên & Quản lý lớp, phân quyền ẩn nút TikZ đối với Học sinh',
         viewId: 'teaching-management',
         icon: CheckCircle2,
-        tags: ['Quyền Giáo viên+', 'Nghiệp vụ giảng dạy', 'Ví Kim Cương 💎', 'GPS Ba Gia', 'Đổi tên lớp'],
+        tags: ['Quyền Giáo viên+', 'Phân quyền TikZ', 'Mỗi hàng 1 tiết/ca', 'Nghiệp vụ giảng dạy', 'Ví Kim Cương 💎', 'GPS Ba Gia', 'Đổi tên lớp'],
       },
       {
         id: 'NhapHocSinh',
-        name: 'NhapHocSinh (Nhập & Xóa HS - Excel chống trùng và Chuẩn hóa chức danh VTM)',
+        name: 'NhapHocSinh (Nhập & Xóa HS, Chuẩn hóa VTM & Đồng bộ vị trí cố định theo sơ đồ)',
         folderPath: 'src/modules/ModuleGiaoVien/NhapHocSinh',
-        description: 'Dịch vụ thêm/xóa học sinh và import Excel/CSV với cơ chế định danh Google Account. Tích hợp hàm chuanHoaChucDanhHocSinh chuẩn hóa các chức danh hợp lệ bao gồm VTM (Văn Thể Mỹ) khi tải lên Excel.',
-        purpose: 'Nhập & Xóa học sinh, Chuẩn hóa chức danh VTM hỗ trợ Excel',
+        description: 'Dịch vụ thêm/xóa học sinh và import Excel/CSV với cơ chế định danh Google Account. Chuẩn hóa chức danh VTM (Văn Thể Mỹ) và validateAndSyncFixedSeatPositions đồng bộ vị trí bàn cố định theo số ghế thực tế từng bàn của sơ đồ lớp.',
+        purpose: 'Nhập & Xóa học sinh, Chuẩn hóa chức danh VTM & Đồng bộ vị trí cố định sơ đồ',
         icon: FileSpreadsheet,
-        tags: ['Google UID/Email', 'nhapHocSinhService', 'Chuẩn hóa VTM', 'Excel chống trùng'],
+        tags: ['Google UID/Email', 'nhapHocSinhService', 'Chuẩn hóa VTM', 'Đồng bộ vị trí cố định', 'Excel chống trùng'],
       },
       {
         id: 'TheoDoiHocSinh',
-        name: 'TheoDoiHocSinh (Sổ điểm & Lưu Drive GV mở lớp)',
+        name: 'TheoDoiHocSinh (Sổ điểm, Lưu Drive GV mở lớp & Theo dõi TKB con em)',
         folderPath: 'src/modules/ModuleGiaoVien/TheoDoiHocSinh',
-        description: 'Quản lý điểm miệng, 15 phút, 1 tiết, học kỳ; ghi nhận xét và tự động lưu trữ bảng điểm từng lớp trực tiếp trên Google Drive cá nhân của giáo viên mở lớp đó.',
-        purpose: 'Đánh giá & Lưu Drive GV',
+        description: 'Quản lý điểm miệng, 15 phút, 1 tiết, học kỳ; ghi nhận xét và tự động lưu trữ bảng điểm từng lớp trực tiếp trên Google Drive cá nhân của giáo viên mở lớp đó. Tích hợp phân hệ "Theo dõi Thời Khóa Biểu Học Sinh / Con Em" cho phép giáo viên/phụ huynh tạo và quản lý nhiều hồ sơ lịch học của con, em, học sinh cần theo dõi.',
+        purpose: 'Đánh giá, Lưu Drive GV & Theo dõi thời khóa biểu học sinh/con em',
         viewId: 'teaching-students',
         icon: LineChart,
-        tags: ['Sổ điểm', 'Drive GV mở lớp', 'Đánh giá'],
+        tags: ['Sổ điểm', 'Drive GV mở lớp', 'Đánh giá', 'Theo dõi TKB con em', 'Đa hồ sơ TKB'],
       },
       {
         id: 'TaiLieuCaNhan',
-        name: 'TaiLieuCaNhan (Tài liệu cá nhân Drive, Công thức KaTeX đẹp & Mở sẵn công thức cần sửa trong MathType)',
+        name: 'TaiLieuCaNhan (Soạn Word, Vẽ Đồ thị/BBT Trong suốt 100% Không Nền/Không Chú thích, Phân quyền nút TikZ)',
         folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Quản lý bộ tài liệu dạy học Google Drive cá nhân. Tích hợp bộ dịch công thức toán học KaTeX/MathJax hiển thị sắc nét chuẩn xuất bản ($...$). Kích vào bất kỳ công thức nào để mở ngay công thức đó trong cửa sổ chèn công thức MathType (không bị cửa sổ trống) để chỉnh sửa trực quan nhanh chóng và giữ nguyên nút sửa. Hỗ trợ hệ thống câu hỏi với điểm mặc định chuẩn Bộ GD&ĐT: Trắc nghiệm lựa chọn (0.25đ); Trắc nghiệm đúng sai 4 ý (1 ý: 0.1đ, 2 ý: 0.25đ, 3 ý: 0.5đ, 4 ý: 1.0đ); Câu trả lời ngắn (0.5đ). Lời giải luôn nằm liền sau từng câu hỏi. Chuẩn hóa đường dẫn tương đối (Giải pháp 5: ./Media/...).',
-        purpose: 'Hiển thị công thức toán KaTeX chuẩn đẹp, Mở sẵn công thức cần sửa trong cửa sổ MathType, Giữ nút sửa sau chèn, Điểm chuẩn Bộ GD&ĐT, Lời giải liền sau câu',
+        description: 'Quản lý tài liệu dạy học Google Drive cá nhân. Tự động kết xuất trực quan đồ thị hàm số và bảng biến thiên dạng nét trong suốt 100% (không nền, không chú thích tiêu đề thừa) đồng bộ hoàn toàn với màu văn bản. Nút chép mã và xem TikZ chỉ xuất hiện ở Giáo viên, học sinh không thấy 2 nút này. Lệnh "Chèn đồ thị" và "Chèn bảng biến thiên" có 3 menu con: 1) Từ máy tính (quét vẽ lại), 2) Nhập hàm, 3) Tự vẽ tay canvas có AI nắn chỉnh.',
+        purpose: 'Vẽ Đồ thị & BBT trong suốt 100% không nền, không chú thích, Phân quyền nút TikZ (chỉ GV thấy)',
         viewId: 'teaching-documents',
         icon: FolderLock,
-        tags: ['Công thức KaTeX/MathJax đẹp', 'Mở sẵn công thức trong MathType', 'Giữ nút sửa công thức', 'Điểm TN 0.25đ / ĐS / Ngắn 0.5đ', 'Lời giải liền sau câu', 'Cú pháp Câu n - Đáp án - Lời giải', 'Relative Path (GP5)'],
+        tags: ['Đồ thị/BBT trong suốt 100%', 'Không nền không chú thích', 'Phân quyền nút TikZ cho GV', '3 Menu con Chèn', 'Từ máy tính', 'Nhập hàm', 'Tự vẽ Canvas'],
       },
       {
         id: 'SoanThao',
-        name: 'SoanThao / Tài liệu (Menu View: Tách câu, Toàn bộ, Xem PPT & Dịch công thức KaTeX/MathJax)',
+        name: 'SoanThao / Tài liệu (Vẽ Đồ thị/BBT Không nền đồng bộ văn bản, Phân quyền xem TikZ, Menu View)',
         folderPath: 'src/modules/ModuleGiaoVien/SoanThao',
-        description: 'Trình soạn thảo văn bản kiểu Word chuyên nghiệp với Nút "View" 3 tùy chọn: 1) Tách câu (soạn từng câu, mức 1-6, phân nhóm Bắt buộc/Khuyến khích, điểm chuẩn tự động, hiển thị công thức đẹp và nút kích sửa cho cả 4 ý đúng/sai); 2) Toàn bộ (xem toàn bộ đề thi chuẩn cú pháp: "Câu n. nội dung \\n Đáp án: \\n Lời giải \\n nội dung lời giải"); 3) Xem PPT (trình chiếu PowerPoint hiện lần lượt đề bài và bấm hiện lời giải liền sau câu hỏi). Toàn bộ công thức toán học hiển thị chuẩn xác qua KaTeX/MathJax.',
-        purpose: 'Nút View Menu: Tách câu / Toàn bộ / Xem PPT, Công thức toán học dịch chuẩn đẹp KaTeX, Cú pháp chuẩn Word (Câu n - Đáp án - Lời giải)',
+        description: 'Trình soạn thảo văn bản kiểu Word chuyên nghiệp: Kết xuất trực quan Đồ thị TikZ và Bảng biến thiên tikz-tab không màu nền (trong suốt 100%), chỉ vẽ nét thuần túy và bỏ tiêu đề chú thích; Nút chép mã & xem TikZ chỉ hiển thị cho Giáo viên; Thanh công cụ Word cố định (Sticky) ở đầu trang khi cuộn; Chèn trực tiếp mã TikZ đồ thị và Bảng biến thiên tikz-tab vào câu hỏi đang chọn; Đã bỏ trang soạn thảo tự do A4 dư thừa ở chế độ xem Toàn bộ. Nút "View" 3 tùy chọn: 1) Tách câu; 2) Toàn bộ; 3) Xem PPT.',
+        purpose: 'Vẽ Đồ thị & BBT không màu nền trong suốt, Phân quyền nút TikZ chỉ Giáo viên thấy, Thanh Word Sticky, Menu View',
         viewId: 'teaching-soanthao',
         icon: FileText,
-        tags: ['Menu View (Tách câu / Toàn bộ / PPT)', 'KaTeX / MathJax', 'Kích sửa công thức', 'Lời giải liền sau câu hỏi', 'Cú pháp chuẩn Word', 'Điểm chuẩn 0.25đ/ĐS/0.5đ'],
+        tags: ['Đồ thị/BBT không màu nền', 'Đồng bộ màu văn bản', 'Phân quyền nút TikZ GV', 'Thanh Word Sticky', 'Chèn TikZ/tikz-tab vào câu hỏi', 'Bỏ A4 tự do dư thừa', 'Menu View', 'KaTeX / MathJax', 'Kích sửa công thức'],
       },
       {
         id: 'ThuongMaiTaiLieu',
@@ -216,13 +217,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyNguoiDung',
-        name: 'QuanLyNguoiDung (Quản trị tài khoản & Tự sửa thông tin Superadmin)',
+        name: 'QuanLyNguoiDung (Quản trị tài khoản, Tự sửa thông tin & Thêm TKB người thân)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Quản trị tài khoản và phân quyền cho Admin và Superadmin. Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi" trong dropdown tài khoản kết nối mà không bị ghi đè.',
-        purpose: 'Quản trị tài khoản, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo (Th Bảo) & Tự sửa hồ sơ',
+        description: 'Quản trị tài khoản và phân quyền cho Admin và Superadmin. Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi". Bổ sung tính năng "Thêm TKB (Con, Em...)" giúp quản trị viên và người dùng dễ dàng tạo thêm thời khóa biểu gia đình để cùng theo dõi.',
+        purpose: 'Quản trị tài khoản, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo & Thêm TKB người thân',
         viewId: 'settings-users',
         icon: UserCog,
-        tags: ['Đỗ Tấn Bảo (Th Bảo)', 'Superadmin tự sửa hồ sơ', 'Dropdown vai trò trải nghiệm', '14 Trường Firestore', 'Deduplicate tanbaodl@gmail.com'],
+        tags: ['Đỗ Tấn Bảo (Th Bảo)', 'Superadmin tự sửa hồ sơ', 'Thêm TKB Con/Em', '14 Trường Firestore', 'Deduplicate tanbaodl@gmail.com'],
       },
       {
         id: 'BaoCaoGiamSat',
@@ -299,22 +300,22 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'Navigation',
-        name: 'Navigation (Cấu hình Menu, NavigationContainer & Kiểm soát Phân quyền RBAC)',
+        name: 'Navigation (Cấu hình Menu, NavigationContainer & 3 Menu Con Chèn TikZ / BBT, Thanh Word Sticky)',
         folderPath: 'src/modules/ModuleGiaoDien/Navigation',
-        description: 'Định nghĩa menuConfig dạng phân cấp, NavigationContainer và DynamicViewContainer. Tích hợp cửa sổ soạn thảo Word nâng cao với menu "Chèn" (menu xổ xuống gồm bảng, Toán LaTeX, hình ảnh, file, thư mục e-learning) và menu "Canh lề" (menu xổ xuống gồm trái, giữa, phải, đều 2 bên); dropdown cỡ chữ đặt ngay sau chữ U gạch chân hiển thị ngắn gọn "22px" (mặc định 22px). Dropdown vai trò tài khoản linh hoạt.',
-        purpose: 'Bộ điều hướng động, Cửa sổ Word nâng cao với Menu Chèn/Canh lề & Dropdown cỡ chữ chuẩn',
+        description: 'Định nghĩa menuConfig dạng phân cấp, NavigationContainer và DynamicViewContainer. Cửa sổ soạn thảo Word nâng cao với thanh công cụ cố định (sticky) khi cuộn, menu "Chèn" với 3 menu con cho cả Chèn đồ thị và Chèn bảng biến thiên: 1) Từ máy tính (chọn ảnh hệ thống vẽ lại TikZ), 2) Nhập hàm (nhập biểu thức/điểm mốc vẽ lại TikZ), 3) Tự vẽ (vẽ tay canvas, hệ thống nắn chỉnh nét chuẩn TikZ/tikz-tab); hỗ trợ Chèn Bảng, MathType, file và tự động nạp mã vào câu hỏi đang chọn.',
+        purpose: 'Bộ điều hướng động, Cửa sổ Word nâng cao với thanh Sticky, 3 menu con Chèn Đồ thị & BBT: Từ máy tính, Nhập hàm, Tự vẽ',
         icon: Compass,
-        tags: ['menuConfig', 'NavigationContainer', 'Word Editor menu Chèn/Canh lề', 'Cỡ chữ 22px sau U', 'RBAC Guard'],
+        tags: ['menuConfig', 'NavigationContainer', 'Thanh Word Sticky', '3 Menu con Chèn', 'Từ máy tính', 'Nhập hàm', 'Tự vẽ Canvas AI', 'Chèn đồ thị TikZ', 'Chèn BBT tikz-tab', 'Word Editor', 'Cỡ chữ 22px', 'RBAC Guard'],
       },
       {
         id: 'HuongDanWeb',
         name: 'HuongDanWeb (Sơ đồ cây, Phân tích lệnh & Kho Prompt chuẩn)',
         folderPath: 'src/modules/ModuleGiaoDien/HuongDanWeb',
-        description: '(Phần sau chỉ Superadmin mới thấy: Hướng dẫn web và sơ đồ cây). Sơ đồ cây module phân cấp, bộ phân tích & tạo lệnh AI siêu tốc bóc tách module và Kho prompt chuẩn hỗ trợ phát triển dự án.',
-        purpose: 'Đặc quyền Superadmin: Sơ đồ cây module, Phân tích lệnh & Kho Prompt',
+        description: '(Phần sau chỉ Superadmin mới thấy: Hướng dẫn web và sơ đồ cây). Sơ đồ cây module phân cấp, bộ phân tích & tạo lệnh AI siêu tốc với nút "Copy lệnh" bên trái, cho phép người dùng tự sửa trực tiếp trong ô prompt trước khi copy và Kho prompt chuẩn hỗ trợ phát triển dự án.',
+        purpose: 'Đặc quyền Superadmin: Sơ đồ cây module, Phân tích lệnh & Kho Prompt (Sửa trực tiếp prompt)',
         viewId: 'guide-tree',
         icon: Network,
-        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích & Tạo lệnh AI', 'Kho Prompt Chuẩn'],
+        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích & Tạo lệnh AI', 'Copy lệnh bên trái', 'Sửa prompt trực tiếp', 'Kho Prompt Chuẩn'],
       },
     ],
   },
@@ -335,12 +336,12 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'ConnectDrive',
-        name: 'ConnectDrive (Google Drive API, Gói Tài Liệu & Bảo Mật Giáo Viên)',
+        name: 'ConnectDrive (Google Drive API, Xóa sạch 3 cấp & Bảo Mật Giáo Viên)',
         folderPath: 'src/modules/ConnectData/ConnectDrive',
-        description: 'Hệ thống đồng bộ hóa Google Drive của giáo viên. Đường dẫn chuẩn 7 cấp độ: myApp / LopU / TaiLieu / [Tên tài liệu] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề]. Hỗ trợ gói bài dạy Chuyên đề gồm KienThuc.html, Luyentap [STT].json, và DanhGia [STT].json. Tự động khởi tạo và lưu trữ tệp đa phương tiện vào các thư mục Media\\HinhAnh, Media\\AmThanh, Media\\Video ngay bên trong thư mục Chuyên đề chứa file KienThuc.html. Áp dụng Giải pháp 5: Chuẩn hóa đường dẫn tương đối (./Media/...) trong file JSON để gói tài liệu hoạt động 100% độc lập khi chuyển máy hoặc chạy sandbox cho học sinh.',
-        purpose: 'Soạn thảo tài liệu khoa học, Gói tệp Chuyên đề, Media\\... & Đường dẫn tương đối JSON (Giải pháp 5)',
+        description: 'Hệ thống đồng bộ hóa Google Drive của giáo viên. Đường dẫn chuẩn 7 cấp độ: myApp / LopU / TaiLieu / [Tên tài liệu] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề] và thư mục myApp\\LopU\\SoDoLop. Hỗ trợ phương thức deleteDriveFileEverywhere xóa triệt để 3 cấp: LocalStorage, Blacklist chống ghost-files và xóa thực tế qua Google Drive REST API. Hỗ trợ gói bài dạy Chuyên đề gồm KienThuc.html, Luyentap [STT].json, và DanhGia [STT].json. Tự động khởi tạo và lưu trữ tệp đa phương tiện vào các thư mục Media\\HinhAnh, Media\\AmThanh, Media\\Video ngay bên trong thư mục Chuyên đề chứa file KienThuc.html. Áp dụng Giải pháp 5: Chuẩn hóa đường dẫn tương đối (./Media/...) trong file JSON để gói tài liệu hoạt động 100% độc lập khi chuyển máy hoặc chạy sandbox cho học sinh.',
+        purpose: 'Xóa sạch 3 cấp Local-Drive-Hệ thống, Gói tệp Chuyên đề, Media\\... & Đường dẫn tương đối JSON (Giải pháp 5)',
         icon: Cloud,
-        tags: ['Giải pháp 5 JSON Media', 'Đường dẫn tương đối ./Media/...', 'Bảo mật Drive GV', 'Media\\HinhAnh', 'Media\\AmThanh', 'Media\\Video', 'KienThuc.html', 'Luyentap', 'DanhGia'],
+        tags: ['Xóa sạch 3 cấp Local-Drive-Hệ thống', 'Giải pháp 5 JSON Media', 'Đường dẫn tương đối ./Media/...', 'Bảo mật Drive GV', 'Media\\HinhAnh', 'Media\\AmThanh', 'Media\\Video', 'KienThuc.html', 'Luyentap', 'DanhGia'],
       },
       {
         id: 'ConnectFirestore',
@@ -991,15 +992,18 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       )}
 
-      {/* CHẾ ĐỘ 4: TRỢ LÝ PHÂN TÍCH & TẠO CÂU LỆNH AI SIÊU TỐC */}
+      {/* CHẾ ĐỘ 4: TRỢ LÝ PHÂN TÍCH & TẠO CÂU LỆNH AI SIÊU TỐC & KHO PROMPT LỆNH CHUẨN */}
       {viewMode === 'prompt-assistant' && (
-        <PhanTichLenh
-          onNavigateToView={onNavigateToView}
-          onSelectSubmoduleInTree={subId => {
-            setSelectedSubmoduleId(subId);
-            setViewMode('split-explorer');
-          }}
-        />
+        <div className="space-y-8">
+          <PhanTichLenh
+            onNavigateToView={onNavigateToView}
+            onSelectSubmoduleInTree={subId => {
+              setSelectedSubmoduleId(subId);
+              setViewMode('split-explorer');
+            }}
+          />
+          <LuuPromptChuanView />
+        </div>
       )}
 
       {/* Box Hướng Dẫn Cấu Hình Vercel & Firebase Authorized Domains */}
