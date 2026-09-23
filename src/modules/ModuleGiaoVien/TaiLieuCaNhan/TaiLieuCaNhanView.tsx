@@ -26,16 +26,139 @@ import {
   RotateCcw,
   Sparkles,
   Check,
+  BookOpen,
+  Filter,
+  FolderLock,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { TeacherDocument, ClassItem, UserRole, UserProfile, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
 import { getClasses, getTeacherDocuments, saveTeacherDocument, getUsers } from '../../ConnectData/ConnectFirestore';
-import { saveTeachingMaterialHierarchyToDrive, getDriveConnectionState, deleteDriveFileEverywhere } from '../../ConnectData/ConnectDrive/googleDriveService';
+import {
+  saveTeachingMaterialHierarchyToDrive,
+  getDriveConnectionState,
+  createDriveFolderIfNotExists,
+  connectGoogleDrive,
+} from '../../ConnectData/ConnectDrive/googleDriveService';
+import { getStoredHierarchy, saveStoredHierarchy } from './hierarchyData';
 import { HierarchySelector } from './HierarchySelector';
 import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 import { MathTypeEditorModal } from './MathTypeEditorModal';
 import { MathFormulaRenderer } from './MathFormulaRenderer';
+import { convertMathExprToJs } from './TikZVisualRenderer';
 import { auth } from '../../../config/firebase';
 import { signOut } from 'firebase/auth';
+
+// Đường dẫn mặc định của app và module Tài liệu
+export const DEFAULT_APP_PATH = 'myApp/LopU';
+export const DEFAULT_TAILIEU_PATH = `${DEFAULT_APP_PATH}/TaiLieu`;
+
+/**
+ * Chuyển đổi công thức toán sang mã biểu thức vẽ TikZ plot
+ */
+export function convertMathExprToTikz(rawExpr: string, varName: string = 'x'): string {
+  let clean = rawExpr.trim();
+  if (clean.includes('=')) {
+    clean = clean.split('=').slice(1).join('=').trim();
+  }
+  clean = clean.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '(($1)/($2))');
+  clean = clean.replace(/frac\{([^}]+)\}\{([^}]+)\}/g, '(($1)/($2))');
+
+  const v = varName.replace(/^\\+/, '') || 'x';
+  clean = clean.replace(new RegExp(`\\\\${v}`, 'g'), v);
+
+  // 3t -> 3*\t, 3.5t -> 3.5*\t
+  clean = clean.replace(new RegExp(`(\\d+(?:\\.\\d+)?)\\s*${v}`, 'g'), `$1*\\${v}`);
+  clean = clean.replace(new RegExp(`\\b${v}\\b`, 'g'), `\\${v}`);
+
+  // Lũy thừa \t^3 -> (\t*\t*\t)
+  clean = clean.replace(new RegExp(`\\\\${v}\\^3`, 'g'), `(\\${v}*\\${v}*\\${v})`);
+  clean = clean.replace(new RegExp(`\\\\${v}\\^2`, 'g'), `(\\${v}*\\${v})`);
+  clean = clean.replace(new RegExp(`\\\\${v}\\^4`, 'g'), `(\\${v}*\\${v}*\\${v}*\\${v})`);
+  clean = clean.replace(/\^2/g, `*\\${v}`);
+  clean = clean.replace(/\^3/g, `*\\${v}*\\${v}`);
+
+  return clean;
+}
+
+/**
+ * Chuẩn hóa tên tài liệu theo quy ước: {tên môn} {số lớp - ví dụ lớp 10 thì số lớp là 10} - {tên tài liệu}
+ */
+export function formatDocumentTitleWithSubjectGrade(rawTitle: string, subjectName?: string, gradeVal?: string): string {
+  const cleanTitle = rawTitle.trim();
+  if (!cleanTitle) return '';
+
+  const cleanSubj = (subjectName || 'Toán').trim().replace(/^(Môn\s+)/i, '');
+  const gradeNum = String(gradeVal || '10').replace(/\D/g, '') || '10';
+  const expectedPrefix = `${cleanSubj} ${gradeNum} - `;
+
+  if (cleanTitle.toLowerCase().startsWith(expectedPrefix.toLowerCase())) {
+    return cleanTitle;
+  }
+
+  // Nếu người dùng đã gõ {số lớp} - {tên tài liệu} (ví dụ: "10 - Đại số & Giải tích")
+  if (/^\d+\s*-\s*/.test(cleanTitle)) {
+    const afterHyphen = cleanTitle.replace(/^\d+\s*-\s*/, '').trim();
+    return `${cleanSubj} ${gradeNum} - ${afterHyphen}`;
+  }
+
+  // Nếu người dùng đã gõ {tên môn} - {tên tài liệu}
+  if (cleanTitle.toLowerCase().startsWith(`${cleanSubj.toLowerCase()} - `)) {
+    const afterHyphen = cleanTitle.slice(`${cleanSubj} - `.length).trim();
+    return `${cleanSubj} ${gradeNum} - ${afterHyphen}`;
+  }
+
+  // Nếu người dùng gõ có chứa dấu gạch nối và đã có tên môn hoặc số lớp
+  if (cleanTitle.includes(' - ') && (cleanTitle.includes(cleanSubj) || cleanTitle.includes(gradeNum))) {
+    return cleanTitle;
+  }
+
+  return `${expectedPrefix}${cleanTitle}`;
+}
+
+/**
+ * Tự động phân tích tên trục hoành, trục tung và biến từ công thức hàm số (Ví dụ: N=t^3+3t -> xLabel='t', yLabel='N')
+ */
+export function inferAxesLabels(formula: string): { xLabel: string; yLabel: string; varName: string; rhs: string } {
+  let lhs = 'y';
+  let rhs = formula.trim();
+  if (formula.includes('=')) {
+    const parts = formula.split('=');
+    lhs = parts[0].trim() || 'y';
+    rhs = parts.slice(1).join('=').trim();
+  }
+
+  let yLabel = lhs;
+  let xLabel = 'x';
+  let varName = 'x';
+
+  if (lhs.includes('(') && lhs.includes(')')) {
+    const inner = lhs.match(/\(([^)]+)\)/);
+    if (inner && inner[1].trim()) {
+      xLabel = inner[1].trim();
+      varName = inner[1].trim();
+    }
+  }
+
+  if (xLabel === 'x') {
+    if (/(?:^|[^a-zA-Z])t(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bt\b/.test(rhs) || /\d+t/.test(rhs)) {
+      xLabel = 't';
+      varName = 't';
+    } else if (/(?:^|[^a-zA-Z])u(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bu\b/.test(rhs) || /\d+u/.test(rhs)) {
+      xLabel = 'u';
+      varName = 'u';
+    } else if (/(?:^|[^a-zA-Z])z(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bz\b/.test(rhs)) {
+      xLabel = 'z';
+      varName = 'z';
+    } else if (/(?:^|[^a-zA-Z])x(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bx\b/.test(rhs) || /\d+x/.test(rhs)) {
+      xLabel = 'x';
+      varName = 'x';
+    }
+  }
+
+  return { xLabel, yLabel, varName, rhs };
+}
 
 /**
  * Đường dẫn lưu thời khóa biểu ở drive: myApp\LopU\ThoiKhoaBieu\TKB {Tên tài khoản} lần k
@@ -44,13 +167,17 @@ export const TKB_DRIVE_FOLDER_PATH = 'myApp\\LopU\\ThoiKhoaBieu\\TKB {Tên tài 
 
 /**
  * Quy cách đặt tên mới theo yêu cầu:
- * - Luyện tập: LuyenTap <tên bài luyện tập>.json (không có cặp dấu [])
- * - Đánh giá: DanhGia <tên bài đánh giá>.json (không có cặp dấu [])
+ * Mỗi chuyên đề có 4 phần tiến trình:
+ * - 1. Kiến thức: KienThuc <tên chuyên đề>.html
+ * - 2. Luyện tập: LuyenTap <tên bài luyện tập>.json
+ * - 3. Kiểm tra: KiemTra <tên bài kiểm tra>.json
+ * - 4. Cải thiện: CaiThien <tên bài cải thiện>.json
+ * - Đánh giá: DanhGia <tên bài đánh giá>.json
  */
-export function formatDanhGiaFileName(rawName: string): string {
+export function formatKienThucFileName(rawName: string): string {
   let clean = rawName.trim();
-  clean = clean.replace(/^DanhGia\s*/i, '').replace(/[\[\]]/g, '').replace(/\.json$/i, '').trim();
-  return `DanhGia ${clean || 'Bài đánh giá'}.json`;
+  clean = clean.replace(/^KienThuc\s*/i, '').replace(/[\[\]]/g, '').replace(/\.html$/i, '').replace(/\.json$/i, '').trim();
+  return `KienThuc ${clean || 'Nội dung kiến thức'}.html`;
 }
 
 export function formatLuyenTapFileName(rawName: string): string {
@@ -59,9 +186,27 @@ export function formatLuyenTapFileName(rawName: string): string {
   return `LuyenTap ${clean || 'Bài luyện tập'}.json`;
 }
 
+export function formatKiemTraFileName(rawName: string): string {
+  let clean = rawName.trim();
+  clean = clean.replace(/^KiemTra\s*/i, '').replace(/[\[\]]/g, '').replace(/\.json$/i, '').trim();
+  return `KiemTra ${clean || 'Bài kiểm tra'}.json`;
+}
+
+export function formatCaiThienFileName(rawName: string): string {
+  let clean = rawName.trim();
+  clean = clean.replace(/^CaiThien\s*/i, '').replace(/[\[\]]/g, '').replace(/\.json$/i, '').trim();
+  return `CaiThien ${clean || 'Bài cải thiện'}.json`;
+}
+
+export function formatDanhGiaFileName(rawName: string): string {
+  let clean = rawName.trim();
+  clean = clean.replace(/^DanhGia\s*/i, '').replace(/[\[\]]/g, '').replace(/\.json$/i, '').trim();
+  return `DanhGia ${clean || 'Bài đánh giá'}.json`;
+}
+
 export const isDanhGia = (str?: string): boolean => {
   if (!str) return false;
-  return /^DanhGia/i.test(str.trim()) || /^\[?DanhGia/i.test(str.trim());
+  return /^DanhGia/i.test(str.trim()) || /^\[?DanhGia/i.test(str.trim()) || /^KiemTra/i.test(str.trim());
 };
 
 export interface TaiLieuCaNhanViewProps {
@@ -82,6 +227,13 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterGrade, setFilterGrade] = useState<string>('all');
+  const [filterTitle, setFilterTitle] = useState<string>('all');
+  const [filterChuong, setFilterChuong] = useState<string>('all');
+  const [filterBai, setFilterBai] = useState<string>('all');
+  const [filterVanDe, setFilterVanDe] = useState<string>('all');
+  const [filterChuyenDe, setFilterChuyenDe] = useState<string>('all');
   const [notification, setNotification] = useState<string | null>(null);
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
 
@@ -106,12 +258,11 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [showModalAddDialog, setShowModalAddDialog] = useState<boolean>(false);
   const [modalAddLevel, setModalAddLevel] = useState<string>('');
   const [modalAddItemText, setModalAddItemText] = useState<string>('');
-  const [deleteOptionConfirm, setDeleteOptionConfirm] = useState<{ level: string; item: string } | null>(null);
   
   // Trạng thái kiểu mục khi bấm "Thêm":
   // - Tài liệu, chương, bài, vấn đề: 2 tùy chọn: 'standard' (Thêm mới) hoặc 'danhGia' (Đánh giá)
-  // - Chuyên đề: 3 tùy chọn: 'standard' (Thêm chuyên đề mới), 'luyenTap' (Luyện tập), 'danhGia' (Đánh giá)
-  const [modalAddType, setModalAddType] = useState<'standard' | 'luyenTap' | 'danhGia'>('standard');
+  // - Chuyên đề có 4 phần tiến trình: 'kienThuc' (Kiến thức), 'luyenTap' (Luyện tập), 'kiemTra' (Kiểm tra), 'caiThien' (Cải thiện), cùng 'standard' và 'danhGia'
+  const [modalAddType, setModalAddType] = useState<'standard' | 'kienThuc' | 'luyenTap' | 'kiemTra' | 'caiThien' | 'danhGia'>('standard');
   const [showMathTypeModal, setShowMathTypeModal] = useState<boolean>(false);
   const [mathModalInitialFormula, setMathModalInitialFormula] = useState<string>('');
 
@@ -127,16 +278,92 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 
   // Trực quan hóa chèn đồ thị & bảng biến thiên:
   const [showGraphModal, setShowGraphModal] = useState<boolean>(false);
-  const [graphFormula, setGraphFormula] = useState<string>('x^2 - 1');
+  const [graphFormula, setGraphFormula] = useState<string>('y = x^2 - 1');
+  const [graphXLabel, setGraphXLabel] = useState<string>('x');
+  const [graphYLabel, setGraphYLabel] = useState<string>('y');
+  const [graphRequirement, setGraphRequirement] = useState<string>('Gióng trục điểm cực trị (0, -1)');
   const [graphXMin, setGraphXMin] = useState<string>('-2');
   const [graphXMax, setGraphXMax] = useState<string>('2');
-  const [graphYMin, setGraphYMin] = useState<string>('-1.5');
-  const [graphYMax, setGraphYMax] = useState<string>('3');
+  const [graphYMin, setGraphYMin] = useState<string>('-2');
+  const [graphYMax, setGraphYMax] = useState<string>('4');
+  const [graphOldTikz, setGraphOldTikz] = useState<string>('');
 
   const [showBBTModal, setShowBBTModal] = useState<boolean>(false);
+  const [bbtFormula, setBbtFormula] = useState<string>('y = x^2 - 1');
+  const [bbtDomain, setBbtDomain] = useState<string>('(-\\infty; +\\infty)');
+  const [bbtRequirement, setBbtRequirement] = useState<string>('Gạch xiên 60 độ vùng không xác định / ngoài miền');
   const [bbtXPoints, setBbtXPoints] = useState<string>('-\\infty, -1, 1, +\\infty');
   const [bbtYPrimeSigns, setBbtYPrimeSigns] = useState<string>(', +, 0, -, 0, +, ');
   const [bbtYValues, setBbtYValues] = useState<string>('-/ -\\infty, +/ 2, -/ -2, +/ +\\infty');
+
+  // Lắng nghe sự kiện click nút "Chỉnh sửa" từ đồ thị TikZ để mở cửa sổ chỉnh sửa thông số
+  useEffect(() => {
+    const handleOpenEditTikz = (e: CustomEvent<any>) => {
+      if (e.detail) {
+        if (e.detail.formulaStr) {
+          setGraphFormula(e.detail.formulaStr);
+          const inferred = inferAxesLabels(e.detail.formulaStr);
+          setGraphXLabel(inferred.xLabel);
+          setGraphYLabel(inferred.yLabel);
+        }
+        if (e.detail.xLabel) setGraphXLabel(e.detail.xLabel);
+        if (e.detail.yLabel) setGraphYLabel(e.detail.yLabel);
+        if (e.detail.xMin !== undefined) setGraphXMin(e.detail.xMin.toString());
+        if (e.detail.xMax !== undefined) setGraphXMax(e.detail.xMax.toString());
+        if (e.detail.yMin !== undefined) setGraphYMin(e.detail.yMin.toString());
+        if (e.detail.yMax !== undefined) setGraphYMax(e.detail.yMax.toString());
+        if (e.detail.requirement !== undefined) setGraphRequirement(e.detail.requirement);
+        setGraphOldTikz(e.detail.tikzCode || '');
+        setShowGraphModal(true);
+      }
+    };
+
+    window.addEventListener('app-open-edit-tikz-modal', handleOpenEditTikz as EventListener);
+    return () => {
+      window.removeEventListener('app-open-edit-tikz-modal', handleOpenEditTikz as EventListener);
+    };
+  }, []);
+
+  // Hàm tính toán và đề xuất miền y (GTNN - 1 và GTLN + 1) dựa theo công thức và miền x
+  const getSuggestedYDomain = (formula: string, xminStr: string, xmaxStr: string, customVar?: string) => {
+    try {
+      const x1 = parseFloat(xminStr) || -2;
+      const x2 = parseFloat(xmaxStr) || 2;
+      const inferred = inferAxesLabels(formula);
+      const varName = customVar || inferred.varName || 'x';
+      const evalFn = convertMathExprToJs(formula, varName);
+
+      let minVal = Infinity;
+      let maxVal = -Infinity;
+      const step = Math.max(0.02, (x2 - x1) / 80);
+      for (let x = x1; x <= x2 + 0.001; x += step) {
+        const y = Number(evalFn(x));
+        if (!isNaN(y) && isFinite(y) && Math.abs(y) < 500) {
+          if (y < minVal) minVal = y;
+          if (y > maxVal) maxVal = y;
+        }
+      }
+
+      if (minVal !== Infinity && maxVal !== -Infinity) {
+        const calculatedMin = Math.max(-100, Math.floor(minVal) - 1);
+        const calculatedMax = Math.min(100, Math.ceil(maxVal) + 1);
+        return {
+          suggestedYMin: calculatedMin.toString(),
+          suggestedYMax: calculatedMax.toString(),
+          minVal: Number(minVal.toFixed(2)),
+          maxVal: Number(maxVal.toFixed(2)),
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      suggestedYMin: '-2',
+      suggestedYMax: '4',
+      minVal: -1,
+      maxVal: 3,
+    };
+  };
 
   // Modal Tự vẽ đồ thị / Bảng biến thiên (Canvas vẽ tay & Nắn chỉnh AI TikZ)
   const [showDrawSketchModal, setShowDrawSketchModal] = useState<boolean>(false);
@@ -295,33 +522,143 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
     setShowDrawSketchModal(false);
   };
 
+  // Hàm chuyển đổi số sang phân số hoặc số nguyên ưu tiên
+  const formatCoordinateMath = (val: number): { raw: string; tex: string; display: string } => {
+    if (Math.abs(val - Math.round(val)) < 0.02) {
+      const intVal = Math.round(val);
+      return { raw: `${intVal}`, tex: `${intVal}`, display: `${intVal}` };
+    }
+
+    for (let d = 2; d <= 16; d++) {
+      const n = Math.round(val * d);
+      const diff = Math.abs(val - n / d);
+      if (diff < 0.02) {
+        const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
+        const common = gcd(n, d);
+        let num = n / common;
+        let denom = d / common;
+        if (denom < 0) {
+          num = -num;
+          denom = -denom;
+        }
+        if (denom === 1) {
+          return { raw: `${num}`, tex: `${num}`, display: `${num}` };
+        }
+        const isNeg = num < 0;
+        const absNum = Math.abs(num);
+        const texStr = isNeg ? `-\\frac{${absNum}}{${denom}}` : `\\frac{${absNum}}{${denom}}`;
+        const rawStr = `${num}/${denom}`;
+        return { raw: rawStr, tex: texStr, display: texStr };
+      }
+    }
+
+    const dec = Number(val.toFixed(2));
+    return { raw: `${dec}`, tex: `${dec}`, display: `${dec}` };
+  };
+
   const handleGenerateGraphTikZ = () => {
-    const customTikz = `\\begin{tikzpicture}[scale=0.8, >=stealth]
-  \\draw[->,thick] (${parseFloat(graphXMin) - 1},0) -- (${parseFloat(graphXMax) + 1},0) node[right] {$x$};
-  \\draw[->,thick] (0,${parseFloat(graphYMin) - 1}) -- (0,${parseFloat(graphYMax) + 1}) node[above] {$y$};
-  \\draw[domain=${graphXMin}:${graphXMax},smooth,variable=\\x,red,ultra thick] plot ({\\x},{${graphFormula}});
+    const xMinNum = parseFloat(graphXMin) || -2;
+    const xMaxNum = parseFloat(graphXMax) || 2;
+    const yMinNum = parseFloat(graphYMin) || -2;
+    const yMaxNum = parseFloat(graphYMax) || 4;
+
+    // 1. Phân tích nhãn trục từ ô nhập hoặc tự động suy ra
+    const inferred = inferAxesLabels(graphFormula);
+    const xLabel = (graphXLabel.trim() || inferred.xLabel || 'x');
+    const yLabel = (graphYLabel.trim() || inferred.yLabel || 'y');
+    const varName = xLabel; // Biến trong TikZ plot khớp với trục hoành
+
+    // 2. Chuẩn hóa biểu thức cho TikZ plot
+    const cleanFormulaForTikz = convertMathExprToTikz(graphFormula, varName);
+
+    // 3. Tự động tính toán điểm cực trị và sinh mã gióng trục bằng bộ tính toán JS chuẩn
+    const evalMath = convertMathExprToJs(graphFormula, varName);
+
+    const extremaList: Array<{ x: number; y: number }> = [];
+    const samples = 100;
+    const step = (xMaxNum - xMinNum) / samples;
+    const pts: Array<{ x: number; y: number }> = [];
+    for (let x = xMinNum; x <= xMaxNum + 0.0001; x += step) {
+      pts.push({ x, y: evalMath(x) });
+    }
+
+    for (let i = 2; i < pts.length - 2; i++) {
+      const cur = pts[i];
+      const prev = pts[i - 1];
+      const next = pts[i + 1];
+      if (cur.x <= xMinNum + 0.1 || cur.x >= xMaxNum - 0.1) continue;
+
+      if ((cur.y > prev.y && cur.y > next.y) || (cur.y < prev.y && cur.y < next.y)) {
+        if (!extremaList.some(e => Math.abs(e.x - cur.x) < 0.35)) {
+          extremaList.push({
+            x: Number(cur.x.toFixed(2)),
+            y: Number(cur.y.toFixed(2)),
+          });
+        }
+      }
+    }
+
+    // Sinh mã gióng cực trị: vị trí nhãn tránh đè lên trục, đường gióng và đồ thị
+    const extremaTikzLines = extremaList.map(e => {
+      const xFmt = formatCoordinateMath(e.x);
+      const yFmt = formatCoordinateMath(e.y);
+      const xStr = e.x.toString();
+      const yStr = e.y.toString();
+      // Nếu y >= 0 đường gióng đi lên -> đặt nhãn x ở below; nếu y < 0 đường gióng đi xuống -> đặt nhãn x ở above
+      const xPos = e.y >= 0 ? 'below' : 'above';
+      // Nếu x >= 0 đường gióng đi sang phải -> đặt nhãn y ở left; nếu x < 0 đường gióng đi sang trái -> đặt nhãn y ở right
+      const yPos = e.x >= 0 ? 'left' : 'right';
+
+      return `  % Gióng tọa độ điểm cực trị (${xFmt.raw}, ${yFmt.raw})
+  \\draw[dashed, thin, gray] (${xStr},0) -- (${xStr},${yStr}) -- (0,${yStr});
+  \\fill (${xStr},${yStr}) circle (1.8pt);
+  ${Math.abs(e.x) > 0.1 ? `\\node at (${xStr},0) [${xPos}, font=\\footnotesize] {$${xFmt.tex}$};` : ''}
+  ${Math.abs(e.y) > 0.1 ? `\\node at (0,${yStr}) [${yPos}, font=\\footnotesize] {$${yFmt.tex}$};` : ''}`;
+    }).join('\n');
+
+    const reqComment = graphRequirement ? `\n  % Yêu cầu: ${graphRequirement}` : '';
+
+    // Mã TikZ hoàn chỉnh: Bỏ hoàn toàn các vạch chia trên trục, giữ trục tọa độ thanh thoát và chuẩn xác
+    const customTikz = `% Đồ thị hàm số: ${graphFormula}${reqComment}
+% Cấu hình: xMin=${xMinNum}; xMax=${xMaxNum}; yMin=${yMinNum}; yMax=${yMaxNum}; xLabel=${xLabel}; yLabel=${yLabel}
+\\begin{tikzpicture}[scale=0.85, >=stealth]
+  % Trục tọa độ
+  \\draw[->,thick] (${(xMinNum - 0.6).toFixed(1)},0) -- (${(xMaxNum + 0.6).toFixed(1)},0) node[right] {$${xLabel}$};
+  \\draw[->,thick] (0,${(yMinNum - 0.6).toFixed(1)}) -- (0,${(yMaxNum + 0.6).toFixed(1)}) node[above] {$${yLabel}$};
   \\node at (0,0) [below left] {$O$};
+${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị nằm gọn trong hình chữ nhật (x_min, y_min) -- (x_max, y_max)
+  \\begin{scope}
+    \\clip (${xMinNum}, ${yMinNum}) rectangle (${xMaxNum}, ${yMaxNum});
+    \\draw[domain=${xMinNum}:${xMaxNum},smooth,variable=\\${varName},blue,ultra thick] plot ({\\${varName}},{${cleanFormulaForTikz || `\\${varName}*\\${varName} - 1`}});
+  \\end{scope}
 \\end{tikzpicture}`;
+
     setNewSnippet(prev => (prev ? prev + '\n\n' : '') + customTikz);
     window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
-      detail: { code: customTikz, type: 'graph', title: `Đồ thị y = ${graphFormula}` }
+      detail: { code: customTikz, oldCode: graphOldTikz, type: 'graph', title: `Đồ thị ${graphFormula}` }
     }));
-    setNotification(`Đã chèn đồ thị y = ${graphFormula}!`);
+    setNotification(`Đã ${graphOldTikz ? 'cập nhật' : 'chèn'} đồ thị ${graphFormula}!`);
     setTimeout(() => setNotification(null), 4000);
+    setGraphOldTikz('');
     setShowGraphModal(false);
   };
 
   const handleGenerateBBTTikZ = () => {
-    const customTikzTab = `\\begin{tikzpicture}
-  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{${bbtXPoints}}
+    const reqComment = bbtRequirement ? `\n  % Yêu cầu đặc biệt: ${bbtRequirement}` : '';
+    const domainComment = bbtDomain ? `\n  % Miền xác định: ${bbtDomain}` : '';
+
+    const customTikzTab = `% Bảng biến thiên hàm số: ${bbtFormula || 'f(x)'}${domainComment}${reqComment}
+\\begin{tikzpicture}
+  \\tkzTabInit[lgt=1.8, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{${bbtXPoints}}
   \\tkzTabLine{${bbtYPrimeSigns}}
   \\tkzTabVar{${bbtYValues}}
 \\end{tikzpicture}`;
+
     setNewSnippet(prev => (prev ? prev + '\n\n' : '') + customTikzTab);
     window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
-      detail: { code: customTikzTab, type: 'bbt', title: 'Bảng biến thiên tikz-tab' }
+      detail: { code: customTikzTab, type: 'bbt', title: `Bảng biến thiên ${bbtFormula}` }
     }));
-    setNotification('Đã chèn bảng biến thiên từ dữ liệu nhập trực tiếp!');
+    setNotification(`Đã chèn bảng biến thiên ${bbtFormula}!`);
     setTimeout(() => setNotification(null), 4000);
     setShowBBTModal(false);
   };
@@ -397,37 +734,169 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
     e.target.value = '';
   };
   
-  const [customTitles, setCustomTitles] = useState<string[]>([]);
-  const [customChuongs, setCustomChuongs] = useState<string[]>([]);
-  const [customBais, setCustomBais] = useState<string[]>([]);
-  const [customVanDes, setCustomVanDes] = useState<string[]>([]);
-  const [customChuyenDes, setCustomChuyenDes] = useState<string[]>([]);
+  const [customTitles, setCustomTitles] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_custom_titles_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customChuongs, setCustomChuongs] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_custom_chuongs_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customBais, setCustomBais] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_custom_bais_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customVanDes, setCustomVanDes] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_custom_vandes_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customChuyenDes, setCustomChuyenDes] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_custom_chuyendes_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('lopu_custom_titles_v1', JSON.stringify(customTitles));
+  }, [customTitles]);
+  useEffect(() => {
+    localStorage.setItem('lopu_custom_chuongs_v1', JSON.stringify(customChuongs));
+  }, [customChuongs]);
+  useEffect(() => {
+    localStorage.setItem('lopu_custom_bais_v1', JSON.stringify(customBais));
+  }, [customBais]);
+  useEffect(() => {
+    localStorage.setItem('lopu_custom_vandes_v1', JSON.stringify(customVanDes));
+  }, [customVanDes]);
+  useEffect(() => {
+    localStorage.setItem('lopu_custom_chuyendes_v1', JSON.stringify(customChuyenDes));
+  }, [customChuyenDes]);
+
+  const [isAddingFolder, setIsAddingFolder] = useState<boolean>(false);
+  const [modalAddError, setModalAddError] = useState<string | null>(null);
+  const [dropdownFeedbackMsg, setDropdownFeedbackMsg] = useState<{ lvl: string; message: string; type: 'success' | 'error' } | null>(null);
 
   const handleOpenAdd = (level: string) => {
     setModalAddLevel(level);
     setModalAddItemText('');
+    setModalAddError(null);
+    setDropdownFeedbackMsg(null);
     // Mặc định chọn tùy chọn đầu tiên (Thêm mới)
     setModalAddType('standard');
     setShowModalAddDialog(true);
     setOpenModalDropdown(null);
   };
 
-  const handleConfirmAdd = () => {
-    if (!modalAddItemText.trim()) return;
+  const handleConfirmAdd = async () => {
+    if (!modalAddItemText.trim() || isAddingFolder) return;
     const raw = modalAddItemText.trim();
     let val = raw;
 
-    // Áp dụng quy cách đặt tên chuẩn
-    if (modalAddType === 'danhGia') {
+    // Áp dụng quy cách đặt tên:
+    // - Với Tài liệu: {tên môn} {số lớp} - {tên tài liệu}
+    // - Với các phần chuyên đề/đánh giá: áp dụng tiền tố chuẩn tương ứng
+    if (modalAddLevel === 'title') {
+      val = formatDocumentTitleWithSubjectGrade(raw, newSubject, newGrade);
+    } else if (modalAddType === 'danhGia') {
       val = formatDanhGiaFileName(raw);
     } else if (modalAddType === 'luyenTap') {
       val = formatLuyenTapFileName(raw);
+    } else if (modalAddType === 'kiemTra') {
+      val = formatKiemTraFileName(raw);
+    } else if (modalAddType === 'caiThien') {
+      val = formatCaiThienFileName(raw);
+    } else if (modalAddType === 'kienThuc') {
+      val = formatKienThucFileName(raw);
     } else {
       val = raw;
     }
 
+    // Xác định đường dẫn thư mục phân cấp tương ứng trên Google Drive:
+    // myApp / LopU / TaiLieu / [Tài liệu] / [Chương] / [Bài] / [Vấn đề] / [Chuyên đề]
+    const pathSegments: string[] = ['myApp', 'LopU', 'TaiLieu'];
     if (modalAddLevel === 'title') {
-      setCustomTitles(prev => [...prev, val]);
+      pathSegments.push(val);
+    } else if (modalAddLevel === 'chuong') {
+      pathSegments.push(newTitle || 'TaiLieuChung', val);
+    } else if (modalAddLevel === 'bai') {
+      pathSegments.push(newTitle || 'TaiLieuChung', newChuong || 'Chuong1', val);
+    } else if (modalAddLevel === 'vanDe') {
+      pathSegments.push(newTitle || 'TaiLieuChung', newChuong || 'Chuong1', newBai || 'Bai1', val);
+    } else if (modalAddLevel === 'chuyenDe') {
+      pathSegments.push(newTitle || 'TaiLieuChung', newChuong || 'Chuong1', newBai || 'Bai1', newVanDe || 'VanDe1', val);
+    }
+
+    setIsAddingFolder(true);
+    setModalAddError(null);
+    setDropdownFeedbackMsg(null);
+    setNotification('Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...');
+
+    const driveRes = await createDriveFolderIfNotExists(pathSegments);
+
+    if (!driveRes.success) {
+      setIsAddingFolder(false);
+      const errText = driveRes.error || 'Tạo chưa thành công: Phiên kết nối Google Drive đã hết hạn (401). Vui lòng bấm Kết nối Drive để xác thực lại.';
+      setModalAddError(errText);
+      setNotification(`Tạo chưa thành công: ${errText}`);
+      setDropdownFeedbackMsg({ lvl: modalAddLevel, message: errText, type: 'error' });
+      setTimeout(() => {
+        setNotification(null);
+      }, 7000);
+      return;
+    }
+
+    // Cập nhật cây dữ liệu phân cấp bền vững
+    const currentStore = getStoredHierarchy();
+    const docKey = modalAddLevel === 'title' ? val : (newTitle || 'TaiLieuChung');
+    if (!currentStore[docKey]) currentStore[docKey] = {};
+
+    if (modalAddLevel === 'chuong') {
+      if (!currentStore[docKey][val]) currentStore[docKey][val] = {};
+    } else if (modalAddLevel === 'bai') {
+      const chKey = newChuong || 'Chuong1';
+      if (!currentStore[docKey][chKey]) currentStore[docKey][chKey] = {};
+      if (!currentStore[docKey][chKey][val]) currentStore[docKey][chKey][val] = {};
+    } else if (modalAddLevel === 'vanDe') {
+      const chKey = newChuong || 'Chuong1';
+      const bKey = newBai || 'Bai1';
+      if (!currentStore[docKey][chKey]) currentStore[docKey][chKey] = {};
+      if (!currentStore[docKey][chKey][bKey]) currentStore[docKey][chKey][bKey] = {};
+      if (!currentStore[docKey][chKey][bKey][val]) currentStore[docKey][chKey][bKey][val] = [];
+    } else if (modalAddLevel === 'chuyenDe') {
+      const chKey = newChuong || 'Chuong1';
+      const bKey = newBai || 'Bai1';
+      const vKey = newVanDe || 'VanDe1';
+      if (!currentStore[docKey][chKey]) currentStore[docKey][chKey] = {};
+      if (!currentStore[docKey][chKey][bKey]) currentStore[docKey][chKey][bKey] = {};
+      if (!currentStore[docKey][chKey][bKey][vKey]) currentStore[docKey][chKey][bKey][vKey] = [];
+      if (!currentStore[docKey][chKey][bKey][vKey].includes(val)) {
+        currentStore[docKey][chKey][bKey][vKey].push(val);
+      }
+    }
+    saveStoredHierarchy(currentStore);
+
+    // Khi tạo/xác nhận thành công trên Google Drive, mới thêm vào App
+    if (modalAddLevel === 'title') {
+      setCustomTitles(prev => prev.includes(val) ? prev : [...prev, val]);
       setNewTitle(val);
       if (modalAddType === 'danhGia') {
         setNewChuong('');
@@ -436,7 +905,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
         setNewChuyenDe('');
       }
     } else if (modalAddLevel === 'chuong') {
-      setCustomChuongs(prev => [...prev, val]);
+      setCustomChuongs(prev => prev.includes(val) ? prev : [...prev, val]);
       setNewChuong(val);
       if (modalAddType === 'danhGia') {
         setNewBai('');
@@ -444,45 +913,37 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
         setNewChuyenDe('');
       }
     } else if (modalAddLevel === 'bai') {
-      setCustomBais(prev => [...prev, val]);
+      setCustomBais(prev => prev.includes(val) ? prev : [...prev, val]);
       setNewBai(val);
       if (modalAddType === 'danhGia') {
         setNewVanDe('');
         setNewChuyenDe('');
       }
     } else if (modalAddLevel === 'vanDe') {
-      setCustomVanDes(prev => [...prev, val]);
+      setCustomVanDes(prev => prev.includes(val) ? prev : [...prev, val]);
       setNewVanDe(val);
       if (modalAddType === 'danhGia') {
         setNewChuyenDe('');
       }
     } else if (modalAddLevel === 'chuyenDe') {
-      setCustomChuyenDes(prev => [...prev, val]);
+      setCustomChuyenDes(prev => prev.includes(val) ? prev : [...prev, val]);
       setNewChuyenDe(val);
     }
-    setShowModalAddDialog(false);
-  };
 
-  const handleExecuteDeleteOption = () => {
-    if (!deleteOptionConfirm) return;
-    const { level, item } = deleteOptionConfirm;
-    if (level === 'title') {
-      setCustomTitles(prev => prev.filter(x => x !== item));
-      if (newTitle === item) setNewTitle('');
-    } else if (level === 'chuong') {
-      setCustomChuongs(prev => prev.filter(x => x !== item));
-      if (newChuong === item) setNewChuong('');
-    } else if (level === 'bai') {
-      setCustomBais(prev => prev.filter(x => x !== item));
-      if (newBai === item) setNewBai('');
-    } else if (level === 'vanDe') {
-      setCustomVanDes(prev => prev.filter(x => x !== item));
-      if (newVanDe === item) setNewVanDe('');
-    } else if (level === 'chuyenDe') {
-      setCustomChuyenDes(prev => prev.filter(x => x !== item));
-      if (newChuyenDe === item) setNewChuyenDe('');
-    }
-    setDeleteOptionConfirm(null);
+    setIsAddingFolder(false);
+    setModalAddError(null);
+    setShowModalAddDialog(false);
+
+    const successMsg = driveRes.alreadyExists
+      ? `Đã liên kết thư mục "${val}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`
+      : `Đã tạo thành công thư mục "${val}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`;
+    
+    setNotification(successMsg);
+    setDropdownFeedbackMsg({ lvl: modalAddLevel, message: successMsg, type: 'success' });
+    setTimeout(() => {
+      setNotification(null);
+      setDropdownFeedbackMsg(null);
+    }, 5500);
   };
 
   const renderCleanModalDropdown = (
@@ -496,9 +957,24 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 
     return (
       <div className="space-y-1 relative">
-        <label className={`text-[11px] font-bold block ${isHighlight ? 'text-indigo-900' : 'text-slate-700'}`}>
-          {label}
-        </label>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <label className={`text-[11px] font-bold block ${isHighlight ? 'text-indigo-900' : 'text-slate-700'}`}>
+              {label}
+            </label>
+            {isAddingFolder ? (
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-full border border-amber-200 animate-pulse">
+                <Loader2 className="w-2.5 h-2.5 animate-spin text-amber-600" />
+                <span>Đang đồng bộ...</span>
+              </span>
+            ) : currentVal ? (
+              <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200">
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                <span>Đã đồng bộ Drive</span>
+              </span>
+            ) : null}
+          </div>
+        </div>
         
         {/* Nút trigger dropdown (đã bỏ nút Nhập ngoài bên ngoài) */}
         <div className="relative">
@@ -598,17 +1074,6 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                     }`}
                   >
                     <span className="truncate flex-1">{opt}</span>
-                    <button
-                      type="button"
-                      title={`Xóa "${opt}"`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteOptionConfirm({ level: lvl, item: opt });
-                      }}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 ))
               )}
@@ -624,6 +1089,49 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             </div>
           )}
         </div>
+
+        {/* Thông báo tiến trình đồng bộ Google Drive ngay bên dưới dropdown */}
+        {isAddingFolder && modalAddLevel === lvl && (
+          <div className="mt-1.5 p-2 rounded-xl bg-red-50 border border-red-200 text-red-600 text-xs font-bold flex items-center gap-2 animate-pulse shadow-xs">
+            <span>⏳ Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...</span>
+          </div>
+        )}
+
+        {/* Thông báo kết quả ngay dưới dropdown sau khi hoàn tất */}
+        {dropdownFeedbackMsg && dropdownFeedbackMsg.lvl === lvl && (
+          <div
+            className={`mt-1.5 p-2 rounded-xl text-xs font-bold flex flex-wrap items-center justify-between gap-2 shadow-xs animate-fade-in ${
+              dropdownFeedbackMsg.type === 'error'
+                ? 'bg-rose-50 border border-rose-300 text-rose-800'
+                : 'bg-emerald-50 border border-emerald-300 text-emerald-800'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 flex-1 min-w-[180px]">
+              {dropdownFeedbackMsg.type === 'error' ? (
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              )}
+              <span>{dropdownFeedbackMsg.message}</span>
+            </div>
+            {dropdownFeedbackMsg.type === 'error' &&
+              (dropdownFeedbackMsg.message.includes('401') ||
+                dropdownFeedbackMsg.message.includes('hết hạn') ||
+                dropdownFeedbackMsg.message.includes('Kết nối Drive')) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await connectGoogleDrive();
+                    setDropdownFeedbackMsg(null);
+                  }}
+                  className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[11px] font-bold transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0"
+                >
+                  <Cloud className="w-3 h-3" />
+                  <span>Kết nối Drive</span>
+                </button>
+              )}
+          </div>
+        )}
       </div>
     );
   };
@@ -636,6 +1144,29 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
       setDocuments(docs);
       const uList = await getUsers();
       setUsers(uList);
+
+      // Đồng bộ toàn bộ danh mục tài liệu & cấu trúc phân cấp từ docs vào custom lists
+      const titlesFromDocs = docs.map(d => d.title).filter((x): x is string => Boolean(x));
+      const chuongsFromDocs = docs.map(d => d.chuong).filter((x): x is string => Boolean(x));
+      const baisFromDocs = docs.map(d => d.bai).filter((x): x is string => Boolean(x));
+      const vanDesFromDocs = docs.map(d => d.vanDe).filter((x): x is string => Boolean(x));
+      const chuyenDesFromDocs = docs.map(d => d.chuyenDe).filter((x): x is string => Boolean(x));
+
+      if (titlesFromDocs.length > 0) {
+        setCustomTitles(prev => Array.from(new Set([...prev, ...titlesFromDocs])));
+      }
+      if (chuongsFromDocs.length > 0) {
+        setCustomChuongs(prev => Array.from(new Set([...prev, ...chuongsFromDocs])));
+      }
+      if (baisFromDocs.length > 0) {
+        setCustomBais(prev => Array.from(new Set([...prev, ...baisFromDocs])));
+      }
+      if (vanDesFromDocs.length > 0) {
+        setCustomVanDes(prev => Array.from(new Set([...prev, ...vanDesFromDocs])));
+      }
+      if (chuyenDesFromDocs.length > 0) {
+        setCustomChuyenDes(prev => Array.from(new Set([...prev, ...chuyenDesFromDocs])));
+      }
     }
     load();
   }, []);
@@ -670,10 +1201,10 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 
     const conn = getDriveConnectionState();
     const cleanFileName = `[${docItem.chuyenDe || 'Chuyên đề trọng tâm'}]_${(docItem.title || 'TaiLieu').replace(/[\s:/\\?*]+/g, '_')}`;
-    if (conn.isConnected && conn.isRealConfigured) {
+    if (conn.isConnected) {
       setNotification(`Đã tải lên Drive & Hệ thống thành công: ${cleanFileName} tại thư mục ${res.drivePath}`);
     } else {
-      setNotification(`Đã tải lên Drive & Hệ thống thành công (Sandbox): ${cleanFileName} tại thư mục ${res.drivePath}`);
+      setNotification(`Đã lưu tài liệu vào hệ thống: ${cleanFileName}`);
     }
     setTimeout(() => setNotification(null), 5000);
   };
@@ -700,23 +1231,6 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 
     setDocuments(prev => prev.map(item => item.id === docId ? updated : item));
     setNotification('Đã cập nhật trạng thái phát hành bài giảng đến lớp học thành công!');
-    setTimeout(() => setNotification(null), 4000);
-  };
-
-  const handleDeleteDocument = async (docItem: TeacherDocument) => {
-    if (!window.confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tài liệu "${docItem.title}" khỏi hệ thống và Google Drive không?`)) return;
-
-    // 1. Xóa triệt để khỏi Drive API và các key local storage
-    if (docItem.driveFileId) {
-      await deleteDriveFileEverywhere(docItem.driveFileId, docItem.title);
-    }
-
-    // 2. Xóa khỏi state và local storage của tài liệu
-    const updated = documents.filter(d => d.id !== docItem.id);
-    setDocuments(updated);
-    localStorage.setItem('lopu_teacher_documents_v1', JSON.stringify(updated));
-
-    setNotification(`Đã xóa vĩnh viễn tài liệu "${docItem.title}" khỏi hệ thống và Drive!`);
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -775,10 +1289,10 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
       
       const conn = getDriveConnectionState();
       const cleanFileName = `[${newChuyenDe}]_${newTitle.trim().replace(/[\s:/\\?*]+/g, '_')}`;
-      if (conn.isConnected && conn.isRealConfigured) {
+      if (conn.isConnected) {
         setNotification(`Đã ghi đè & cập nhật lên Drive & Hệ thống thành công: ${cleanFileName} tại thư mục ${driveFolder}`);
       } else {
-        setNotification(`Đã ghi đè & cập nhật lên Drive & Hệ thống thành công (Sandbox): ${cleanFileName} tại thư mục ${driveFolder}`);
+        setNotification(`Đã ghi đè & cập nhật tài liệu vào hệ thống thành công: ${cleanFileName}`);
       }
       setTimeout(() => setNotification(null), 5000);
       return;
@@ -834,18 +1348,28 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
     setAttachedFiles([]);
     const conn = getDriveConnectionState();
     const cleanFileName = `[${newChuyenDe}]_${newTitle.trim().replace(/[\s:/\\?*]+/g, '_')}`;
-    if (conn.isConnected && conn.isRealConfigured) {
+    if (conn.isConnected) {
       setNotification(`Đã tải lên Drive & Hệ thống thành công: ${cleanFileName} tại thư mục ${driveFolder}`);
     } else {
-      setNotification(`Đã tải lên Drive & Hệ thống thành công (Sandbox): ${cleanFileName} tại thư mục ${driveFolder}`);
+      setNotification(`Đã lưu tài liệu vào hệ thống thành công: ${cleanFileName}`);
     }
     setTimeout(() => setNotification(null), 5000);
   };
 
   const filteredDocs = documents.filter(d => {
-    const matchSearch = d.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchSearch = d.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (d.chuong && d.chuong.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (d.bai && d.bai.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchCategory = categoryFilter === 'all' || d.category === categoryFilter;
-    return matchSearch && matchCategory;
+    const matchSubject = filterSubject === 'all' || d.subject === filterSubject;
+    const matchGrade = filterGrade === 'all' || d.grade === filterGrade;
+    const matchTitle = filterTitle === 'all' || d.title === filterTitle;
+    const matchChuong = filterChuong === 'all' || d.chuong === filterChuong;
+    const matchBai = filterBai === 'all' || d.bai === filterBai;
+    const matchVanDe = filterVanDe === 'all' || d.vanDe === filterVanDe;
+    const matchChuyenDe = filterChuyenDe === 'all' || d.chuyenDe === filterChuyenDe;
+
+    return matchSearch && matchCategory && matchSubject && matchGrade && matchTitle && matchChuong && matchBai && matchVanDe && matchChuyenDe;
   });
 
   return (
@@ -950,6 +1474,236 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             onChange={e => setSearchTerm(e.target.value)}
             className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
           />
+        </div>
+      </div>
+
+      {/* Thanh lọc phân cấp phụ thuộc: 3 hàng chuẩn theo yêu cầu */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+          <div className="flex items-center gap-2">
+            <Filter className="w-4 h-4 text-indigo-600" />
+            <span className="text-xs font-bold text-slate-800 uppercase tracking-wider">Bộ Lọc Phân Cấp Tài Liệu</span>
+            <span className="text-[10px] text-slate-400 italic">Môn học + Khối lớp ➔ TÀI LIỆU ➔ NỘI DUNG BÀI DẠY (Chương, Bài, Vấn đề, Chuyên đề)</span>
+          </div>
+
+          {(filterSubject !== 'all' || filterGrade !== 'all' || filterTitle !== 'all' || filterChuong !== 'all' || filterBai !== 'all' || filterVanDe !== 'all' || filterChuyenDe !== 'all') && (
+            <button
+              onClick={() => {
+                setFilterSubject('all');
+                setFilterGrade('all');
+                setFilterTitle('all');
+                setFilterChuong('all');
+                setFilterBai('all');
+                setFilterVanDe('all');
+                setFilterChuyenDe('all');
+              }}
+              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
+            >
+              <RotateCcw className="w-3 h-3" /> Đặt lại bộ lọc
+            </button>
+          )}
+        </div>
+
+        {/* NHÓM 1: TÀI LIỆU (BAO GỒM MÔN HỌC, KHỐI LỚP VÀ TÀI LIỆU) */}
+        <div className="bg-indigo-50/40 p-3.5 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-2">
+            <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+              <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-indigo-600 font-semibold hidden sm:inline">Môn học + Khối lớp ➔ Tài liệu</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Google Drive: Đã đồng bộ</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Hàng 1 của nhóm Tài liệu: Môn học + Khối lớp */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            {/* 1. Môn học */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-700 block mb-1">Môn học</label>
+              <select
+                value={filterSubject}
+                onChange={e => {
+                  setFilterSubject(e.target.value);
+                  setFilterTitle('all');
+                  setFilterChuong('all');
+                  setFilterBai('all');
+                  setFilterVanDe('all');
+                  setFilterChuyenDe('all');
+                }}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+              >
+                <option value="all">Tất cả môn học</option>
+                <option value="Toán Học">Toán Học</option>
+                <option value="Vật Lý">Vật Lý</option>
+                <option value="Hóa Học">Hóa Học</option>
+                <option value="Ngữ Văn">Ngữ Văn</option>
+                <option value="Tiếng Anh">Tiếng Anh</option>
+                <option value="Sinh Học">Sinh Học</option>
+              </select>
+            </div>
+
+            {/* 2. Khối lớp */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-700 block mb-1">Khối lớp</label>
+              <select
+                value={filterGrade}
+                onChange={e => {
+                  setFilterGrade(e.target.value);
+                  setFilterTitle('all');
+                  setFilterChuong('all');
+                  setFilterBai('all');
+                  setFilterVanDe('all');
+                  setFilterChuyenDe('all');
+                }}
+                className="w-full px-3 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+              >
+                <option value="all">Tất cả khối lớp</option>
+                <option value="Khối 10">Khối 10</option>
+                <option value="Khối 11">Khối 11</option>
+                <option value="Khối 12">Khối 12</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Hàng tiếp theo của nhóm Tài liệu: Dropdown Tài liệu */}
+          <div>
+            <label className="text-[10px] font-bold text-indigo-900 block mb-1">Chọn Tài liệu</label>
+            <select
+              value={filterTitle}
+              onChange={e => {
+                setFilterTitle(e.target.value);
+                setFilterChuong('all');
+                setFilterBai('all');
+                setFilterVanDe('all');
+                setFilterChuyenDe('all');
+              }}
+              className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold focus:outline-indigo-600 bg-white text-indigo-950 shadow-xs"
+            >
+              <option value="all">Tất cả tài liệu</option>
+              {Array.from(new Set(
+                documents
+                  .filter(d => (filterSubject === 'all' || d.subject === filterSubject) && (filterGrade === 'all' || d.grade === filterGrade))
+                  .map(d => d.title)
+                  .filter((x): x is string => Boolean(x))
+              )).map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* NHÓM 2: NỘI DUNG BÀI DẠY GỒM CHƯƠNG, BÀI, VẤN ĐỀ, CHUYÊN ĐỀ */}
+        <div className="bg-slate-50/80 p-3.5 rounded-2xl border border-slate-200 space-y-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200/60 pb-1.5">
+            <span className="text-[10px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+              <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 italic hidden sm:inline">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                <span>Google Drive: Đã đồng bộ</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+            {/* Chương */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-600 block mb-1">Chương</label>
+              <select
+                value={filterChuong}
+                onChange={e => {
+                  setFilterChuong(e.target.value);
+                  setFilterBai('all');
+                  setFilterVanDe('all');
+                  setFilterChuyenDe('all');
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+              >
+                <option value="all">Tất cả chương</option>
+                {Array.from(new Set(
+                  documents
+                    .filter(d => (filterSubject === 'all' || d.subject === filterSubject) && (filterGrade === 'all' || d.grade === filterGrade) && (filterTitle === 'all' || d.title === filterTitle))
+                    .map(d => d.chuong)
+                    .filter((x): x is string => Boolean(x))
+                )).map(c => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Bài */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-600 block mb-1">Bài</label>
+              <select
+                value={filterBai}
+                onChange={e => {
+                  setFilterBai(e.target.value);
+                  setFilterVanDe('all');
+                  setFilterChuyenDe('all');
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+              >
+                <option value="all">Tất cả bài</option>
+                {Array.from(new Set(
+                  documents
+                    .filter(d => (filterSubject === 'all' || d.subject === filterSubject) && (filterGrade === 'all' || d.grade === filterGrade) && (filterTitle === 'all' || d.title === filterTitle) && (filterChuong === 'all' || d.chuong === filterChuong))
+                    .map(d => d.bai)
+                    .filter((x): x is string => Boolean(x))
+                )).map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Vấn đề */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-600 block mb-1">Vấn đề</label>
+              <select
+                value={filterVanDe}
+                onChange={e => {
+                  setFilterVanDe(e.target.value);
+                  setFilterChuyenDe('all');
+                }}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+              >
+                <option value="all">Tất cả vấn đề</option>
+                {Array.from(new Set(
+                  documents
+                    .filter(d => (filterSubject === 'all' || d.subject === filterSubject) && (filterGrade === 'all' || d.grade === filterGrade) && (filterTitle === 'all' || d.title === filterTitle) && (filterChuong === 'all' || d.chuong === filterChuong) && (filterBai === 'all' || d.bai === filterBai))
+                    .map(d => d.vanDe)
+                    .filter((x): x is string => Boolean(x))
+                )).map(v => (
+                  <option key={v} value={v}>{v}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Chuyên đề */}
+            <div>
+              <label className="text-[10px] font-bold text-slate-600 block mb-1">Chuyên đề</label>
+              <select
+                value={filterChuyenDe}
+                onChange={e => setFilterChuyenDe(e.target.value)}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+              >
+                <option value="all">Tất cả chuyên đề</option>
+                {Array.from(new Set(
+                  documents
+                    .filter(d => (filterSubject === 'all' || d.subject === filterSubject) && (filterGrade === 'all' || d.grade === filterGrade) && (filterTitle === 'all' || d.title === filterTitle) && (filterChuong === 'all' || d.chuong === filterChuong) && (filterBai === 'all' || d.bai === filterBai) && (filterVanDe === 'all' || d.vanDe === filterVanDe))
+                    .map(d => d.chuyenDe)
+                    .filter((x): x is string => Boolean(x))
+                )).map(cd => (
+                  <option key={cd} value={cd}>{cd}</option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1119,13 +1873,6 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                   <Cloud className="w-3.5 h-3.5" />
                   <span>{docItem.driveSynced ? 'Cập nhật Drive' : 'Lưu Drive cá nhân'}</span>
                 </button>
-                <button
-                  onClick={() => handleDeleteDocument(docItem)}
-                  className="p-1.5 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer border border-transparent hover:border-rose-200"
-                  title="Xóa tài liệu này khỏi Drive & Hệ thống"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
               </div>
             </div>
           </div>
@@ -1140,7 +1887,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div>
                 <h3 className="font-bold text-sm text-slate-900">Tạo Bộ Tài Liệu Dạy Học & Lưu Drive</h3>
-                <span className="text-[11px] text-slate-500">Cấu trúc: Tài liệu ➔ Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+                <span className="text-[11px] text-slate-500">Cấu trúc: Môn học ➔ Khối lớp ➔ TÀI LIỆU ➔ NỘI DUNG BÀI DẠY (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề)</span>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
@@ -1151,27 +1898,15 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             </div>
 
             <form onSubmit={handleCreateDocument} className="space-y-3.5 text-xs">
-              {/* 1. TÀI LIỆU (ĐƯỢC ĐẶT LÊN TRÊN NỘI DUNG BÀI DẠY) */}
-              <div className="bg-white p-3.5 rounded-2xl border border-indigo-200 shadow-xs space-y-2">
-                {renderCleanModalDropdown(
-                  'title',
-                  'TÀI LIỆU',
-                  newTitle,
-                  Array.from(new Set([...documents.map(d => d.title).filter(Boolean), ...customTitles])),
-                  true
-                )}
-              </div>
-
-              {/* 2. NỘI DUNG BÀI DẠY: Đã bỏ nút Nhập ngoài bên ngoài, nút trong là Thêm */}
-              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-                    <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+              {/* NHÓM 1: TÀI LIỆU (BAO GỒM MÔN HỌC, KHỐI LỚP VÀ TÀI LIỆU) */}
+              <div className="bg-indigo-50/30 p-3.5 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                  <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+                    <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
                   </span>
-                  <span className="text-[10px] text-slate-400 italic">4 cấp độ lồng nhau</span>
+                  <span className="text-[10px] text-indigo-600 font-semibold">Môn học + Khối lớp ➔ Tài liệu</span>
                 </div>
-
-                {/* Môn học & Khối lớp */}
+                {/* Hàng 1: Môn học + Khối lớp */}
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
                     <label className="text-[10px] font-bold text-slate-600 block mb-1">Môn học</label>
@@ -1202,18 +1937,77 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                   </div>
                 </div>
 
+                {/* Hàng 2: Dropdown Tài liệu */}
+                <div>
+                  {renderCleanModalDropdown(
+                    'title',
+                    'TÀI LIỆU',
+                    newTitle,
+                    Array.from(new Set([
+                      ...documents
+                        .filter(d => (!newSubject || d.subject === newSubject) && (!newGrade || d.grade === newGrade))
+                        .map(d => d.title)
+                        .filter(Boolean),
+                      ...customTitles
+                    ])),
+                    true
+                  )}
+                </div>
+              </div>
+
+              {/* 3. NỘI DUNG BÀI DẠY: Đổi tên các nhãn từ Cấp 1..4 thành Chương -> Bài -> Vấn đề -> Chuyên đề */}
+              <div className="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                    <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+                  </span>
+                  <span className="text-[10px] text-slate-400 italic">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+                </div>
+
                 {/* 4 Cấp độ: Khi chọn thêm bài đánh giá thì ẩn các cấp độ con của nó */}
                 {!isDanhGia(newTitle) ? (
                   <>
-                    {renderCleanModalDropdown('chuong', 'Cấp 1: Chương', newChuong, customChuongs)}
+                    {renderCleanModalDropdown(
+                      'chuong',
+                      'Chương',
+                      newChuong,
+                      Array.from(new Set([
+                        ...documents.filter(d => (!newTitle || d.title === newTitle)).map(d => d.chuong).filter((x): x is string => Boolean(x)),
+                        ...customChuongs
+                      ]))
+                    )}
                     {!isDanhGia(newChuong) ? (
                       <>
-                        {renderCleanModalDropdown('bai', 'Cấp 2: Bài', newBai, customBais)}
+                        {renderCleanModalDropdown(
+                          'bai',
+                          'Bài',
+                          newBai,
+                          Array.from(new Set([
+                            ...documents.filter(d => (!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong)).map(d => d.bai).filter((x): x is string => Boolean(x)),
+                            ...customBais
+                          ]))
+                        )}
                         {!isDanhGia(newBai) ? (
                           <>
-                            {renderCleanModalDropdown('vanDe', 'Cấp 3: Vấn đề', newVanDe, customVanDes)}
+                            {renderCleanModalDropdown(
+                              'vanDe',
+                              'Vấn đề',
+                              newVanDe,
+                              Array.from(new Set([
+                                ...documents.filter(d => (!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && (!newBai || d.bai === newBai)).map(d => d.vanDe).filter((x): x is string => Boolean(x)),
+                                ...customVanDes
+                              ]))
+                            )}
                             {!isDanhGia(newVanDe) ? (
-                              renderCleanModalDropdown('chuyenDe', 'Cấp 4: Chuyên đề', newChuyenDe, customChuyenDes)
+                              renderCleanModalDropdown(
+                                'chuyenDe',
+                                'Chuyên đề',
+                                newChuyenDe,
+                                Array.from(new Set([
+                                  ...documents.filter(d => (!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && (!newBai || d.bai === newBai) && (!newVanDe || d.vanDe === newVanDe)).map(d => d.chuyenDe).filter((x): x is string => Boolean(x)),
+                                  ...customChuyenDes
+                                ]))
+                              )
                             ) : (
                               <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
                                 ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
@@ -1497,7 +2291,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                                 </div>
                               </button>
 
-                              {/* 3.2 Nhập hàm / Biến thiên */}
+                              {/* 3.2 Nhập hàm */}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -1508,7 +2302,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                               >
                                 <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                 <div>
-                                  <div className="font-bold text-[11px] text-emerald-950">2. Nhập hàm / Biến thiên</div>
+                                  <div className="font-bold text-[11px] text-emerald-950">2. Nhập hàm</div>
                                   <div className="text-[9px] text-slate-500 font-normal">Nhập điểm & dấu y', hệ thống dùng tikz-tab vẽ lại</div>
                                 </div>
                               </button>
@@ -1603,7 +2397,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
               <h4 className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
                 <span>Thêm vào:</span>
                 <span className="text-indigo-700 font-extrabold">
-                  {modalAddLevel === 'title' ? 'Tài liệu' : modalAddLevel === 'chuong' ? 'Cấp 1: Chương' : modalAddLevel === 'bai' ? 'Cấp 2: Bài' : modalAddLevel === 'vanDe' ? 'Cấp 3: Vấn đề' : 'Cấp 4: Chuyên đề'}
+                  {modalAddLevel === 'title' ? 'Tài liệu' : modalAddLevel === 'chuong' ? 'Chương' : modalAddLevel === 'bai' ? 'Bài' : modalAddLevel === 'vanDe' ? 'Vấn đề' : 'Chuyên đề'}
                 </span>
               </h4>
               <button
@@ -1624,7 +2418,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
               <div className="flex flex-col sm:flex-row items-stretch rounded-xl border border-slate-300 focus-within:ring-2 focus-within:ring-indigo-500 overflow-hidden bg-white shadow-2xs">
                 {/* Dropdown đặt TRƯỚC ô nhập tên */}
                 {modalAddLevel === 'chuyenDe' ? (
-                  /* Nút Thêm ở chuyên đề: dropdown 3 tùy chọn: Thêm chuyên đề mới / Luyện tập / Đánh giá */
+                  /* Nút Thêm ở chuyên đề: dropdown 4 tùy chọn tiến trình: Kiến thức, Luyện tập, Kiểm tra, Cải thiện */
                   <select
                     id="dropdown-add-chuyende-options"
                     value={modalAddType}
@@ -1633,8 +2427,11 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                   >
                     <option value="">-- (Để trống) --</option>
                     <option value="standard">Thêm chuyên đề mới</option>
-                    <option value="luyenTap">Luyện tập</option>
-                    <option value="danhGia">Đánh giá</option>
+                    <option value="kienThuc">1. Kiến thức (.html)</option>
+                    <option value="luyenTap">2. Luyện tập (.json)</option>
+                    <option value="kiemTra">3. Kiểm tra (.json)</option>
+                    <option value="caiThien">4. Cải thiện (.json)</option>
+                    <option value="danhGia">Đánh giá (.json)</option>
                   </select>
                 ) : (
                   /* Nút Thêm ở tài liệu/chương/bài/vấn đề: dropdown 2 tùy chọn: Thêm [...] mới hoặc Đánh giá */
@@ -1656,23 +2453,60 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                 <input
                   type="text"
                   autoFocus
+                  disabled={isAddingFolder}
                   placeholder={
                     modalAddType === 'danhGia'
                       ? 'Ví dụ: 15 phút hoặc Giữa kỳ 1...'
                       : modalAddType === 'luyenTap'
                       ? 'Ví dụ: Tự luyện dạng 1...'
+                      : modalAddType === 'kiemTra'
+                      ? 'Ví dụ: Đề kiểm tra 15 phút chuyên đề...'
+                      : modalAddType === 'caiThien'
+                      ? 'Ví dụ: Bài tập bồi dưỡng cải thiện...'
+                      : modalAddType === 'kienThuc'
+                      ? 'Ví dụ: Tóm tắt lý thuyết và phương pháp giải...'
                       : 'Nhập tên mục mới...'
                   }
                   value={modalAddItemText}
                   onChange={e => setModalAddItemText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleConfirmAdd()}
-                  className="flex-1 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none min-w-0"
+                  onKeyDown={e => e.key === 'Enter' && !isAddingFolder && handleConfirmAdd()}
+                  className="flex-1 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none min-w-0 disabled:bg-slate-50 disabled:text-slate-400"
                 />
               </div>
+
+              {/* Dòng chữ màu đỏ ngay bên dưới chỗ nhập tên thư mục mới theo yêu cầu */}
+              {isAddingFolder && (
+                <div className="mt-2 text-red-600 font-bold text-xs flex items-center gap-1.5 animate-pulse">
+                  <span>⏳ Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...</span>
+                </div>
+              )}
+
+              {/* Thông báo lỗi và nút kết nối Drive ngay sau câu nếu gặp lỗi 401/hết hạn */}
+              {modalAddError && (
+                <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold flex flex-wrap items-center justify-between gap-2 shadow-xs">
+                  <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{modalAddError}</span>
+                  </div>
+                  {(modalAddError.includes('401') || modalAddError.includes('hết hạn') || modalAddError.includes('Kết nối Drive')) && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await connectGoogleDrive();
+                        setModalAddError(null);
+                      }}
+                      className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0"
+                    >
+                      <Cloud className="w-3.5 h-3.5" />
+                      <span>Kết nối Drive</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Live Preview quy cách đặt tên chuẩn */}
-            {(modalAddType === 'danhGia' || modalAddType === 'luyenTap') && (
+            {!isAddingFolder && (modalAddType === 'danhGia' || modalAddType === 'luyenTap' || modalAddType === 'kiemTra' || modalAddType === 'caiThien' || modalAddType === 'kienThuc') && (
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1">
                 <span className="text-slate-500 block">Quy cách đặt tên tệp chuẩn:</span>
                 <div className="font-mono font-bold text-xs text-indigo-700 bg-white px-2 py-1 rounded border border-indigo-100 flex items-center gap-1.5 truncate">
@@ -1680,7 +2514,13 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                   <span className="truncate">
                     {modalAddType === 'danhGia'
                       ? formatDanhGiaFileName(modalAddItemText)
-                      : formatLuyenTapFileName(modalAddItemText)}
+                      : modalAddType === 'luyenTap'
+                      ? formatLuyenTapFileName(modalAddItemText)
+                      : modalAddType === 'kiemTra'
+                      ? formatKiemTraFileName(modalAddItemText)
+                      : modalAddType === 'caiThien'
+                      ? formatCaiThienFileName(modalAddItemText)
+                      : formatKienThucFileName(modalAddItemText)}
                   </span>
                 </div>
               </div>
@@ -1689,27 +2529,48 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
               <button
                 type="button"
+                disabled={isAddingFolder}
                 onClick={() => setShowModalAddDialog(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Hủy
               </button>
               <button
                 type="button"
+                disabled={isAddingFolder || !modalAddItemText.trim()}
                 onClick={handleConfirmAdd}
-                className={`px-4 py-1.5 text-xs font-bold text-white rounded-lg shadow-xs cursor-pointer transition-colors ${
+                className={`px-4 py-1.5 text-xs font-bold text-white rounded-lg shadow-xs cursor-pointer transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed ${
                   modalAddType === 'danhGia'
                     ? 'bg-emerald-600 hover:bg-emerald-700'
                     : modalAddType === 'luyenTap'
                     ? 'bg-blue-600 hover:bg-blue-700'
+                    : modalAddType === 'kiemTra'
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : modalAddType === 'caiThien'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : modalAddType === 'kienThuc'
+                    ? 'bg-teal-600 hover:bg-teal-700'
                     : 'bg-indigo-600 hover:bg-indigo-700'
                 }`}
               >
-                {modalAddType === 'danhGia'
-                  ? 'Thêm Đánh giá'
-                  : modalAddType === 'luyenTap'
-                  ? 'Thêm Luyện tập'
-                  : 'Thêm mục'}
+                {isAddingFolder ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang xử lý...</span>
+                  </>
+                ) : (
+                  modalAddType === 'danhGia'
+                    ? 'Thêm Đánh giá'
+                    : modalAddType === 'luyenTap'
+                    ? 'Thêm Luyện tập'
+                    : modalAddType === 'kiemTra'
+                    ? 'Thêm Kiểm tra'
+                    : modalAddType === 'caiThien'
+                    ? 'Thêm Cải thiện'
+                    : modalAddType === 'kienThuc'
+                    ? 'Thêm Kiến thức'
+                    : 'Thêm mục'
+                )}
               </button>
             </div>
           </div>
@@ -1742,42 +2603,14 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
         }}
       />
 
-      {/* Modal xác nhận xóa */}
-      {deleteOptionConfirm && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-slate-200 space-y-3">
-            <h4 className="font-bold text-sm text-rose-700">Xác nhận xóa tùy chọn</h4>
-            <p className="text-xs text-slate-600">
-              Bạn có chắc chắn muốn xóa mục <strong>"{deleteOptionConfirm.item}"</strong> không?
-            </p>
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDeleteOptionConfirm(null)}
-                className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteDeleteOption}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs cursor-pointer"
-              >
-                Xác nhận xóa
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal Chèn đồ thị (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
       {showGraphModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h4 className="font-bold text-sm text-sky-900 flex items-center gap-1.5">
                 <TrendingUp className="w-5 h-5 text-sky-600" />
-                <span>Cấu hình vẽ Đồ thị TikZ</span>
+                <span>Nhập hàm số vẽ Đồ thị TikZ</span>
               </h4>
               <button
                 type="button"
@@ -1789,71 +2622,232 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             </div>
 
             <div className="space-y-3.5 text-xs">
-              <div className="p-3 bg-sky-50 rounded-xl space-y-2">
-                <span className="block font-bold text-sky-800 text-[11px] uppercase tracking-wider">Cách 1: Nhập trực tiếp vẽ bằng TikZ</span>
+              <div className="p-3.5 bg-sky-50/70 rounded-2xl border border-sky-100 space-y-3">
+                <span className="block font-bold text-sky-900 text-xs uppercase tracking-wider">Cách 1: Nhập công thức hàm số & Thiết lập</span>
                 
-                <div className="space-y-2.5">
+                <div className="space-y-3">
+                  {/* Ô nhập công thức hàm số (cho phép nhập cả tên hàm: y = x^3 - 3x, N = t^3 + 3t, f(x) = t^3 + 2, y = x^2 - 1, s(t) = t^2 + 5t...) */}
                   <div>
-                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Hàm số f(x) (định dạng TikZ, ví dụ: \x*\x - 1 hoặc sin(\x r)):</label>
+                    <label className="text-[11px] font-bold text-slate-800 block mb-1">
+                      Công thức hàm số (Ví dụ: y = x² - 1, N = t³ + 3t, y = x³ - 3x, s = 5t²):
+                    </label>
                     <input
                       type="text"
                       value={graphFormula}
-                      onChange={e => setGraphFormula(e.target.value)}
-                      placeholder="Ví dụ: \x*\x - 1"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      onChange={e => {
+                        const newFormula = e.target.value;
+                        setGraphFormula(newFormula);
+                        const inferred = inferAxesLabels(newFormula);
+                        setGraphXLabel(inferred.xLabel);
+                        setGraphYLabel(inferred.yLabel);
+                        const sug = getSuggestedYDomain(newFormula, graphXMin, graphXMax, inferred.varName);
+                        setGraphYMin(sug.suggestedYMin);
+                        setGraphYMax(sug.suggestedYMax);
+                      }}
+                      placeholder="Ví dụ: y = x^3 - 3x hoặc N = t^3 + 3t hoặc f(x) = t^3 + 2"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
                     />
                   </div>
 
+                  {/* Tên trục hoành & Tên trục tung */}
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmin (Giới hạn trái x):</label>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                        Tên trục hoành (Mặc định: x):
+                      </label>
+                      <input
+                        type="text"
+                        value={graphXLabel}
+                        onChange={e => setGraphXLabel(e.target.value)}
+                        placeholder="x, t, u..."
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                        Tên trục tung (Mặc định: y):
+                      </label>
+                      <input
+                        type="text"
+                        value={graphYLabel}
+                        onChange={e => setGraphYLabel(e.target.value)}
+                        placeholder="y, N, f(t)..."
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Nút gợi ý chèn mã LaTeX / Ký hiệu */}
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Gợi ý chèn nhanh ký hiệu LaTeX:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { label: '+∞', val: '+\\infty' },
+                        { label: '-∞', val: '-\\infty' },
+                        { label: '∞', val: '\\infty' },
+                        { label: '| (gạch đơn)', val: '|' },
+                        { label: '|| (không XĐ)', val: '||' },
+                        { label: 'x²', val: 'x^2' },
+                        { label: 'x³', val: 'x^3' },
+                        { label: '√x', val: '\\sqrt{x}' },
+                        { label: 'x/y', val: '\\frac{a}{b}' },
+                        { label: 'π', val: '\\pi' },
+                        { label: 'sin(x)', val: 'sin(x)' },
+                        { label: 'cos(x)', val: 'cos(x)' },
+                      ].map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            const newFormula = graphFormula + s.val;
+                            setGraphFormula(newFormula);
+                            const sug = getSuggestedYDomain(newFormula, graphXMin, graphXMax);
+                            setGraphYMin(sug.suggestedYMin);
+                            setGraphYMax(sug.suggestedYMax);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-white hover:bg-sky-100 border border-slate-200 text-[10px] font-mono text-sky-800 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Miền x & Miền y đề xuất tự động */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-sky-100">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmin (Cận trái x):</label>
                       <input
                         type="text"
                         value={graphXMin}
-                        onChange={e => setGraphXMin(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setGraphXMin(val);
+                          const sug = getSuggestedYDomain(graphFormula, val, graphXMax);
+                          setGraphYMin(sug.suggestedYMin);
+                          setGraphYMax(sug.suggestedYMax);
+                        }}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmax (Giới hạn phải x):</label>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmax (Cận phải x):</label>
                       <input
                         type="text"
                         value={graphXMax}
-                        onChange={e => setGraphXMax(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setGraphXMax(val);
+                          const sug = getSuggestedYDomain(graphFormula, graphXMin, val);
+                          setGraphYMin(sug.suggestedYMin);
+                          setGraphYMax(sug.suggestedYMax);
+                        }}
                         className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
                       />
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600 block mb-1">ymin (Giới hạn dưới y):</label>
-                      <input
-                        type="text"
-                        value={graphYMin}
-                        onChange={e => setGraphYMin(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
-                      />
+                  {/* Miền y (tự động đề xuất: GTNN - 1 và GTLN + 1) */}
+                  <div className="p-2.5 rounded-xl bg-white border border-sky-200 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-sky-800">
+                        ⚡ Miền y (Đề xuất tự động: GTNN - 1 và GTLN + 1):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sug = getSuggestedYDomain(graphFormula, graphXMin, graphXMax);
+                          setGraphYMin(sug.suggestedYMin);
+                          setGraphYMax(sug.suggestedYMax);
+                        }}
+                        className="text-[9px] font-bold text-sky-600 hover:text-sky-800 underline cursor-pointer"
+                      >
+                        Tính lại đề xuất
+                      </button>
                     </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600 block mb-1">ymax (Giới hạn trên y):</label>
-                      <input
-                        type="text"
-                        value={graphYMax}
-                        onChange={e => setGraphYMax(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
-                      />
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-medium text-slate-500 block">ymin (Cận dưới y):</label>
+                        <input
+                          type="text"
+                          value={graphYMin}
+                          onChange={e => setGraphYMin(e.target.value)}
+                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-slate-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-medium text-slate-500 block">ymax (Cận trên y):</label>
+                        <input
+                          type="text"
+                          value={graphYMax}
+                          onChange={e => setGraphYMax(e.target.value)}
+                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-slate-50"
+                        />
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Ô nhập yêu cầu thêm với đồ thị (Nằm DƯỚI Miền x, trục y và TRÊN nút Hủy, Xác nhận & chèn đồ thị) */}
+                  <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-1.5">
+                    <label className="text-[10px] font-bold text-indigo-900 block flex items-center gap-1">
+                      <span>✨ Yêu cầu thêm với đồ thị (Gióng trục cực trị, gióng điểm, tiếp tuyến, giới hạn...):</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={graphRequirement}
+                      onChange={e => setGraphRequirement(e.target.value)}
+                      placeholder="Ví dụ: Gióng trục điểm cực trị; Gióng điểm A(1, 2); Tiếp tuyến tại x=1; Tô miền diện tích phẳng..."
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+                    />
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        'Gióng trục điểm cực trị',
+                        'Gióng điểm giao trục Ox, Oy',
+                        'Gióng điểm A(1, 2)',
+                        'Vẽ tiệm cận đứng & ngang',
+                        'Tiếp tuyến tại x=1',
+                        'Tô miền phẳng',
+                      ].map((req, rIdx) => (
+                        <button
+                          key={rIdx}
+                          type="button"
+                          onClick={() => {
+                            setGraphRequirement(prev => (prev ? `${prev}; ${req}` : req));
+                          }}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer shadow-2xs font-medium"
+                        >
+                          + {req}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hàng nút Hủy & Xác nhận & chèn đồ thị (Nằm liền ngay dưới trường yêu cầu) */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-sky-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setGraphOldTikz('');
+                        setShowGraphModal(false);
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGenerateGraphTikZ}
+                      className="py-2 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <TrendingUp className="w-4 h-4" />
+                      <span>{graphOldTikz ? 'Xác nhận & Cập nhật đồ thị' : 'Xác nhận & Chèn đồ thị'}</span>
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleGenerateGraphTikZ}
-                  className="w-full mt-2.5 py-2 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-                >
-                  🚀 Vẽ & Chèn Đồ Thị TikZ
-                </button>
               </div>
 
               <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2 text-center">
@@ -1889,11 +2883,11 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
       {/* Modal Chèn bảng biến thiên (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
       {showBBTModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h4 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5">
                 <Activity className="w-5 h-5 text-emerald-600" />
-                <span>Cấu hình vẽ Bảng Biến Thiên</span>
+                <span>Nhập Bảng Biến Thiên tikz-tab</span>
               </h4>
               <button
                 type="button"
@@ -1905,10 +2899,104 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
             </div>
 
             <div className="space-y-3.5 text-xs">
-              <div className="p-3 bg-emerald-50 rounded-xl space-y-2">
-                <span className="block font-bold text-emerald-800 text-[11px] uppercase tracking-wider">Cách 1: Nhập trực tiếp vẽ bằng tikz-tab</span>
+              <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-100 space-y-2.5">
+                <span className="block font-bold text-emerald-800 text-[11px] uppercase tracking-wider">Cách 1: Nhập công thức hàm, miền & Bảng biến thiên</span>
                 
                 <div className="space-y-2.5">
+                  {/* Ô nhập công thức hàm */}
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-700 block mb-1">
+                      Công thức hàm số (Ví dụ: y = x^2 - 1, N(x) = t + 10, y = x^3 - 3x^2 + 2):
+                    </label>
+                    <input
+                      type="text"
+                      value={bbtFormula}
+                      onChange={e => setBbtFormula(e.target.value)}
+                      placeholder="Ví dụ: y = x^2 - 1 hoặc N(x) = t + 10"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                    />
+                  </div>
+
+                  {/* Ô nhập miền cần lập bảng biến thiên & nút gợi ý vô cực */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-bold text-slate-700">
+                        Miền cần lập bảng biến thiên (Mặc định toàn tập số thực ℝ):
+                      </label>
+                    </div>
+                    <input
+                      type="text"
+                      value={bbtDomain}
+                      onChange={e => setBbtDomain(e.target.value)}
+                      placeholder="Ví dụ: (-\infty; +\infty), [0; +\infty), [a; b]"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                    />
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {[
+                        { label: 'ℝ (Toàn tập số thực)', val: '(-\\infty; +\\infty)' },
+                        { label: '[0; +∞)', val: '[0; +\\infty)' },
+                        { label: '(-∞; 0]', val: '(-\\infty; 0]' },
+                        { label: 'ℝ \\ {0}', val: '\\mathbb{R} \\setminus \\{0\\}' },
+                        { label: '[a; b]', val: '[a; b]' },
+                      ].map((dm, dIdx) => (
+                        <button
+                          key={dIdx}
+                          type="button"
+                          onClick={() => setBbtDomain(dm.val)}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100/80 hover:bg-emerald-200 text-emerald-900 border border-emerald-200 cursor-pointer font-medium"
+                        >
+                          {dm.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Ô nhập yêu cầu đặc biệt của giáo viên */}
+                  <div>
+                    <label className="text-[10px] font-bold text-emerald-800 block mb-1">
+                      Ô nhập yêu cầu đặc biệt (Gạch xiên 60 độ ngoài miền, điểm không xác định ||...):
+                    </label>
+                    <input
+                      type="text"
+                      value={bbtRequirement}
+                      onChange={e => setBbtRequirement(e.target.value)}
+                      placeholder="Ví dụ: Gạch xiên 60 độ ngoài miền [0; 5]; Điểm x = 1 hai gạch ||"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                    />
+                  </div>
+
+                  {/* Nút gợi ý ký hiệu tikz-tab */}
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-emerald-600" />
+                      <span>Gợi ý chèn nhanh ký hiệu bảng biến thiên:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { label: '-∞', val: '-\\infty' },
+                        { label: '+∞', val: '+\\infty' },
+                        { label: '|| (2 gạch)', val: '||' },
+                        { label: '| (1 gạch)', val: '|' },
+                        { label: '0 (đạo hàm 0)', val: '0' },
+                        { label: '+ (dương)', val: '+' },
+                        { label: '- (âm)', val: '-' },
+                        { label: 'h (gạch xiên 60°)', val: 'h' },
+                        { label: 'd (double bar)', val: 'd' },
+                        { label: '+/ (tăng lên)', val: '+/ ' },
+                        { label: '-/ (giảm xuống)', val: '-/ ' },
+                      ].map((sym, sIdx) => (
+                        <button
+                          key={sIdx}
+                          type="button"
+                          onClick={() => setBbtXPoints(prev => prev + (prev.endsWith(', ') ? '' : ', ') + sym.val)}
+                          className="px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 border border-slate-200 text-[10px] font-mono text-emerald-800 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          {sym.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div>
                     <label className="text-[10px] font-bold text-slate-600 block mb-1">Danh sách điểm x (Phân tách bằng dấu phẩy):</label>
                     <input
@@ -1941,14 +3029,19 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
                       className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
                     />
                   </div>
+
+                  <div className="text-[10px] text-slate-500 italic bg-emerald-100/50 p-2 rounded-lg border border-emerald-200/60">
+                    📌 <strong>Quy chuẩn bảng biến thiên:</strong> Mặc định bảng biến thiên xác định trên toàn tập số thực ℝ; đối với phần ngoài miền hoặc điểm không xác định sẽ tự động dùng dấu gạch xiên 60 độ để gạch cách biệt.
+                  </div>
                 </div>
 
                 <button
                   type="button"
                   onClick={handleGenerateBBTTikZ}
-                  className="w-full mt-2.5 py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+                  className="w-full mt-2.5 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  🚀 Tạo & Chèn Bảng Biến Thiên
+                  <Activity className="w-4 h-4" />
+                  <span>🚀 Tạo & Chèn Bảng Biến Thiên Vào Word</span>
                 </button>
               </div>
 

@@ -36,6 +36,10 @@ import { ScheduleItem, UserRole } from '../../../services/storageTypes';
 import { savePersonalScheduleToDrive } from '../../ConnectData/ConnectDrive';
 import { getUsers } from '../../ConnectData/ConnectFirestore';
 
+// Đường dẫn mặc định của app và module Thời khóa biểu
+export const DEFAULT_APP_PATH = 'myApp/LopU';
+export const DEFAULT_THOIKHOABIEU_PATH = `${DEFAULT_APP_PATH}/ThoiKhoaBieu`;
+
 // ==========================================
 // 1. CẤU TRÚC DỮ LIỆU CỐT LÕI (DATA MODEL)
 // ==========================================

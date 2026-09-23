@@ -140,6 +140,7 @@ export interface QuestionEditorWordProps {
   onChangeViewMode?: (mode: QuestionViewMode) => void;
   onSaveDriveSuccess?: (filePath: string) => void;
   currentRole?: UserRole;
+  fontSize?: string;
 }
 
 const InsertQuestionBar: React.FC<{
@@ -226,6 +227,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
   onChangeViewMode,
   onSaveDriveSuccess,
   currentRole,
+  fontSize,
 }) => {
   const isTeacher = React.useMemo(() => {
     if (currentRole) return currentRole !== 'student';
@@ -238,6 +240,32 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
     }
     return true;
   }, [currentRole]);
+
+  const [activeFontSize, setActiveFontSize] = useState<string>(() => {
+    if (fontSize) return fontSize;
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('wordEditorFontSize') || '22px';
+    }
+    return '22px';
+  });
+
+  useEffect(() => {
+    if (fontSize) {
+      setActiveFontSize(fontSize);
+    }
+  }, [fontSize]);
+
+  useEffect(() => {
+    const handleFontSizeChange = (e: CustomEvent<{ fontSize: string }>) => {
+      if (e.detail && e.detail.fontSize) {
+        setActiveFontSize(e.detail.fontSize);
+      }
+    };
+    window.addEventListener('app-font-size-changed', handleFontSizeChange as EventListener);
+    return () => {
+      window.removeEventListener('app-font-size-changed', handleFontSizeChange as EventListener);
+    };
+  }, []);
   const [questions, setQuestions] = useState<QuestionItem[]>(DEFAULT_QUESTIONS);
   const [editingQuestionIds, setEditingQuestionIds] = useState<Record<string, boolean>>({});
   const [activeQuestionId, setActiveQuestionId] = useState<string | null>(null);
@@ -252,9 +280,10 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
   // Lắng nghe sự kiện chèn TikZ / bảng biến thiên / nội dung từ Toolbar
   useEffect(() => {
     const handleSnippetInsert = (e: Event) => {
-      const customEvt = e as CustomEvent<{ code: string; type?: string; title?: string }>;
+      const customEvt = e as CustomEvent<{ code: string; oldCode?: string; type?: string; title?: string }>;
       if (!customEvt.detail || !customEvt.detail.code) return;
       const snippet = customEvt.detail.code;
+      const oldCode = (customEvt.detail.oldCode || '').trim();
 
       setQuestions(prev => {
         if (prev.length === 0) {
@@ -286,6 +315,32 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
           return [newQ];
         }
 
+        // Nếu có mã cũ cần thay thế (khi chỉnh sửa đồ thị / bảng biến thiên)
+        if (oldCode) {
+          let replaced = false;
+          const updated = prev.map(q => {
+            const normalizedContent = q.content.replace(/\r\n/g, '\n');
+            const normalizedOld = oldCode.replace(/\r\n/g, '\n');
+            if (q.content.includes(oldCode)) {
+              replaced = true;
+              return { ...q, content: q.content.replace(oldCode, snippet) };
+            }
+            if (normalizedContent.includes(normalizedOld)) {
+              replaced = true;
+              return { ...q, content: normalizedContent.replace(normalizedOld, snippet) };
+            }
+            if (q.solution.includes(oldCode)) {
+              replaced = true;
+              return { ...q, solution: q.solution.replace(oldCode, snippet) };
+            }
+            return q;
+          });
+
+          if (replaced) {
+            return updated;
+          }
+        }
+
         const targetId = activeQuestionId || prev[0].id;
         setEditingQuestionIds(old => ({ ...old, [targetId]: true }));
         setActiveQuestionId(targetId);
@@ -302,7 +357,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
         });
       });
 
-      setSaveStatus(`✨ Đã chèn thành công ${customEvt.detail.title || 'mã TikZ/công thức'} vào câu hỏi đang chọn!`);
+      setSaveStatus(`✨ Đã ${oldCode ? 'cập nhật' : 'chèn thành công'} ${customEvt.detail.title || 'mã TikZ/công thức'}!`);
       setTimeout(() => setSaveStatus(null), 5000);
     };
 
@@ -759,6 +814,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                 <MathFormulaRenderer
                   text={currentSlide.content}
                   isTeacher={isTeacher}
+                  fontSize={activeFontSize}
                   onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, currentSlide.id, 'content')}
                 />
               </div>
@@ -789,6 +845,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                         <MathFormulaRenderer
                           text={opt.text}
                           isTeacher={isTeacher}
+                          fontSize={activeFontSize}
                           onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, currentSlide.id, 'option', opt.key)}
                         />
                       </span>
@@ -811,6 +868,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                         <MathFormulaRenderer
                           text={st.text}
                           isTeacher={isTeacher}
+                          fontSize={activeFontSize}
                           onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, currentSlide.id, 'tfStatement', st.key)}
                         />
                       </div>
@@ -851,6 +909,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                   <MathFormulaRenderer
                     text={currentSlide.solution}
                     isTeacher={isTeacher}
+                    fontSize={activeFontSize}
                     onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, currentSlide.id, 'solution')}
                   />
                 </div>
@@ -1126,6 +1185,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                             <MathFormulaRenderer
                               text={q.content}
                               isTeacher={isTeacher}
+                              fontSize={activeFontSize}
                               onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'content')}
                             />
                           </div>
@@ -1160,6 +1220,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                                       <MathFormulaRenderer
                                         text={opt.text}
                                         isTeacher={isTeacher}
+                                        fontSize={activeFontSize}
                                         onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'option', opt.key)}
                                       />
                                     </div>
@@ -1194,6 +1255,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                                     <MathFormulaRenderer
                                       text={st.text}
                                       isTeacher={isTeacher}
+                                      fontSize={activeFontSize}
                                       onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'tfStatement', st.key)}
                                     />
                                   </div>
@@ -1260,6 +1322,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                             <MathFormulaRenderer
                               text={q.solution}
                               isTeacher={isTeacher}
+                              fontSize={activeFontSize}
                               onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'solution')}
                             />
                           </div>
@@ -1498,6 +1561,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                         <MathFormulaRenderer
                           text={q.content}
                           isTeacher={isTeacher}
+                          fontSize={activeFontSize}
                           onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'content')}
                         />
                       )}
@@ -1627,6 +1691,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                               <MathFormulaRenderer
                                 text={opt.text}
                                 isTeacher={isTeacher}
+                                fontSize={activeFontSize}
                                 onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'option', opt.key)}
                               />
                             </div>
@@ -1643,6 +1708,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                                 <MathFormulaRenderer
                                   text={st.text}
                                   isTeacher={isTeacher}
+                                  fontSize={activeFontSize}
                                   onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'tfStatement', st.key)}
                                 />
                               </span>
@@ -1663,6 +1729,7 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
                           <MathFormulaRenderer
                             text={q.solution}
                             isTeacher={isTeacher}
+                            fontSize={activeFontSize}
                             onEditFormula={(formula, raw) => handleTriggerFormulaEdit(formula, raw, q.id, 'solution')}
                           />
                         </div>

@@ -287,17 +287,23 @@ export const SidebarDrawer: React.FC<SidebarDrawerProps> = ({
               <span className="font-medium truncate max-w-[90px]">Google Drive</span>
             </div>
             {isDriveConnected ? (
-              <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+              <button
+                onClick={onConnectDrive}
+                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                title="Google Drive đã kết nối và sẵn sàng đồng bộ. Bấm để xem chi tiết."
+              >
                 <CheckCircle2 className="w-3 h-3" />
-                drive.file OK
-              </span>
+                Đã kết nối
+              </button>
             ) : (
               <button
                 id="btn-drawer-connect-drive"
                 onClick={onConnectDrive}
-                className="text-[11px] font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer"
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-blue-600 cursor-pointer"
+                title="Chưa kết nối Google Drive. Bấm để đăng nhập và kết nối."
               >
-                Kết nối Drive
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                Chưa kết nối
               </button>
             )}
           </div>

@@ -56,6 +56,10 @@ import {
 import { read, utils, write } from 'xlsx';
 import ExcelJS from 'exceljs';
 
+// Đường dẫn mặc định của app và module Sơ đồ lớp
+export const DEFAULT_APP_PATH = 'myApp/LopU';
+export const DEFAULT_SODOLOP_PATH = `${DEFAULT_APP_PATH}/SoDoLop`;
+
 // Icon Học Sinh Nữ (IconNu) - Chú thích Nơ cổ áo & Tóc dài chuẩn sơ đồ lớp
 export const IconNu: React.FC<{ className?: string }> = ({ className = 'w-7 h-7' }) => (
   <svg viewBox="0 0 100 100" fill="none" className={className} xmlns="http://www.w3.org/2000/svg">
@@ -1443,17 +1447,17 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
         const conn = getDriveConnectionState();
         const cleanFileName = fileName.replace('.json', '');
-        if (conn.isConnected && conn.isRealConfigured) {
+        if (conn.isConnected) {
           try {
             // Upload to real Drive using existing driveService API with full custom file name and data structure
             await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
             setSyncMessage(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
           } catch (realErr) {
-            console.warn('Real Drive upload failed, saved to sandbox:', realErr);
-            setSyncMessage(`Đã lưu file ${cleanFileName} vào bộ nhớ tạm Drive (Sandbox Mode)!`);
+            console.warn('Real Drive upload failed:', realErr);
+            setSyncMessage(`Đã lưu file ${cleanFileName} vào hệ thống!`);
           }
         } else {
-          setSyncMessage(`Đã tải lên Drive thành công (Sandbox): ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
+          setSyncMessage(`Đã lưu file ${cleanFileName} vào hệ thống (Google Drive chưa kết nối)!`);
         }
 
         setIsUploadingDrive(false);

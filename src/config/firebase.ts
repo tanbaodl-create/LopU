@@ -2,28 +2,28 @@ import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore, setLogLevel } from 'firebase/firestore';
 import { getAuth, Auth } from 'firebase/auth';
 import { getAnalytics, isSupported, Analytics } from 'firebase/analytics';
+import appletConfig from '../../firebase-applet-config.json';
 
 // Suppress Firestore connection warnings in offline/sandbox preview
 setLogLevel('silent');
 
 export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'lopu-ddf22.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'lopu-ddf22',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'lopu-ddf22.firebasestorage.app',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '895470500244',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-7R986FTTVN',
+  apiKey: appletConfig.apiKey || import.meta.env.VITE_FIREBASE_API_KEY || '',
+  authDomain: appletConfig.authDomain || import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'gen-lang-client-0465436218.firebaseapp.com',
+  projectId: appletConfig.projectId || import.meta.env.VITE_FIREBASE_PROJECT_ID || 'gen-lang-client-0465436218',
+  storageBucket: appletConfig.storageBucket || import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'gen-lang-client-0465436218.firebasestorage.app',
+  messagingSenderId: appletConfig.messagingSenderId || import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '999770107772',
+  appId: appletConfig.appId || import.meta.env.VITE_FIREBASE_APP_ID || '1:999770107772:web:3cc0f1b3ce7391931d3ef9',
+  measurementId: appletConfig.measurementId || import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
 };
 
 export const googleClientConfig = {
-  clientId: import.meta.env.VITE_GOOGLE_CLIENT_ID || '',
+  clientId: appletConfig.oAuthClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || '999770107772-bprimeadqahj7etfdsel6oi5frci04s4.apps.googleusercontent.com',
   clientSecret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
-  // Strict scoped access to only files created or opened by LopU
-  scope: 'https://www.googleapis.com/auth/drive.file',
+  scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive',
 };
 
-// Check whether real credentials have been replaced from placeholder
+// Check whether real credentials are present
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
   !firebaseConfig.apiKey.includes('THAY_API_KEY') &&

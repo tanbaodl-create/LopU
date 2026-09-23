@@ -54,8 +54,8 @@ export interface MenuGroup {
 export const MENU_GROUPS: MenuGroup[] = [
   {
     id: 'learning',
-    moduleName: 'Module 1: Không gian Học tập (ModuleHocSinh)',
-    label: 'Không gian Học tập',
+    moduleName: 'Module 1: Học tập (ModuleHocSinh)',
+    label: 'Học tập',
     icon: GraduationCap,
     subItems: [
       {
@@ -81,7 +81,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: 'learning-join',
-        label: 'Tìm lớp & Đăng ký (PIN)',
+        label: 'Tìm lớp & Đăng ký',
         badge: 'PIN',
         icon: Search,
         description: 'Tra cứu mã lớp và nhập mã bảo mật PIN để tham gia lớp học mới',
@@ -90,8 +90,8 @@ export const MENU_GROUPS: MenuGroup[] = [
   },
   {
     id: 'teaching',
-    moduleName: 'Module 2: Nghiệp vụ Giảng dạy & Lớp học (ModuleGiaoVien)',
-    label: 'Nghiệp vụ Giảng dạy',
+    moduleName: 'Module 2: Giảng dạy (ModuleGiaoVien)',
+    label: 'Giảng dạy',
     icon: Users,
     subItems: [
       {
@@ -149,7 +149,7 @@ export const MENU_GROUPS: MenuGroup[] = [
   {
     id: 'settings',
     moduleName: 'Module 3: Quản trị Hệ thống (ModuleQuanTri)',
-    label: 'Quản trị Tài khoản & Phân quyền',
+    label: 'Quản trị',
     icon: UserCog,
     subItems: [
       {
@@ -171,7 +171,7 @@ export const MENU_GROUPS: MenuGroup[] = [
   {
     id: 'guide',
     moduleName: 'Module 4: Giao diện & Hướng dẫn Web (ModuleGiaoDien)',
-    label: 'Hướng dẫn Web & Sơ đồ Cây',
+    label: 'Trợ giúp',
     icon: Network,
     subItems: [
       {
@@ -183,7 +183,7 @@ export const MENU_GROUPS: MenuGroup[] = [
       },
       {
         id: 'guide-prompt-assistant',
-        label: 'Phân tích & Tạo lệnh AI',
+        label: 'Phân tích lệnh',
         badge: 'Siêu tốc',
         icon: Zap,
         description: 'Nhập yêu cầu tự nhiên, đối chiếu sơ đồ cây và tạo Prompt chuẩn tối ưu sửa nhanh app',
@@ -212,7 +212,7 @@ export function getViewMeta(viewId: ViewId): { title: string; category: string; 
   }
   return {
     title: 'Lớp học & Bài giảng',
-    category: 'Không gian Học tập',
+    category: 'Học tập',
     description: 'Quản lý lớp học thông minh LopU',
   };
 }

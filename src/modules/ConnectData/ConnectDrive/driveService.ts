@@ -28,13 +28,25 @@ export interface DriveStoredFile {
 const DRIVE_FILES_STORAGE_KEY = 'lopu_google_drive_files_v1';
 const DRIVE_TOKEN_STORAGE_KEY = 'lopu_google_drive_token_v1';
 
+// Helper to check token type
+export function isRealDriveToken(token?: string | null): boolean {
+  if (!token) return false;
+  return !token.startsWith('lopu_token_') && !token.startsWith('sandbox_') && (token.startsWith('ya29.') || token.length > 25);
+}
+
+// Clean up any old simulated tokens on startup
+const storedToken = localStorage.getItem(DRIVE_TOKEN_STORAGE_KEY);
+if (storedToken && !isRealDriveToken(storedToken)) {
+  localStorage.removeItem(DRIVE_TOKEN_STORAGE_KEY);
+}
+
 // In-memory token cache
 let currentAccessToken: string | null = localStorage.getItem(DRIVE_TOKEN_STORAGE_KEY);
-let isDriveConnected: boolean = Boolean(currentAccessToken);
+let isDriveConnected: boolean = isRealDriveToken(currentAccessToken);
 let currentDriveEmail: string = localStorage.getItem('lopu_drive_email') || 'tanbaodl@gmail.com';
 
 // Listeners for UI reactive status
-type DriveStatusListener = (connected: boolean, email: string) => void;
+export type DriveStatusListener = (connected: boolean, email: string) => void;
 const statusListeners: Set<DriveStatusListener> = new Set();
 
 export function subscribeDriveStatus(listener: DriveStatusListener): () => void {
@@ -70,23 +82,23 @@ function saveStoredDriveFiles(files: DriveStoredFile[]): void {
 }
 
 // Check connection state
-export function getDriveConnectionState(): { isConnected: boolean; email: string; isRealConfigured: boolean } {
+export function getDriveConnectionState(): {
+  isConnected: boolean;
+  email: string;
+  isRealConfigured: boolean;
+} {
+  const token = localStorage.getItem(DRIVE_TOKEN_STORAGE_KEY) || currentAccessToken;
+  const isReal = isRealDriveToken(token);
   return {
-    isConnected: isDriveConnected,
+    isConnected: isReal,
     email: currentDriveEmail,
     isRealConfigured: isGoogleClientConfigured || isFirebaseConfigured,
   };
 }
 
-// Connect to Google Drive using Google Identity Services, Firebase Auth popup, or simulated sandbox token
-export async function connectGoogleDrive(forceSimulated = false): Promise<{ success: boolean; email: string; message: string }> {
-  if (forceSimulated) {
-    return new Promise((resolve) => {
-      enableSimulatedDriveSession(resolve);
-    });
-  }
-
-  // 1. Try Firebase Auth popup first (extremely robust for dynamic preview URLs/iframes because the redirect goes to firebaseapp.com authorized origin)
+// Connect to Google Drive using Google Identity Services or Firebase Auth popup
+export async function connectGoogleDrive(): Promise<{ success: boolean; email: string; message: string }> {
+  // 1. Try Firebase Auth popup first
   if (auth && isFirebaseConfigured) {
     try {
       const provider = new GoogleAuthProvider();
@@ -105,11 +117,11 @@ export async function connectGoogleDrive(forceSimulated = false): Promise<{ succ
         return {
           success: true,
           email: currentDriveEmail,
-          message: 'Đã xác thực Google Drive thành công qua Firebase Auth!',
+          message: 'Đã xác thực và kết nối Google Drive thành công!',
         };
       }
     } catch (firebaseErr: any) {
-      console.warn('Firebase Auth Google Sign-In popup failed/cancelled, falling back to other methods:', firebaseErr);
+      console.warn('Firebase Auth Google Sign-In popup error:', firebaseErr);
     }
   }
 
@@ -119,7 +131,7 @@ export async function connectGoogleDrive(forceSimulated = false): Promise<{ succ
       try {
         const client = (window as any).google.accounts.oauth2.initTokenClient({
           client_id: googleClientConfig.clientId,
-          scope: googleClientConfig.scope + ' https://www.googleapis.com/auth/drive',
+          scope: googleClientConfig.scope + ' https://www.googleapis.com/auth/drive.file',
           callback: (tokenResponse: { access_token?: string; error?: string }) => {
             if (tokenResponse.error || !tokenResponse.access_token) {
               resolve({
@@ -145,32 +157,20 @@ export async function connectGoogleDrive(forceSimulated = false): Promise<{ succ
         client.requestAccessToken();
       } catch (err) {
         console.warn('GSI Token request error:', err);
-        // Fallback to local authenticated session
-        enableSimulatedDriveSession(resolve);
+        resolve({
+          success: false,
+          email: '',
+          message: 'Không thể mở cửa sổ đăng nhập Google. Vui lòng kiểm tra quyền pop-up trình duyệt.',
+        });
       }
     });
   }
 
-  // 3. Fallback to simulated drive session
-  return new Promise((resolve) => {
-    enableSimulatedDriveSession(resolve);
-  });
-}
-
-function enableSimulatedDriveSession(resolve: (val: any) => void) {
-  setTimeout(() => {
-    currentAccessToken = `lopu_token_${Date.now()}`;
-    localStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, currentAccessToken);
-    isDriveConnected = true;
-    currentDriveEmail = 'tanbaodl@gmail.com';
-    localStorage.setItem('lopu_drive_email', currentDriveEmail);
-    notifyStatusChanged();
-    resolve({
-      success: true,
-      email: currentDriveEmail,
-      message: 'Đã kích hoạt kết nối Google Drive (Phạm vi an toàn: drive.file)!',
-    });
-  }, 400);
+  return {
+    success: false,
+    email: '',
+    message: 'Chưa thể kết nối Google Drive. Vui lòng đăng nhập tài khoản Google để cấp quyền.',
+  };
 }
 
 export function disconnectGoogleDrive(): void {

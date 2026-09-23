@@ -1,11 +1,24 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layers, FolderTree, Plus, Check, ChevronDown, Trash2, X, AlertTriangle } from 'lucide-react';
+import { Layers, FolderTree, Plus, Check, ChevronDown, Trash2, X, AlertTriangle, Loader2, Cloud, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   HierarchyStore,
   getStoredHierarchy,
   saveStoredHierarchy,
 } from './hierarchyData';
-import { isDanhGia } from './TaiLieuCaNhanView';
+import {
+  isDanhGia,
+  formatDanhGiaFileName,
+  formatLuyenTapFileName,
+  formatKiemTraFileName,
+  formatCaiThienFileName,
+  formatKienThucFileName,
+} from './TaiLieuCaNhanView';
+import {
+  createDriveFolderIfNotExists,
+  deleteDriveFolderHierarchy,
+  getDriveConnectionState,
+  connectGoogleDrive,
+} from '../../ConnectData/ConnectDrive/googleDriveService';
 
 export interface HierarchySelectorProps {
   title: string;
@@ -29,10 +42,10 @@ type HierarchyLevel = 'title' | 'chuong' | 'bai' | 'vanDe' | 'chuyenDe';
 
 const LEVEL_LABELS: Record<HierarchyLevel, string> = {
   title: 'TÀI LIỆU',
-  chuong: 'Cấp 1: Chương',
-  bai: 'Cấp 2: Bài',
-  vanDe: 'Cấp 3: Vấn đề',
-  chuyenDe: 'Cấp 4: Chuyên đề',
+  chuong: 'Chương',
+  bai: 'Bài',
+  vanDe: 'Vấn đề',
+  chuyenDe: 'Chuyên đề',
 };
 
 export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
@@ -58,12 +71,6 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   const [activeLevel, setActiveLevel] = useState<HierarchyLevel>('title');
   const [customInputValue, setCustomInputValue] = useState<string>('');
   const [confirmNotice, setConfirmNotice] = useState<string | null>(null);
-
-  // Modal xác nhận xóa tùy chọn (thay thế window.confirm để chạy mượt trong iframe)
-  const [deleteConfirmItem, setDeleteConfirmItem] = useState<{
-    level: HierarchyLevel;
-    optVal: string;
-  } | null>(null);
 
   // Quản lý trạng thái mở dropdown cho từng cấp độ
   const [openDropdown, setOpenDropdown] = useState<HierarchyLevel | null>(null);
@@ -217,21 +224,92 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     }
   };
 
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+  const [customAddType, setCustomAddType] = useState<string>('standard');
+  const [modalErrorMessage, setModalErrorMessage] = useState<string | null>(null);
+  const [deleteErrorMessage, setDeleteErrorMessage] = useState<string | null>(null);
+
   const openCustomModal = (level: HierarchyLevel) => {
     setActiveLevel(level);
     setCustomInputValue('');
+    setCustomAddType('standard');
+    setModalErrorMessage(null);
     setModalOpen(true);
     setOpenDropdown(null);
   };
 
-  // Xác nhận nhập ngoài danh sách: Thêm vào danh sách và CHỌN LUÔN NÓ
-  const handleConfirmCustom = () => {
-    const trimmed = customInputValue.trim();
-    if (!trimmed) {
-      alert('Vui lòng nhập nội dung hợp lệ!');
+  // Xác nhận nhập ngoài danh sách: Thêm vào danh sách và CHỌN LUÔN NÓ (sau khi kiểm tra và tạo trên Drive)
+  const handleConfirmCustom = async () => {
+    const raw = customInputValue.trim();
+    if (!raw || isProcessing) {
       return;
     }
 
+    let trimmed = raw;
+    if (customAddType === 'danhGia') {
+      trimmed = formatDanhGiaFileName(raw);
+    } else if (customAddType === 'luyenTap') {
+      trimmed = formatLuyenTapFileName(raw);
+    } else if (customAddType === 'kiemTra') {
+      trimmed = formatKiemTraFileName(raw);
+    } else if (customAddType === 'caiThien') {
+      trimmed = formatCaiThienFileName(raw);
+    } else if (customAddType === 'kienThuc') {
+      trimmed = formatKienThucFileName(raw);
+    }
+
+    // 1. Xác định đường dẫn phân cấp trên Google Drive:
+    // myApp / LopU / TaiLieu / [Tài liệu] / [Chương] / [Bài] / [Vấn đề] / [Chuyên đề]
+    const pathSegments: string[] = ['myApp', 'LopU', 'TaiLieu'];
+    if (activeLevel === 'title') {
+      pathSegments.push(trimmed);
+    } else if (activeLevel === 'chuong') {
+      pathSegments.push(title || 'TaiLieuChung', trimmed);
+    } else if (activeLevel === 'bai') {
+      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', trimmed);
+    } else if (activeLevel === 'vanDe') {
+      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', trimmed);
+    } else if (activeLevel === 'chuyenDe') {
+      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', vanDe || 'VanDe1', trimmed);
+    }
+
+    setIsProcessing(true);
+    setModalErrorMessage(null);
+    setConfirmNotice('Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...');
+
+    // Kiểm tra phiên kết nối Google Drive, nếu hết hạn hoặc chưa kết nối thì mở cửa sổ để đăng nhập kết nối lại
+    const connState = getDriveConnectionState();
+    if (!connState.isConnected) {
+      const connRes = await connectGoogleDrive();
+      if (!connRes.success) {
+        setIsProcessing(false);
+        setModalErrorMessage(connRes.message || 'Phiên kết nối Google Drive chưa được xác thực. Vui lòng kết nối lại.');
+        return;
+      }
+    }
+
+    // Kiểm tra xem thư mục tương ứng đã có bên drive chưa, nếu chưa có thì Tạo thư mục tương ứng
+    let driveRes = await createDriveFolderIfNotExists(pathSegments);
+
+    // Nếu gặp lỗi hết hạn 401 khi gọi API, tự động kích hoạt popup kết nối lại và thử lại
+    if (!driveRes.success && driveRes.error && (driveRes.error.includes('401') || driveRes.error.includes('hết hạn'))) {
+      const reConn = await connectGoogleDrive();
+      if (reConn.success) {
+        driveRes = await createDriveFolderIfNotExists(pathSegments);
+      }
+    }
+
+    if (!driveRes.success) {
+      setIsProcessing(false);
+      const errMsg = driveRes.error || 'Tạo chưa thành công trên Google Drive. Vui lòng thử lại.';
+      setModalErrorMessage(errMsg);
+      setConfirmNotice(`Tạo chưa thành công: ${errMsg}`);
+      setTimeout(() => setConfirmNotice(null), 5000);
+      return;
+    }
+
+    // Sau khi nhận được thông báo đã có thư mục bên drive (mới tạo/có sẵn): thêm vào tùy chọn dropdown và chọn luôn nó
     const newStore = { ...store };
 
     if (activeLevel === 'title') {
@@ -305,83 +383,56 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
 
     setStore(newStore);
     saveStoredHierarchy(newStore);
+    setIsProcessing(false);
+    setModalErrorMessage(null);
     setModalOpen(false);
-    setConfirmNotice(`Đã thêm "${trimmed}" và chọn làm ${LEVEL_LABELS[activeLevel]}!`);
-    setTimeout(() => setConfirmNotice(null), 3500);
+
+    setConfirmNotice(
+      driveRes.alreadyExists
+        ? `Đã liên kết thư mục "${trimmed}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`
+        : `Đã tạo thành công thư mục "${trimmed}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`
+    );
+    setTimeout(() => setConfirmNotice(null), 5500);
   };
 
-  // Mở modal xác nhận xóa tùy chọn khỏi dropdown (xóa cấp cha thì các cấp con phụ thuộc cũng bị xóa sạch)
-  const handleDeleteOption = (level: HierarchyLevel, optVal: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setDeleteConfirmItem({ level, optVal });
-    setOpenDropdown(null);
-  };
+  // Trạng thái kết nối và đồng bộ với Google Drive
+  const driveConn = getDriveConnectionState();
 
-  // Thực thi xóa tùy chọn sau khi người dùng xác nhận
-  const executeDeleteOption = () => {
-    if (!deleteConfirmItem) return;
-    const { level, optVal } = deleteConfirmItem;
-
-    const newStore = { ...store };
-
-    if (level === 'title') {
-      delete newStore[optVal];
-      if (title === optVal) {
-        onChangeTitle('');
-        onChangeChuong('');
-        onChangeBai('');
-        onChangeVanDe('');
-        onChangeChuyenDe('');
-      }
-    } else if (level === 'chuong') {
-      if (newStore[title]) {
-        delete newStore[title][optVal];
-      }
-      if (chuong === optVal) {
-        onChangeChuong('');
-        onChangeBai('');
-        onChangeVanDe('');
-        onChangeChuyenDe('');
-      }
-    } else if (level === 'bai') {
-      if (newStore[title] && newStore[title][chuong]) {
-        delete newStore[title][chuong][optVal];
-      }
-      if (bai === optVal) {
-        onChangeBai('');
-        onChangeVanDe('');
-        onChangeChuyenDe('');
-      }
-    } else if (level === 'vanDe') {
-      if (newStore[title] && newStore[title][chuong] && newStore[title][chuong][bai]) {
-        delete newStore[title][chuong][bai][optVal];
-      }
-      if (vanDe === optVal) {
-        onChangeVanDe('');
-        onChangeChuyenDe('');
-      }
-    } else if (level === 'chuyenDe') {
-      if (
-        newStore[title] &&
-        newStore[title][chuong] &&
-        newStore[title][chuong][bai] &&
-        newStore[title][chuong][bai][vanDe]
-      ) {
-        newStore[title][chuong][bai][vanDe] = newStore[title][chuong][bai][vanDe].filter(
-          c => c !== optVal
-        );
-      }
-      if (chuyenDe === optVal) {
-        onChangeChuyenDe('');
-      }
+  // Helper component hiển thị Chỉ báo trạng thái Google Drive cạnh danh mục
+  const renderDriveStatusIndicator = (compactView = false) => {
+    if (isProcessing) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-300 animate-pulse shadow-2xs"
+          title="Đang kiểm tra và đồng bộ thư mục với Google Drive..."
+        >
+          <Loader2 className="w-3 h-3 animate-spin text-amber-600 shrink-0" />
+          <span>{compactView ? 'Đang đồng bộ...' : 'Đang đồng bộ Drive...'}</span>
+        </span>
+      );
     }
 
-    setStore(newStore);
-    saveStoredHierarchy(newStore);
-    setDeleteConfirmItem(null);
-    setConfirmNotice(`Đã xóa "${optVal}" và các cấp con phụ thuộc thành công!`);
-    setTimeout(() => setConfirmNotice(null), 3000);
+    if (!driveConn.isConnected) {
+      return (
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 shadow-2xs"
+          title="Chưa kết nối Google Drive"
+        >
+          <Cloud className="w-3 h-3 text-slate-400 shrink-0" />
+          <span>{compactView ? 'Chưa kết nối' : 'Google Drive: Chưa kết nối'}</span>
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-2xs"
+        title="Đã kết nối và đồng bộ chuẩn xác với Google Drive"
+      >
+        <CheckCircle2 className="w-3 h-3 text-emerald-600 shrink-0" />
+        <span>{compactView ? 'Đã đồng bộ' : 'Google Drive: Đã đồng bộ'}</span>
+      </span>
+    );
   };
 
   // Render một dropdown có nút xóa ở cuối mỗi tùy chọn và nút nhập ngoài
@@ -397,9 +448,21 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     return (
       <div className="space-y-1 relative">
         <div className="flex items-center justify-between">
-          <label className={`text-[11px] font-bold ${isHighlight ? 'text-indigo-800' : 'text-slate-700'}`}>
-            {label}
-          </label>
+          <div className="flex items-center gap-1.5">
+            <label className={`text-[11px] font-bold ${isHighlight ? 'text-indigo-800' : 'text-slate-700'}`}>
+              {label}
+            </label>
+            {/* Chỉ báo trạng thái đồng bộ Drive cạnh nhãn danh mục */}
+            {currentValue && (
+              <span
+                className="inline-flex items-center gap-0.5 text-[9px] font-medium text-emerald-600 bg-emerald-50/80 px-1.5 py-0.2 rounded border border-emerald-200"
+                title={`Mục "${currentValue}" đã được đồng bộ với Google Drive`}
+              >
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
+                <span>Đồng bộ</span>
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Trigger button */}
@@ -469,18 +532,6 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
                     }`}
                   >
                     <span className="truncate flex-1">{opt}</span>
-                    {/* Nút xóa ở cuối mỗi tùy chọn */}
-                    <button
-                      type="button"
-                      title={`Xóa "${opt}" (và toàn bộ cấp con thuộc nó)`}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                      }}
-                      onClick={(e) => handleDeleteOption(level, opt, e)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors shrink-0 cursor-pointer"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
                   </div>
                 ))
               )}
@@ -496,6 +547,14 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
             </div>
           )}
         </div>
+
+        {/* Thông báo tiến trình kiểm tra & thêm vào hệ thống ngay dưới dropdown */}
+        {isProcessing && activeLevel === level && (
+          <div className="mt-1.5 p-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold flex items-center gap-2 animate-pulse shadow-xs">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+            <span>Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -509,21 +568,19 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         </div>
       )}
 
-      {/* 1. TÀI LIỆU (ĐƯỢC ĐẶT LÊN TRÊN NỘI DUNG BÀI DẠY) */}
-      <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-2">
-        {renderDropdown('title', 'TÀI LIỆU', title, docTitles, true)}
-      </div>
-
-      {/* 2. NỘI DUNG BÀI DẠY */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-          <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-            <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+      {/* 1. TÀI LIỆU (BAO GỒM MÔN HỌC, KHỐI LỚP VÀ CHỌN TÀI LIỆU) */}
+      <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-2">
+          <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+            <Layers className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
           </span>
-          <span className="text-[10px] text-slate-400 italic">Dropdown lồng nhau & nút xóa</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-indigo-600 font-semibold hidden sm:inline">Môn học + Khối lớp ➔ Tài liệu</span>
+            {renderDriveStatusIndicator(true)}
+          </div>
         </div>
 
-        {/* Tùy chọn Môn học & Khối lớp nếu có */}
+        {/* Hàng 1 của nhóm Tài liệu: Môn học + Khối lớp (nếu có callback) */}
         {onChangeSubject && onChangeGrade && (
           <div className="grid grid-cols-2 gap-2.5">
             <div>
@@ -556,18 +613,36 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
           </div>
         )}
 
+        {/* Hàng tiếp theo của nhóm Tài liệu: Dropdown Tài liệu */}
+        <div>
+          {renderDropdown('title', 'TÀI LIỆU', title, docTitles, true)}
+        </div>
+      </div>
+
+      {/* 2. NỘI DUNG BÀI DẠY: Chỉ còn Chương, Bài, Vấn đề, Chuyên đề */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+            <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-400 italic hidden sm:inline">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+            {renderDriveStatusIndicator(true)}
+          </div>
+        </div>
+
         {/* 4 Cấp độ: Khi chọn bài đánh giá thì ẩn các cấp độ con tương ứng */}
         {!isDanhGia(title) ? (
           <>
-            {renderDropdown('chuong', 'Cấp 1: Chương', chuong, chuongList)}
+            {renderDropdown('chuong', 'Chương', chuong, chuongList)}
             {!isDanhGia(chuong) ? (
               <>
-                {renderDropdown('bai', 'Cấp 2: Bài', bai, baiList)}
+                {renderDropdown('bai', 'Bài', bai, baiList)}
                 {!isDanhGia(bai) ? (
                   <>
-                    {renderDropdown('vanDe', 'Cấp 3: Vấn đề', vanDe, vanDeList)}
+                    {renderDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
                     {!isDanhGia(vanDe) ? (
-                      renderDropdown('chuyenDe', 'Cấp 4: Chuyên đề', chuyenDe, chuyenDeList)
+                      renderDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)
                     ) : (
                       <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
                         ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
@@ -601,13 +676,14 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         </div>
       </div>
 
-      {/* POPUP / MODAL XÁC NHẬN NHẬP NGOÀI DANH SÁCH */}
+      {/* POPUP / MODAL XÁC NHẬN THÊM VÀO TÀI LIỆU / PHÂN CẤP */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h3 className="font-bold text-sm text-slate-800">
-                Nhập Ngoài Danh Sách: {LEVEL_LABELS[activeLevel]}
+              <h3 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
+                <span>Thêm vào:</span>
+                <span className="text-indigo-700 font-extrabold">{LEVEL_LABELS[activeLevel]}</span>
               </h3>
               <button
                 type="button"
@@ -618,98 +694,107 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
               </button>
             </div>
 
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Nhập giá trị mới cho <strong>{LEVEL_LABELS[activeLevel]}</strong>. Sau khi xác nhận, hệ thống sẽ đưa vào danh sách tùy chọn và <strong>chọn luôn nó</strong>.
-            </p>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1 uppercase">
+                  Tùy chọn:
+                </label>
+                <select
+                  value={customAddType}
+                  onChange={(e) => setCustomAddType(e.target.value)}
+                  disabled={isProcessing}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-indigo-600 bg-slate-50 cursor-pointer disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="standard">Thêm {LEVEL_LABELS[activeLevel].toLowerCase()} mới</option>
+                  <option value="danhGia">Đánh giá</option>
+                </select>
+              </div>
 
-            <div>
-              <input
-                type="text"
-                autoFocus
-                value={customInputValue}
-                onChange={(e) => setCustomInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    handleConfirmCustom();
-                  }
-                }}
-                placeholder={`Nhập tên ${LEVEL_LABELS[activeLevel]} mới...`}
-                className="w-full px-3 py-2 rounded-xl border border-indigo-200 text-xs font-semibold focus:outline-indigo-600 bg-slate-50/50"
-              />
+              <div>
+                <label className="text-[11px] font-bold text-slate-700 block mb-1 uppercase">
+                  Tên {LEVEL_LABELS[activeLevel].toLowerCase()} mới:
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  disabled={isProcessing}
+                  value={customInputValue}
+                  onChange={(e) => {
+                    setCustomInputValue(e.target.value);
+                    if (modalErrorMessage) setModalErrorMessage(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isProcessing) {
+                      e.preventDefault();
+                      handleConfirmCustom();
+                    }
+                  }}
+                  placeholder={`Nhập tên ${LEVEL_LABELS[activeLevel].toLowerCase()} mới...`}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-indigo-600 bg-white disabled:bg-slate-100 disabled:text-slate-400"
+                />
+
+                {/* Dòng chữ màu xanh hiển thị ngay bên dưới chỗ nhập tên thư mục mới trong cửa sổ Thêm vào tài liệu */}
+                {isProcessing && (
+                  <div className="mt-2 text-emerald-600 font-bold text-xs flex items-center gap-1.5 animate-pulse">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-emerald-600" />
+                    <span>⏳ Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...</span>
+                  </div>
+                )}
+
+                {/* Thông báo nếu chưa thành công */}
+                {modalErrorMessage && (
+                  <div className="mt-2 p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs font-bold flex flex-wrap items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                      <span>Tạo chưa thành công: {modalErrorMessage}</span>
+                    </div>
+                    {(modalErrorMessage.includes('401') || modalErrorMessage.includes('hết hạn') || modalErrorMessage.includes('Kết nối Drive') || modalErrorMessage.includes('chưa được xác thực')) && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const res = await connectGoogleDrive();
+                          if (res.success) {
+                            setModalErrorMessage(null);
+                            handleConfirmCustom();
+                          }
+                        }}
+                        className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0"
+                      >
+                        <Cloud className="w-3.5 h-3.5" />
+                        <span>Kết nối Drive</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
               <button
                 type="button"
+                disabled={isProcessing}
                 onClick={() => setModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Hủy bỏ
               </button>
               <button
                 type="button"
+                disabled={isProcessing || !customInputValue.trim()}
                 onClick={handleConfirmCustom}
-                className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                <Check className="w-3.5 h-3.5" /> Xác nhận & Chọn luôn
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* POPUP / MODAL XÁC NHẬN XÓA TÙY CHỌN (KHÔNG DÙNG WINDOW.CONFIRM ĐỂ TRÁNH BỊ CHẶN TRÊN IFRAME) */}
-      {deleteConfirmItem && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl border border-rose-100 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2 text-rose-600">
-                <div className="w-8 h-8 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-rose-600" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-slate-900">
-                    Xác nhận xóa tùy chọn
-                  </h3>
-                  <span className="text-[11px] text-slate-500 font-medium">
-                    {LEVEL_LABELS[deleteConfirmItem.level]}
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmItem(null)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-xs p-1 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2.5 text-xs text-slate-600">
-              <p>
-                Bạn có chắc chắn muốn xóa tùy chọn <strong className="text-slate-900 font-bold">"{deleteConfirmItem.optVal}"</strong> khỏi danh sách không?
-              </p>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-[11px] leading-relaxed">
-                ⚠️ <strong>Lưu ý:</strong> Khi bạn xác nhận xóa tùy chọn này, <strong>toàn bộ các tùy chọn ở các dropdown con phụ thuộc bên dưới cũng sẽ được xóa bỏ hoàn toàn</strong>.
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setDeleteConfirmItem(null)}
-                className="px-3.5 py-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                Hủy bỏ
-              </button>
-              <button
-                type="button"
-                onClick={executeDeleteOption}
-                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Xác nhận xóa</span>
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang kiểm tra Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm mục</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

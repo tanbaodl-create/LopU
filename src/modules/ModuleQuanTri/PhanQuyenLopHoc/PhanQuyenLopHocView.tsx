@@ -9,6 +9,7 @@ import {
   UserCheck,
   ShieldAlert,
   Cloud,
+  Key,
 } from 'lucide-react';
 import { ClassItem, UserProfile, UserRole } from '../../../services/storageTypes';
 import { getClasses, saveClass, getUsers } from '../../ConnectData/ConnectFirestore';
@@ -22,6 +23,8 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [teachers, setTeachers] = useState<UserProfile[]>([]);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
+  const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>('all');
   const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
   const [notification, setNotification] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -83,7 +86,7 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // Phân quyền bảo vệ: Phần sau thì admin và superadmin thấy: Quản trị tài khoản và phân quyền
+  // Phân quyền bảo vệ: Phần sau thì admin và superadmin thấy: Quản trị
   if (currentRole && currentRole !== 'admin' && currentRole !== 'superadmin') {
     return (
       <div id="settings-permissions-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-amber-200 shadow-sm space-y-4">
@@ -92,7 +95,7 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
         </div>
         <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Phân Quyền</h3>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Chỉ <strong>Quản trị viên (Admin)</strong> và <strong>Superadmin</strong> mới có quyền xem và điều phối tại phân hệ <strong>Phân quyền lớp học & Quản lý mã PIN</strong>.
+          Chỉ <strong>Quản trị viên (Admin)</strong> và <strong>Superadmin</strong> mới có quyền xem và điều phối tại phân hệ <strong>Quản trị</strong>.
         </p>
       </div>
     );
@@ -133,12 +136,12 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
         <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 space-y-1.5">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span className="font-bold text-slate-700 flex items-center gap-1">
-              <ShieldAlert className="w-3.5 h-3.5 text-indigo-600" /> Quy chế phân quyền:
+              <ShieldAlert className="w-3.5 h-3.5 text-indigo-600" /> Quy chế phân quyền & Cấu trúc tài liệu:
             </span>
             <span>• <strong>Superadmin</strong>: 2 tài khoản bất khả xâm phạm</span>
             <span>• <strong>Quản trị</strong>: Toàn quyền</span>
             <span>• <strong>Quản lý</strong>: Toàn quyền trong môn được phân công</span>
-            <span>• <strong>Giáo viên</strong>: Mở lớp, thêm/xóa HS, soạn bài Drive 4 cấp</span>
+            <span>• <strong>Giáo viên</strong>: Mở lớp, thêm/xóa HS, soạn tài liệu Drive theo chuỗi phụ thuộc: <em>Môn học ➔ Khối lớp ➔ TÀI LIỆU ➔ NỘI DUNG BÀI DẠY (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề)</em></span>
           </div>
 
           <div className="pt-1 border-t border-slate-200/60 flex flex-wrap items-center gap-2 text-[10px] font-bold">
@@ -159,29 +162,73 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
 
       {/* Google Drive Permissions & Connection Status & Bảo Mật Drive Giáo Viên */}
       <div className={`p-4 rounded-2xl border text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs ${
-        driveConn.isConnected && driveConn.isRealConfigured
+        driveConn.isConnected
           ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-          : 'bg-amber-50 border-amber-200 text-amber-800'
+          : 'bg-slate-50 border-slate-200 text-slate-700'
       }`}>
         <div className="space-y-1">
           <div className="flex items-center gap-1.5 font-bold">
-            <Cloud className="w-4 h-4 shrink-0" />
-            <span>QUYỀN GHI GOOGLE DRIVE & BẢO MẬT DỮ LIỆU: {driveConn.isConnected && driveConn.isRealConfigured ? 'ĐÃ LIÊN KẾT THÀNH CÔNG' : 'CHẾ ĐỘ THỬ NGHIỆM (SANDBOX)'}</span>
+            <Cloud className="w-4 h-4 shrink-0 text-blue-600" />
+            <span>QUYỀN GHI GOOGLE DRIVE & BẢO MẬT DỮ LIỆU: {driveConn.isConnected ? 'ĐÃ LIÊN KẾT THÀNH CÔNG' : 'CHƯA KẾT NỐI GOOGLE DRIVE'}</span>
           </div>
           <p className="text-[11px] leading-relaxed opacity-90">
-            {driveConn.isConnected && driveConn.isRealConfigured
+            {driveConn.isConnected
               ? `Tài khoản giáo viên hiện tại (${driveConn.email}) có đầy đủ quyền tạo cấu trúc thư mục myApp / LopU / TaiLieu và ghi dữ liệu bài dạy vào Google Drive. Hệ thống áp dụng cơ chế bảo mật nghiêm ngặt: Drive của giáo viên chỉ chính giáo viên và app truy cập; học sinh tuyệt đối không được cấp link trực tiếp để lấy trộm tài liệu.`
-              : 'Ứng dụng chưa liên kết hoặc chưa được cấp quyền ghi thực tế từ Google Drive API của bạn. Do đó, hệ thống đang lưu tạm vào Sandbox bộ nhớ trình duyệt. Cơ chế bảo mật tuyệt đối ngăn chặn học sinh truy xuất Drive giáo viên vẫn được thực thi.'}
+              : 'Ứng dụng chưa liên kết Google Drive. Bạn có thể bấm Kết nối Drive ở thanh điều hướng để đồng bộ trực tiếp lên drive.google.com.'}
           </p>
           <div className="pt-1 text-[10px] font-semibold text-indigo-700">
-            🛡️ Bảo mật phát lại: Với bài giảng E-Learning (KienThuc.html), hệ thống tự sinh sandbox đường dẫn tương đối để phát media/assets an toàn mà không làm lộ ID Drive hay file nguồn của giáo viên.
+            🛡️ Bảo mật phát lại: Với bài giảng E-Learning (KienThuc.html), hệ thống tự mã hóa đường dẫn tương đối an toàn mà không làm lộ ID Drive hay file nguồn của giáo viên.
+          </div>
+        </div>
+      </div>
+
+      {/* Lọc danh sách theo Môn học & Khối lớp */}
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-2">
+          <Key className="w-4 h-4 text-indigo-600" />
+          <span className="text-xs font-bold text-slate-800">Danh Sách Lớp & Mã PIN Truy Cập</span>
+          <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
+            {classes.filter(c => (selectedSubjectFilter === 'all' || c.subject === selectedSubjectFilter) && (selectedGradeFilter === 'all' || c.grade === selectedGradeFilter)).length} lớp
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-500 font-medium">Môn:</span>
+            <select
+              value={selectedSubjectFilter}
+              onChange={e => setSelectedSubjectFilter(e.target.value)}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+            >
+              <option value="all">Tất cả môn</option>
+              <option value="Toán Học">Toán Học</option>
+              <option value="Vật Lý">Vật Lý</option>
+              <option value="Hóa Học">Hóa Học</option>
+              <option value="Ngữ Văn">Ngữ Văn</option>
+              <option value="Tiếng Anh">Tiếng Anh</option>
+              <option value="Sinh Học">Sinh Học</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] text-slate-500 font-medium">Khối:</span>
+            <select
+              value={selectedGradeFilter}
+              onChange={e => setSelectedGradeFilter(e.target.value)}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+            >
+              <option value="all">Tất cả khối</option>
+              <option value="Khối 10">Khối 10</option>
+              <option value="Khối 11">Khối 11</option>
+              <option value="Khối 12">Khối 12</option>
+            </select>
           </div>
         </div>
       </div>
 
       {/* Classes PIN & Teacher Assignment Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {classes.map(cls => {
+        {classes
+          .filter(c => (selectedSubjectFilter === 'all' || c.subject === selectedSubjectFilter) && (selectedGradeFilter === 'all' || c.grade === selectedGradeFilter))
+          .map(cls => {
           const isEditing = editingClassId === cls.id;
           const currentPinValue = pinInputs[cls.id] || cls.pinCode;
 

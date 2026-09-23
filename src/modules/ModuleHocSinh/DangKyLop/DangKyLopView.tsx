@@ -93,7 +93,7 @@ export const DangKyLopView: React.FC = () => {
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-lg font-bold text-slate-900">Tìm Lớp & Đăng Ký Học Với Mã PIN</h2>
+            <h2 className="text-lg font-bold text-slate-900">Tìm lớp & Đăng ký</h2>
             <p className="text-xs text-slate-500 mt-1">
               Nhập mã định danh lớp hoặc tìm kiếm tên giáo viên để đăng ký tham gia lớp mới.
             </p>

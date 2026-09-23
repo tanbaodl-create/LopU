@@ -17,6 +17,10 @@ import { ClassItem, ClassLesson, UserProfile, TeacherDocument } from '../../../s
 import { getClasses, updateProgress, getUsers, getTeacherDocuments, purchaseDocumentWithDiamonds, rewardStudentDiamonds } from '../../ConnectData/ConnectFirestore';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
 
+// Đường dẫn mặc định của app và module Lớp học
+export const DEFAULT_APP_PATH = 'myApp/LopU';
+export const DEFAULT_LOPHOC_PATH = `${DEFAULT_APP_PATH}/LopHoc`;
+
 interface LearningClassesViewProps {
   currentStudentId?: string;
 }

@@ -50,6 +50,7 @@ import {
   Check,
   Sparkles,
   FolderTree,
+  FolderLock,
   Send,
   Unlock,
   Layers,
@@ -62,11 +63,14 @@ import {
   Laptop,
   Calculator,
   RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
 import {
   saveTeachingMaterialHierarchyToDrive,
   getDriveConnectionState,
+  createDriveFolderIfNotExists,
+  deleteDriveFolderHierarchy,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
 
 /**
@@ -111,14 +115,129 @@ const WordSoanThaoView: React.FC = () => {
   const [openWordViewMenu, setOpenWordViewMenu] = useState<boolean>(false);
   const [wordViewMode, setWordViewMode] = useState<QuestionViewMode>('split');
   const [currentAlignment, setCurrentAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
+  const [tienTrinhChuyenDe, setTienTrinhChuyenDe] = useState<string>('Kiến thức');
 
   // Modal Nhập hàm Đồ thị trong Word
   const [showWordGraphModal, setShowWordGraphModal] = useState<boolean>(false);
-  const [wordGraphFormula, setWordGraphFormula] = useState<string>('x^2 - 1');
+  const [wordGraphFormula, setWordGraphFormula] = useState<string>('y = x^2 - 1');
   const [wordGraphXMin, setWordGraphXMin] = useState<string>('-2');
   const [wordGraphXMax, setWordGraphXMax] = useState<string>('2');
-  const [wordGraphYMin, setWordGraphYMin] = useState<string>('-1.5');
-  const [wordGraphYMax, setWordGraphYMax] = useState<string>('3');
+  const [wordGraphYMin, setWordGraphYMin] = useState<string>('-2');
+  const [wordGraphYMax, setWordGraphYMax] = useState<string>('4');
+  const [wordGraphRequirement, setWordGraphRequirement] = useState<string>('Gióng trục điểm cực trị');
+  const [wordGraphOldTikz, setWordGraphOldTikz] = useState<string>('');
+
+  // Lắng nghe sự kiện click nút "Chỉnh sửa" từ đồ thị TikZ để mở cửa sổ chỉnh sửa thông số
+  useEffect(() => {
+    const handleOpenEditTikz = (e: CustomEvent<any>) => {
+      if (e.detail) {
+        if (e.detail.formulaStr) setWordGraphFormula(e.detail.formulaStr);
+        if (e.detail.xMin !== undefined) setWordGraphXMin(e.detail.xMin.toString());
+        if (e.detail.xMax !== undefined) setWordGraphXMax(e.detail.xMax.toString());
+        if (e.detail.yMin !== undefined) setWordGraphYMin(e.detail.yMin.toString());
+        if (e.detail.yMax !== undefined) setWordGraphYMax(e.detail.yMax.toString());
+        if (e.detail.requirement !== undefined) setWordGraphRequirement(e.detail.requirement);
+        setWordGraphOldTikz(e.detail.tikzCode || '');
+        setShowWordGraphModal(true);
+      }
+    };
+
+    window.addEventListener('app-open-edit-tikz-modal', handleOpenEditTikz as EventListener);
+    return () => {
+      window.removeEventListener('app-open-edit-tikz-modal', handleOpenEditTikz as EventListener);
+    };
+  }, []);
+
+  // Hàm tính toán và đề xuất miền y (GTNN - 1 và GTLN + 1) dựa theo công thức và miền x
+  const getWordSuggestedYDomain = (formula: string, xminStr: string, xmaxStr: string) => {
+    try {
+      const x1 = parseFloat(xminStr) || -2;
+      const x2 = parseFloat(xmaxStr) || 2;
+      const cleanExpr = formula
+        .replace(/^[a-zA-Z]\([a-zA-Z]\)\s*=\s*/, '')
+        .replace(/^[a-zA-Z]\s*=\s*/, '')
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1)/($2)')
+        .replace(/\\x/g, 'x')
+        .replace(/\bt\b/g, 'x')
+        .replace(/\^/g, '**')
+        .replace(/\\sqrt\{([^}]+)\}/g, 'Math.sqrt($1)')
+        .replace(/sqrt/g, 'Math.sqrt')
+        .replace(/sin/g, 'Math.sin')
+        .replace(/cos/g, 'Math.cos')
+        .replace(/tan/g, 'Math.tan')
+        .replace(/abs/g, 'Math.abs')
+        .replace(/(\d+)\s*x/g, '$1*x')
+        .replace(/(\d+)\s*\(/g, '$1*(')
+        .replace(/\)\s*\(/g, ')*(')
+        .replace(/x\s*(\d+)/g, 'x*$1');
+
+      // eslint-disable-next-line no-new-func
+      const fn = new Function('x', `try { return ${cleanExpr}; } catch { return 0; }`);
+      let minVal = Infinity;
+      let maxVal = -Infinity;
+      const step = Math.max(0.02, (x2 - x1) / 80);
+      for (let x = x1; x <= x2 + 0.001; x += step) {
+        const y = Number(fn(x));
+        if (!isNaN(y) && isFinite(y) && Math.abs(y) < 200) {
+          if (y < minVal) minVal = y;
+          if (y > maxVal) maxVal = y;
+        }
+      }
+
+      if (minVal !== Infinity && maxVal !== -Infinity) {
+        const calculatedMin = Math.max(-50, Math.floor(minVal) - 1);
+        const calculatedMax = Math.min(50, Math.ceil(maxVal) + 1);
+        return {
+          suggestedYMin: calculatedMin.toString(),
+          suggestedYMax: calculatedMax.toString(),
+          minVal: Number(minVal.toFixed(2)),
+          maxVal: Number(maxVal.toFixed(2)),
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      suggestedYMin: '-2',
+      suggestedYMax: '4',
+      minVal: -1,
+      maxVal: 3,
+    };
+  };
+
+  // Hàm chuyển đổi số sang phân số hoặc số nguyên ưu tiên
+  const formatWordCoordinateMath = (val: number): { raw: string; tex: string; display: string } => {
+    if (Math.abs(val - Math.round(val)) < 0.02) {
+      const intVal = Math.round(val);
+      return { raw: `${intVal}`, tex: `${intVal}`, display: `${intVal}` };
+    }
+
+    for (let d = 2; d <= 16; d++) {
+      const n = Math.round(val * d);
+      const diff = Math.abs(val - n / d);
+      if (diff < 0.02) {
+        const gcd = (a: number, b: number): number => (b === 0 ? Math.abs(a) : gcd(b, a % b));
+        const common = gcd(n, d);
+        let num = n / common;
+        let denom = d / common;
+        if (denom < 0) {
+          num = -num;
+          denom = -denom;
+        }
+        if (denom === 1) {
+          return { raw: `${num}`, tex: `${num}`, display: `${num}` };
+        }
+        const isNeg = num < 0;
+        const absNum = Math.abs(num);
+        const texStr = isNeg ? `-\\frac{${absNum}}{${denom}}` : `\\frac{${absNum}}{${denom}}`;
+        const rawStr = `${num}/${denom}`;
+        return { raw: rawStr, tex: texStr, display: texStr };
+      }
+    }
+
+    const dec = Number(val.toFixed(2));
+    return { raw: `${dec}`, tex: `${dec}`, display: `${dec}` };
+  };
 
   // Modal Nhập Bảng biến thiên trong Word
   const [showWordBBTModal, setShowWordBBTModal] = useState<boolean>(false);
@@ -294,36 +413,140 @@ const WordSoanThaoView: React.FC = () => {
   };
 
   const handleGenerateWordGraphTikZ = () => {
-    const rawTikz = `% Đồ thị TikZ (Nhập hàm: y = ${wordGraphFormula}):
-\\begin{tikzpicture}[scale=0.8, >=stealth]
-  \\draw[->,thick] (${parseFloat(wordGraphXMin) - 1},0) -- (${parseFloat(wordGraphXMax) + 1},0) node[right] {$x$};
-  \\draw[->,thick] (0,${parseFloat(wordGraphYMin) - 1}) -- (0,${parseFloat(wordGraphYMax) + 1}) node[above] {$y$};
-  \\draw[domain=${wordGraphXMin}:${wordGraphXMax},smooth,variable=\\x,red,ultra thick] plot ({\\x},{${wordGraphFormula}});
+    const xMinNum = parseFloat(wordGraphXMin) || -2;
+    const xMaxNum = parseFloat(wordGraphXMax) || 2;
+    const yMinNum = parseFloat(wordGraphYMin) || -2;
+    const yMaxNum = parseFloat(wordGraphYMax) || 4;
+
+    // 1. Phân tích vế trái và vế phải để suy ra nhãn trục
+    let lhs = 'y';
+    let rhs = wordGraphFormula.trim();
+    if (wordGraphFormula.includes('=')) {
+      const parts = wordGraphFormula.split('=');
+      lhs = parts[0].trim() || 'y';
+      rhs = parts.slice(1).join('=').trim();
+    }
+
+    let yLabel = lhs;
+    let xLabel = 'x';
+    let varName = 'x';
+
+    if (/\bt\b/.test(rhs)) {
+      xLabel = 't';
+      varName = 't';
+    } else if (/\bx\b/.test(rhs)) {
+      xLabel = 'x';
+      varName = 'x';
+    } else if (/\bu\b/.test(rhs)) {
+      xLabel = 'u';
+      varName = 'u';
+    } else if (lhs.includes('(') && lhs.includes(')')) {
+      const innerVar = lhs.match(/\(([^)]+)\)/);
+      if (innerVar && innerVar[1].trim()) {
+        xLabel = innerVar[1].trim();
+        varName = innerVar[1].trim();
+      }
+    }
+
+    // 2. Chuẩn hóa biểu thức cho TikZ plot
+    const cleanFormulaForTikz = rhs
+      .replace(new RegExp(`\\b${varName}\\b`, 'g'), `\\${varName}`)
+      .replace(/\^2/g, `*\\${varName}`)
+      .replace(/\^3/g, `*\\${varName}*\\${varName}`)
+      .trim();
+
+    // 3. Tự động tính toán điểm cực trị và sinh mã gióng trục (Ưu tiên số nguyên -> phân số -> số thập phân)
+    const evalMath = (val: number): number => {
+      try {
+        let expr = rhs
+          .replace(new RegExp(`\\b${varName}\\b`, 'g'), 'x')
+          .replace(/\^/g, '**')
+          .replace(/sin/g, 'Math.sin')
+          .replace(/cos/g, 'Math.cos')
+          .replace(/tan/g, 'Math.tan')
+          .replace(/sqrt/g, 'Math.sqrt')
+          .replace(/abs/g, 'Math.abs')
+          .replace(/(\d+)\s*x/g, '$1*x')
+          .replace(/x\s*(\d+)/g, 'x*$1');
+        // eslint-disable-next-line no-new-func
+        const fn = new Function('x', `return ${expr};`);
+        const res = fn(val);
+        return isNaN(res) || !isFinite(res) ? 0 : res;
+      } catch {
+        return val * val - 1;
+      }
+    };
+
+    const extremaList: Array<{ x: number; y: number }> = [];
+    const samples = 100;
+    const step = (xMaxNum - xMinNum) / samples;
+    const pts: Array<{ x: number; y: number }> = [];
+    for (let x = xMinNum; x <= xMaxNum + 0.0001; x += step) {
+      pts.push({ x, y: evalMath(x) });
+    }
+
+    for (let i = 2; i < pts.length - 2; i++) {
+      const cur = pts[i];
+      const prev = pts[i - 1];
+      const next = pts[i + 1];
+      if (cur.x <= xMinNum + 0.1 || cur.x >= xMaxNum - 0.1) continue;
+
+      if ((cur.y > prev.y && cur.y > next.y) || (cur.y < prev.y && cur.y < next.y)) {
+        if (!extremaList.some(e => Math.abs(e.x - cur.x) < 0.35)) {
+          extremaList.push({
+            x: Number(cur.x.toFixed(2)),
+            y: Number(cur.y.toFixed(2)),
+          });
+        }
+      }
+    }
+
+    // Sinh mã gióng cực trị: vị trí nhãn tránh đè lên trục, đường gióng và đồ thị
+    const extremaTikzLines = extremaList.map(e => {
+      const xFmt = formatWordCoordinateMath(e.x);
+      const yFmt = formatWordCoordinateMath(e.y);
+      const xStr = e.x.toString();
+      const yStr = e.y.toString();
+      const xPos = e.y >= 0 ? 'below' : 'above';
+      const yPos = e.x >= 0 ? 'left' : 'right';
+
+      return `  % Gióng tọa độ điểm cực trị (${xFmt.raw}, ${yFmt.raw})
+  \\draw[dashed, thin, gray] (${xStr},0) -- (${xStr},${yStr}) -- (0,${yStr});
+  \\fill (${xStr},${yStr}) circle (1.8pt);
+  ${Math.abs(e.x) > 0.1 ? `\\node at (${xStr},0) [${xPos}, font=\\footnotesize] {$${xFmt.tex}$};` : ''}
+  ${Math.abs(e.y) > 0.1 ? `\\node at (0,${yStr}) [${yPos}, font=\\footnotesize] {$${yFmt.tex}$};` : ''}`;
+    }).join('\n');
+
+    const reqComment = wordGraphRequirement ? `\n  % Yêu cầu: ${wordGraphRequirement}` : '';
+
+    // Mã TikZ hoàn chỉnh: Bỏ hoàn toàn các vạch chia trên trục, giữ trục tọa độ thanh thoát và chuẩn xác
+    const rawTikz = `% Đồ thị hàm số: ${wordGraphFormula}${reqComment}
+% Cấu hình: xMin=${xMinNum}; xMax=${xMaxNum}; yMin=${yMinNum}; yMax=${yMaxNum}; xLabel=${xLabel}; yLabel=${yLabel}
+\\begin{tikzpicture}[scale=0.85, >=stealth]
+  % Trục tọa độ
+  \\draw[->,thick] (${(xMinNum - 0.6).toFixed(1)},0) -- (${(xMaxNum + 0.6).toFixed(1)},0) node[right] {$${xLabel}$};
+  \\draw[->,thick] (0,${(yMinNum - 0.6).toFixed(1)}) -- (0,${(yMaxNum + 0.6).toFixed(1)}) node[above] {$${yLabel}$};
   \\node at (0,0) [below left] {$O$};
+${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị nằm gọn trong hình chữ nhật (x_min, y_min) -- (x_max, y_max)
+  \\begin{scope}
+    \\clip (${xMinNum}, ${yMinNum}) rectangle (${xMaxNum}, ${yMaxNum});
+    \\draw[domain=${xMinNum}:${xMaxNum},smooth,variable=\\${varName},blue,ultra thick] plot ({\\${varName}},{${cleanFormulaForTikz || `\\${varName}*\\${varName} - 1`}});
+  \\end{scope}
 \\end{tikzpicture}`;
 
     // Chèn trực tiếp vào câu hỏi đang chọn trong QuestionEditorWord
     window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
-      detail: { code: rawTikz, type: 'graph', title: `Đồ thị y = ${wordGraphFormula}` }
+      detail: {
+        code: rawTikz,
+        oldCode: wordGraphOldTikz,
+        type: 'graph',
+        title: `Đồ thị ${wordGraphFormula}`
+      }
     }));
 
-    const customTikz = `
-      <div style="background-color: #f0f9ff; border: 1.5px solid #0284c7; padding: 14px; border-radius: 12px; margin: 12px 0;">
-        <div style="color: #0369a1; font-weight: bold; font-size: 14px; margin-bottom: 8px;">
-          📈 <span>Đồ thị TikZ (Nhập hàm trực tiếp: y = ${wordGraphFormula})</span>
-        </div>
-        <pre style="background: #0f172a; color: #38bdf8; padding: 10px; border-radius: 8px; font-size: 11px; font-family: monospace; overflow-x: auto; margin: 0;">
-\\begin{tikzpicture}[scale=0.8, >=stealth]
-  \\draw[->,thick] (${parseFloat(wordGraphXMin) - 1},0) -- (${parseFloat(wordGraphXMax) + 1},0) node[right] {$x$};
-  \\draw[->,thick] (0,${parseFloat(wordGraphYMin) - 1}) -- (0,${parseFloat(wordGraphYMax) + 1}) node[above] {$y$};
-  \\draw[domain=${wordGraphXMin}:${wordGraphXMax},smooth,variable=\\x,red,ultra thick] plot ({\\x},{${wordGraphFormula}});
-  \\node at (0,0) [below left] {$O$};
-\\end{tikzpicture}</pre>
-      </div>
-    `;
-    execCommand('insertHTML', customTikz);
-    setNotification({ text: `Đã chèn đồ thị y = ${wordGraphFormula} vào câu hỏi!`, type: 'success' });
+    setNotification({ text: `Đã ${wordGraphOldTikz ? 'cập nhật' : 'chèn'} đồ thị ${wordGraphFormula} vào câu hỏi!`, type: 'success' });
     setTimeout(() => setNotification(null), 4000);
+    setWordGraphOldTikz('');
     setShowWordGraphModal(false);
   };
 
@@ -365,6 +588,8 @@ const WordSoanThaoView: React.FC = () => {
   const [addingLevel, setAddingLevel] = useState<string>('');
   const [newItemText, setNewItemText] = useState<string>('');
   const [addModalType, setAddModalType] = useState<'standard' | 'luyenTap' | 'danhGia'>('standard');
+  const [isAddingFolder, setIsAddingFolder] = useState<boolean>(false);
+  const [modalAddError, setModalAddError] = useState<string | null>(null);
   const [showMathTypeModal, setShowMathTypeModal] = useState<boolean>(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ level: string; item: string } | null>(null);
 
@@ -593,18 +818,46 @@ const WordSoanThaoView: React.FC = () => {
     setAddingLevel(lvl);
     setNewItemText('');
     setAddModalType('standard');
+    setModalAddError(null);
     setShowAddModal(true);
     setOpenDropdown(null);
   };
 
-  const handleConfirmAddItem = () => {
-    if (!newItemText.trim()) return;
+  const handleConfirmAddItem = async () => {
+    if (!newItemText.trim() || isAddingFolder) return;
     const raw = newItemText.trim();
     let val = raw;
     if (addModalType === 'danhGia') {
       val = formatDanhGiaFileName(raw);
     } else if (addModalType === 'luyenTap') {
       val = formatLuyenTapFileName(raw);
+    }
+
+    // 1. Xác định đường dẫn Drive phân cấp:
+    // myApp / LopU / TaiLieu / [Tài liệu] / [Chương] / [Bài] / [Vấn đề] / [Chuyên đề]
+    const pathSegments: string[] = ['myApp', 'LopU', 'TaiLieu'];
+    if (addingLevel === 'title') {
+      pathSegments.push(val);
+    } else if (addingLevel === 'chuong') {
+      pathSegments.push(title || 'TaiLieuChung', val);
+    } else if (addingLevel === 'bai') {
+      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', val);
+    } else if (addingLevel === 'vanDe') {
+      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', val);
+    } else if (addingLevel === 'chuyenDe') {
+      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', vanDe || 'VanDe1', val);
+    }
+
+    setIsAddingFolder(true);
+    setModalAddError(null);
+
+    const driveRes = await createDriveFolderIfNotExists(pathSegments);
+
+    if (!driveRes.success) {
+      setIsAddingFolder(false);
+      const errMsg = driveRes.error || 'Tạo chưa thành công trên Google Drive';
+      setModalAddError(errMsg);
+      return;
     }
 
     if (addingLevel === 'title') {
@@ -641,7 +894,25 @@ const WordSoanThaoView: React.FC = () => {
       setChuyenDeList(prev => [...prev, val]);
       setChuyenDe(val);
     }
+
+    setIsAddingFolder(false);
+    setModalAddError(null);
     setShowAddModal(false);
+
+    if (driveRes.isRealDrive) {
+      setNotification({
+        text: driveRes.alreadyExists
+          ? `Đã liên kết thư mục "${val}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`
+          : `Đã tạo thành công thư mục "${val}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`,
+        type: 'success',
+      });
+    } else {
+      setNotification({
+        text: `Đã thêm "${val}" vào ứng dụng. (Chưa kết nối Google Drive - Hãy bấm Kết nối Drive để đồng bộ lên drive.google.com)`,
+        type: 'info',
+      });
+    }
+    setTimeout(() => setNotification(null), 6000);
   };
 
   const handleDeleteItem = (lvl: string, itm: string, e: React.MouseEvent) => {
@@ -855,11 +1126,17 @@ const WordSoanThaoView: React.FC = () => {
       );
 
       const conn = getDriveConnectionState();
-      const statusMsg = conn.isConnected && conn.isRealConfigured ? 'Google Drive thực' : 'Sandbox bộ nhớ';
-      setNotification({
-        text: `Đã lưu thành công lên ${statusMsg}! Đường dẫn: ${res.drivePath}`,
-        type: 'success',
-      });
+      if (conn.isConnected) {
+        setNotification({
+          text: `Đã lưu thành công lên Google Drive! Đường dẫn: ${res.drivePath}`,
+          type: 'success',
+        });
+      } else {
+        setNotification({
+          text: `Đã lưu thành công tài liệu vào hệ thống!`,
+          type: 'success',
+        });
+      }
       setTimeout(() => setNotification(null), 5000);
     } catch {
       setNotification({ text: 'Có lỗi xảy ra khi lưu tài liệu. Vui lòng thử lại!', type: 'error' });
@@ -890,26 +1167,23 @@ const WordSoanThaoView: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Cột trái (4 cột): TÀI LIỆU & NỘI DUNG BÀI DẠY */}
         <div className="lg:col-span-4 space-y-4">
-          <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-2">
-            {renderCleanDropdown('title', 'TÀI LIỆU', title, titleList, true)}
-          </div>
-
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-                <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+          {/* 1. NHÓM TÀI LIỆU (GỒM MÔN HỌC + KHỐI LỚP VÀ DROPDOWN TÊN TÀI LIỆU) */}
+          <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+              <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+                <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
               </span>
-              <span className="text-[10px] text-slate-400 italic">4 cấp độ lồng nhau</span>
+              <span className="text-[10px] text-indigo-600 font-semibold">Môn học + Khối lớp ➔ Tên tài liệu</span>
             </div>
 
-            {/* Môn học & Khối lớp */}
+            {/* Hàng 1 của nhóm Tài liệu: Môn học & Khối lớp (đứng trước dropdown chọn Tên tài liệu) */}
             <div className="grid grid-cols-2 gap-2.5">
               <div>
                 <label className="text-[10px] font-bold text-slate-600 block mb-1">Môn học</label>
                 <select
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
                 >
                   <option value="">-- (Để trống) --</option>
                   <option value="Toán Học">Toán Học</option>
@@ -925,7 +1199,7 @@ const WordSoanThaoView: React.FC = () => {
                 <select
                   value={grade}
                   onChange={(e) => setGrade(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
                 >
                   <option value="">-- (Để trống) --</option>
                   <option value="Khối 10">Khối 10</option>
@@ -935,18 +1209,33 @@ const WordSoanThaoView: React.FC = () => {
               </div>
             </div>
 
-            {/* 4 Cấp độ: Đã bỏ nút Nhập ngoài bên ngoài, Nút trong là "Thêm". Khi chọn bài đánh giá thì ẩn các cấp độ con */}
+            {/* Hàng tiếp theo của nhóm Tài liệu: Dropdown chọn Tên tài liệu */}
+            <div className="pt-1">
+              {renderCleanDropdown('title', 'Tên tài liệu', title, titleList, true)}
+            </div>
+          </div>
+
+          {/* 2. NHÓM NỘI DUNG BÀI DẠY (CHỈ CÒN CHƯƠNG, BÀI, VẤN ĐỀ, CHUYÊN ĐỀ) */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+              </span>
+              <span className="text-[10px] text-slate-400 italic">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+            </div>
+
+            {/* Các cấp độ: Chương -> Bài -> Vấn đề -> Chuyên đề */}
             {!isDanhGia(title) ? (
               <>
-                {renderCleanDropdown('chuong', 'Cấp 1: Chương', chuong, chuongList)}
+                {renderCleanDropdown('chuong', 'Chương', chuong, chuongList)}
                 {!isDanhGia(chuong) ? (
                   <>
-                    {renderCleanDropdown('bai', 'Cấp 2: Bài', bai, baiList)}
+                    {renderCleanDropdown('bai', 'Bài', bai, baiList)}
                     {!isDanhGia(bai) ? (
                       <>
-                        {renderCleanDropdown('vanDe', 'Cấp 3: Vấn đề', vanDe, vanDeList)}
+                        {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
                         {!isDanhGia(vanDe) ? (
-                          renderCleanDropdown('chuyenDe', 'Cấp 4: Chuyên đề', chuyenDe, chuyenDeList)
+                          renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)
                         ) : (
                           <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
                             ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
@@ -1003,6 +1292,34 @@ const WordSoanThaoView: React.FC = () => {
         <div className="lg:col-span-8 space-y-4">
           {/* Menu Thanh công cụ Word - Cố định ở đầu trang khi cuộn xuống dưới */}
           <div className="sticky top-0 z-30 bg-slate-100/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-md flex flex-wrap items-center gap-1.5 transition-all">
+            {/* 0. DROPDOWN TIẾN TRÌNH CHUYÊN ĐỀ (ĐỨNG TRƯỚC BIỂU TƯỢNG IN ĐẬM): Gồm 4 phần: Kiến thức, Luyện tập, Kiểm tra, Cải thiện */}
+            <div className="flex items-center gap-1 mr-1">
+              <select
+                id="select-tien-trinh-chuyen-de-word"
+                value={tienTrinhChuyenDe}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setTienTrinhChuyenDe(val);
+                  if (val) {
+                    setNotification({
+                      text: `Tiến trình chuyên đề: ${val}`,
+                      type: 'info',
+                    });
+                    setTimeout(() => setNotification(null), 3000);
+                  }
+                }}
+                className="text-xs font-black bg-white border border-indigo-300 rounded-lg px-2.5 py-1 text-indigo-900 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors"
+                title="Tiến trình chuyên đề (4 phần: Kiến thức, Luyện tập, Kiểm tra, Cải thiện)"
+              >
+                <option value="Kiến thức">📚 1. Kiến thức</option>
+                <option value="Luyện tập">✍️ 2. Luyện tập</option>
+                <option value="Kiểm tra">📝 3. Kiểm tra</option>
+                <option value="Cải thiện">🚀 4. Cải thiện</option>
+              </select>
+            </div>
+
+            <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
+
             {/* 1. Đậm, Nghiêng, Gạch chân */}
             <button onClick={() => execCommand('bold')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Chữ Đậm (Ctrl+B)">
               <Bold className="w-4 h-4" />
@@ -1539,6 +1856,7 @@ const WordSoanThaoView: React.FC = () => {
                 <input
                   type="text"
                   autoFocus
+                  disabled={isAddingFolder}
                   placeholder={
                     addModalType === 'danhGia'
                       ? 'Nhập tên bài đánh giá (ví dụ: 15 phút, Giữa kỳ)...'
@@ -1547,15 +1865,32 @@ const WordSoanThaoView: React.FC = () => {
                       : 'Nhập tên mục mới...'
                   }
                   value={newItemText}
-                  onChange={e => setNewItemText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleConfirmAddItem()}
-                  className="flex-1 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none min-w-0"
+                  onChange={e => {
+                    setNewItemText(e.target.value);
+                    if (modalAddError) setModalAddError(null);
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && !isAddingFolder && handleConfirmAddItem()}
+                  className="flex-1 px-3 py-2 text-xs font-semibold text-slate-800 focus:outline-none min-w-0 disabled:bg-slate-50 disabled:text-slate-400"
                 />
               </div>
+
+              {/* Dòng chữ màu đỏ ngay bên dưới chỗ nhập tên thư mục mới trong cửa sổ Thêm vào tài liệu */}
+              {isAddingFolder && (
+                <div className="mt-2 text-red-600 font-bold text-xs flex items-center gap-1.5 animate-pulse">
+                  <span>⏳ Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...</span>
+                </div>
+              )}
+
+              {/* Thông báo lỗi màu đỏ nếu chưa thành công */}
+              {modalAddError && (
+                <div className="mt-2 text-red-600 font-bold text-xs flex items-center gap-1.5">
+                  <span>Tạo chưa thành công: {modalAddError}</span>
+                </div>
+              )}
             </div>
 
             {/* Live Preview quy cách đặt tên chuẩn */}
-            {(addModalType === 'danhGia' || addModalType === 'luyenTap') && (
+            {!isAddingFolder && (addModalType === 'danhGia' || addModalType === 'luyenTap') && (
               <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-[11px] space-y-1">
                 <span className="text-slate-500 block">Quy cách đặt tên tệp chuẩn:</span>
                 <div className="font-mono font-bold text-xs text-indigo-700 bg-white px-2 py-1 rounded border border-indigo-100 flex items-center gap-1.5 truncate">
@@ -1572,15 +1907,17 @@ const WordSoanThaoView: React.FC = () => {
             <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
               <button
                 type="button"
+                disabled={isAddingFolder}
                 onClick={() => setShowAddModal(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Hủy
               </button>
               <button
                 type="button"
+                disabled={isAddingFolder || !newItemText.trim()}
                 onClick={handleConfirmAddItem}
-                className={`px-4 py-1.5 text-xs font-bold text-white rounded-lg shadow-xs cursor-pointer transition-colors ${
+                className={`px-4 py-1.5 text-xs font-bold text-white rounded-lg shadow-xs cursor-pointer transition-colors flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed ${
                   addModalType === 'danhGia'
                     ? 'bg-emerald-600 hover:bg-emerald-700'
                     : addModalType === 'luyenTap'
@@ -1588,11 +1925,17 @@ const WordSoanThaoView: React.FC = () => {
                     : 'bg-indigo-600 hover:bg-indigo-700'
                 }`}
               >
-                {addModalType === 'danhGia'
-                  ? 'Thêm Đánh giá'
-                  : addModalType === 'luyenTap'
-                  ? 'Thêm Luyện tập'
-                  : 'Thêm mục'}
+                {isAddingFolder ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang kiểm tra Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Thêm mục</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1611,95 +1954,229 @@ const WordSoanThaoView: React.FC = () => {
       {/* Modal Nhập công thức Đồ thị TikZ */}
       {showWordGraphModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
                 <div className="p-2 rounded-xl bg-sky-100 text-sky-700">
-                  <Calculator className="w-5 h-5" />
+                  <TrendingUp className="w-5 h-5" />
                 </div>
                 <div>
-                  <h4 className="font-bold text-sm text-slate-900">Nhập hàm số vẽ Đồ thị TikZ</h4>
-                  <p className="text-[11px] text-slate-500 font-normal">Nhập biểu thức và hệ thống sẽ xuất mã TikZ</p>
+                  <h4 className="font-bold text-sm text-slate-900">
+                    {wordGraphOldTikz ? 'Chỉnh sửa Đồ thị TikZ' : 'Nhập hàm số vẽ Đồ thị TikZ'}
+                  </h4>
+                  <p className="text-[11px] text-slate-500 font-normal">Tùy chỉnh thông số hàm số, miền x/y và các yêu cầu đồ thị</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setShowWordGraphModal(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                onClick={() => {
+                  setWordGraphOldTikz('');
+                  setShowWordGraphModal(false);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Công thức hàm số y = f(x):</label>
-                <input
-                  type="text"
-                  value={wordGraphFormula}
-                  onChange={e => setWordGraphFormula(e.target.value)}
-                  placeholder="Ví dụ: x^2 - 2*x - 1 hoặc sin(deg(x))"
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-sky-600 bg-slate-50"
-                />
-              </div>
+            <div className="space-y-3.5 text-xs">
+              <div className="p-3.5 bg-sky-50/70 rounded-2xl border border-sky-100 space-y-3">
+                <span className="block font-bold text-sky-900 text-xs uppercase tracking-wider">
+                  Công thức hàm số & Thiết lập miền
+                </span>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Miền x (Min → Max):</label>
-                  <div className="flex items-center gap-1.5">
+                <div className="space-y-3">
+                  {/* Ô nhập công thức hàm số (cho phép nhập cả tên hàm) */}
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-800 block mb-1">
+                      Công thức hàm số (nhập đầy đủ tên hàm, ví dụ: y = x^3 - 3x, f(x) = t^3 + 2, y = x^2 - 1):
+                    </label>
                     <input
                       type="text"
-                      value={wordGraphXMin}
-                      onChange={e => setWordGraphXMin(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
-                    />
-                    <span>→</span>
-                    <input
-                      type="text"
-                      value={wordGraphXMax}
-                      onChange={e => setWordGraphXMax(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
+                      value={wordGraphFormula}
+                      onChange={e => {
+                        const newFormula = e.target.value;
+                        setWordGraphFormula(newFormula);
+                        const sug = getWordSuggestedYDomain(newFormula, wordGraphXMin, wordGraphXMax);
+                        setWordGraphYMin(sug.suggestedYMin);
+                        setWordGraphYMax(sug.suggestedYMax);
+                      }}
+                      placeholder="Ví dụ: y = x^3 - 3x hoặc f(x) = t^3 + 2 hoặc y = x^2 - 1"
+                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
                     />
                   </div>
-                </div>
 
-                <div>
-                  <label className="text-[11px] font-semibold text-slate-600 block mb-1">Trục y (Min → Max):</label>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      value={wordGraphYMin}
-                      onChange={e => setWordGraphYMin(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
+                  {/* Nút gợi ý chèn mã LaTeX */}
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Gợi ý chèn nhanh ký hiệu:</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        { label: '+∞', val: '+\\infty' },
+                        { label: '-∞', val: '-\\infty' },
+                        { label: '∞', val: '\\infty' },
+                        { label: '|', val: '|' },
+                        { label: '||', val: '||' },
+                        { label: 'x²', val: 'x^2' },
+                        { label: 'x³', val: 'x^3' },
+                        { label: '√x', val: '\\sqrt{x}' },
+                        { label: 'x/y', val: '\\frac{a}{b}' },
+                        { label: 'π', val: '\\pi' },
+                        { label: 'sin(x)', val: 'sin(x)' },
+                        { label: 'cos(x)', val: 'cos(x)' },
+                      ].map((s, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            const newFormula = wordGraphFormula + s.val;
+                            setWordGraphFormula(newFormula);
+                            const sug = getWordSuggestedYDomain(newFormula, wordGraphXMin, wordGraphXMax);
+                            setWordGraphYMin(sug.suggestedYMin);
+                            setWordGraphYMax(sug.suggestedYMax);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-white hover:bg-sky-100 border border-slate-200 text-[10px] font-mono text-sky-800 transition-colors cursor-pointer shadow-2xs"
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Miền x */}
+                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-sky-100">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmin (Cận trái x):</label>
+                      <input
+                        type="text"
+                        value={wordGraphXMin}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setWordGraphXMin(val);
+                          const sug = getWordSuggestedYDomain(wordGraphFormula, val, wordGraphXMax);
+                          setWordGraphYMin(sug.suggestedYMin);
+                          setWordGraphYMax(sug.suggestedYMax);
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmax (Cận phải x):</label>
+                      <input
+                        type="text"
+                        value={wordGraphXMax}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setWordGraphXMax(val);
+                          const sug = getWordSuggestedYDomain(wordGraphFormula, wordGraphXMin, val);
+                          setWordGraphYMin(sug.suggestedYMin);
+                          setWordGraphYMax(sug.suggestedYMax);
+                        }}
+                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Miền y đề xuất tự động */}
+                  <div className="p-2.5 rounded-xl bg-white border border-sky-200 space-y-1.5 shadow-2xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold text-sky-800">
+                        ⚡ Miền y (Đề xuất tự động: GTNN - 1 và GTLN + 1):
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sug = getWordSuggestedYDomain(wordGraphFormula, wordGraphXMin, wordGraphXMax);
+                          setWordGraphYMin(sug.suggestedYMin);
+                          setWordGraphYMax(sug.suggestedYMax);
+                        }}
+                        className="text-[9px] font-bold text-sky-600 hover:text-sky-800 underline cursor-pointer"
+                      >
+                        Tính lại đề xuất
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[9px] font-medium text-slate-500 block">ymin (Cận dưới y):</label>
+                        <input
+                          type="text"
+                          value={wordGraphYMin}
+                          onChange={e => setWordGraphYMin(e.target.value)}
+                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-slate-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[9px] font-medium text-slate-500 block">ymax (Cận trên y):</label>
+                        <input
+                          type="text"
+                          value={wordGraphYMax}
+                          onChange={e => setWordGraphYMax(e.target.value)}
+                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-slate-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ô nhập yêu cầu thêm với đồ thị */}
+                  <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-1.5">
+                    <label className="text-[10px] font-bold text-indigo-900 block flex items-center gap-1">
+                      <span>✨ Yêu cầu thêm với đồ thị:</span>
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={wordGraphRequirement}
+                      onChange={e => setWordGraphRequirement(e.target.value)}
+                      placeholder="Ví dụ: Gióng trục điểm cực trị; Gióng điểm A(1, 2); Tiếp tuyến tại x=1..."
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
                     />
-                    <span>→</span>
-                    <input
-                      type="text"
-                      value={wordGraphYMax}
-                      onChange={e => setWordGraphYMax(e.target.value)}
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600"
-                    />
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        'Gióng trục điểm cực trị',
+                        'Gióng điểm giao trục Ox, Oy',
+                        'Gióng điểm A(1, 2)',
+                        'Vẽ tiệm cận đứng & ngang',
+                        'Tiếp tuyến tại x=1',
+                      ].map((req, rIdx) => (
+                        <button
+                          key={rIdx}
+                          type="button"
+                          onClick={() => {
+                            setWordGraphRequirement(prev => (prev ? `${prev}; ${req}` : req));
+                          }}
+                          className="text-[9px] px-1.5 py-0.5 rounded bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer shadow-2xs font-medium"
+                        >
+                          + {req}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Hàng nút Hủy & Xác nhận */}
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-sky-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWordGraphOldTikz('');
+                        setShowWordGraphModal(false);
+                      }}
+                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGenerateWordGraphTikZ}
+                      className="py-2 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <TrendingUp className="w-4 h-4" />
+                      <span>{wordGraphOldTikz ? 'Xác nhận & Cập nhật đồ thị' : 'Xác nhận & Chèn đồ thị'}</span>
+                    </button>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowWordGraphModal(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                onClick={handleGenerateWordGraphTikZ}
-                className="px-4 py-1.5 text-xs font-bold text-white bg-sky-600 hover:bg-sky-700 rounded-xl shadow-xs cursor-pointer flex items-center gap-1.5"
-              >
-                <Check className="w-4 h-4" />
-                <span>Xác nhận & Chèn đồ thị</span>
-              </button>
             </div>
           </div>
         </div>

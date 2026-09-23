@@ -13,6 +13,9 @@ import {
   School,
   MapPin,
   ArrowRightLeft,
+  Cloud,
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile, UserProfile, UserRole, QUESTION_LEVELS } from '../../../services/storageTypes';
 import {
@@ -27,9 +30,15 @@ import {
   getUsers,
   updateStudentLevel,
 } from '../../ConnectData/ConnectFirestore';
+import {
+  deleteDriveFolderHierarchy,
+  connectGoogleDrive,
+} from '../../ConnectData/ConnectDrive/googleDriveService';
 import { ModalThemHocSinhExcel, themMotHocSinh } from '../NhapHocSinh';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
 import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
+export { inferAxesLabels, convertMathExprToTikz } from '../TaiLieuCaNhan/TaiLieuCaNhanView';
+export { convertMathExprToJs } from '../TaiLieuCaNhan/TikZVisualRenderer';
 
 // Helper component hiển thị Khung Thẻ Bàn Học Sinh hình vuông bo góc với 4 nhãn chức danh nằm ngoài vòng tròn icon nhưng nằm trong hình vuông
 export interface StudentCardBoxProps {
@@ -350,6 +359,23 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
     return classes;
   }, [classes, userProfiles]);
 
+  const [driveNotification, setDriveNotification] = useState<{ message: string; isError?: boolean } | null>(null);
+
+  // Helper xóa tài liệu/phân cấp chuẩn hóa: Kiểm tra xóa bên Google Drive của giáo viên trước, báo thành công mới xóa bên App
+  const handleDeleteTeachingMaterialWithDriveCheck = async (pathSegments: string[], itemName: string, onAppDelete: () => void) => {
+    setDriveNotification({ message: `Đang kiểm tra và xóa "${itemName}" trên Google Drive của giáo viên. Vui lòng đợi...` });
+    const deleteDriveRes = await deleteDriveFolderHierarchy(pathSegments);
+    if (!deleteDriveRes.success) {
+      const errMsg = deleteDriveRes.error || 'Phiên kết nối Google Drive đã hết hạn (401). Vui lòng bấm Kết nối Drive để xác thực lại.';
+      setDriveNotification({ message: errMsg, isError: true });
+      return;
+    }
+    // Khi Drive báo đã xóa xong (hoặc thư mục không tồn tại trên Drive), mới xóa bên App
+    onAppDelete();
+    setDriveNotification({ message: `Đã xóa "${itemName}" khỏi Google Drive và hệ thống thành công!` });
+    setTimeout(() => setDriveNotification(null), 4000);
+  };
+
   if (currentRole && !['superadmin', 'admin', 'manager', 'teacher'].includes(currentRole)) {
     return (
       <div id="teaching-management-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-emerald-200 shadow-sm space-y-4">
@@ -371,6 +397,42 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
         <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs animate-fade-in">
           <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
           <span>{notification}</span>
+        </div>
+      )}
+
+      {/* Thông báo tiến trình hoặc lỗi xóa Drive với nút Kết nối Drive trực tiếp */}
+      {driveNotification && (
+        <div
+          className={`p-3.5 rounded-xl text-xs font-bold flex flex-wrap items-center justify-between gap-3 shadow-xs animate-fade-in ${
+            driveNotification.isError
+              ? 'bg-rose-50 border border-rose-300 text-rose-800'
+              : 'bg-amber-50 border border-amber-300 text-amber-900'
+          }`}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+            {driveNotification.isError ? (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            ) : (
+              <Loader2 className="w-4 h-4 text-amber-600 animate-spin shrink-0" />
+            )}
+            <span>{driveNotification.message}</span>
+          </div>
+          {driveNotification.isError &&
+            (driveNotification.message.includes('401') ||
+              driveNotification.message.includes('hết hạn') ||
+              driveNotification.message.includes('Kết nối Drive')) && (
+              <button
+                type="button"
+                onClick={async () => {
+                  await connectGoogleDrive();
+                  setDriveNotification(null);
+                }}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1.5 shrink-0"
+              >
+                <Cloud className="w-3.5 h-3.5" />
+                <span>Kết nối Drive</span>
+              </button>
+            )}
         </div>
       )}
 

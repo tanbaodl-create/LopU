@@ -44,7 +44,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { UserProfile, UserRole, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
-import { getDriveConnectionState } from '../../ConnectData/ConnectDrive';
+import { getDriveConnectionState, connectGoogleDrive } from '../../ConnectData/ConnectDrive';
 import { auth } from '../../../config/firebase';
 import { signOut } from 'firebase/auth';
 import {
@@ -832,7 +832,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         </div>
         <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Truy Cập</h3>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Chỉ <strong>Quản trị viên (Admin)</strong> và <strong>Superadmin</strong> mới có quyền xem và thao tác tại phân hệ <strong>Quản trị tài khoản và phân quyền</strong>.
+          Chỉ <strong>Quản trị viên (Admin)</strong> và <strong>Superadmin</strong> mới có quyền xem và thao tác tại phân hệ <strong>Quản trị</strong>.
         </p>
       </div>
     );
@@ -842,9 +842,36 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
     <div id="settings-users-view" className="space-y-6">
       {/* Toast Notification */}
       {notification && (
-        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs animate-fade-in">
-          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>{notification}</span>
+        <div
+          className={`p-3.5 rounded-xl text-xs font-semibold flex flex-wrap items-center justify-between gap-2 shadow-xs animate-fade-in ${
+            notification.includes('401') || notification.includes('thất bại') || notification.includes('Lỗi')
+              ? 'bg-rose-50 border border-rose-200 text-rose-800'
+              : 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+          }`}
+        >
+          <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+            {notification.includes('401') || notification.includes('thất bại') || notification.includes('Lỗi') ? (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            )}
+            <span>{notification}</span>
+          </div>
+          {(notification.includes('401') ||
+            notification.includes('hết hạn') ||
+            notification.includes('Kết nối Drive')) && (
+            <button
+              type="button"
+              onClick={async () => {
+                await connectGoogleDrive();
+                setNotification(null);
+              }}
+              className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer shadow-xs inline-flex items-center gap-1 shrink-0"
+            >
+              <Cloud className="w-3.5 h-3.5" />
+              <span>Kết nối Drive</span>
+            </button>
+          )}
         </div>
       )}
 

@@ -71,7 +71,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           setCurrentUserProfile(finalProfile);
           setCurrentRole(finalProfile.role);
           setDriveEmail(user.email || '');
-          setIsDriveConnected(true);
         } catch (err) {
           console.warn('Failed to sync authenticated Google user to Firestore:', err);
         }
@@ -157,8 +156,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     setShowDriveModal(true);
   };
 
-  const handleConnectDriveAction = async (forceSimulated = false) => {
-    const res = await connectGoogleDrive(forceSimulated);
+  const handleConnectDriveAction = async () => {
+    const res = await connectGoogleDrive();
     setDriveModalMessage(res.message);
     const files = await listAppFilesFromDrive();
     setDriveFiles(files);
@@ -343,7 +342,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       }`}
                     />
                     <span className="font-bold text-sm text-slate-800">
-                      {isDriveConnected ? `Đã liên kết (${driveEmail})` : 'Chưa kết nối'}
+                      {isDriveConnected ? `Đã kết nối (${driveEmail})` : 'Chưa kết nối'}
                     </span>
                   </div>
                 </div>
@@ -358,50 +357,29 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 )}
               </div>
 
-              {!isDriveConnected ? (
-                <div className="space-y-3">
-                  <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-lg text-[11px] leading-relaxed">
-                    💡 <strong>Lưu ý về Popup Blocker:</strong> Trình duyệt của bạn có thể chặn cửa sổ đăng nhập Google khi chạy bên trong Iframe của AI Studio. Bạn có hai lựa chọn dưới đây để tiếp tục:
+              {isDriveConnected ? (
+                <div className="text-[11px] text-emerald-800 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 flex flex-col gap-1">
+                  <div className="font-bold flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    <span>Google Drive đang đồng bộ trực tiếp lên đám mây (drive.google.com)</span>
                   </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    {/* Option 1: Sandbox */}
-                    <div className="p-3 border border-slate-200 bg-white rounded-xl flex flex-col justify-between space-y-2 hover:border-blue-200 transition-all">
-                      <div>
-                        <h4 className="font-bold text-slate-800 text-[12px]">Option A: Chế độ Sandbox (Khuyên dùng)</h4>
-                        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-                          Chạy an toàn ngay trên bộ nhớ trình duyệt, <strong>không lo bị chặn Popup</strong> hay lỗi cấu hình Client ID. Thích hợp nhất trong môi trường AI Studio.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleConnectDriveAction(true)}
-                        className="w-full text-center py-2 px-3 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                      >
-                        Sử dụng Sandbox
-                      </button>
-                    </div>
-
-                    {/* Option 2: Real Google Drive */}
-                    <div className="p-3 border border-slate-200 bg-white rounded-xl flex flex-col justify-between space-y-2 hover:border-blue-200 transition-all">
-                      <div>
-                        <h4 className="font-bold text-slate-800 text-[12px]">Option B: Đăng nhập Google thật</h4>
-                        <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">
-                          Lưu trữ thực tế vào tài khoản Google Drive cá nhân của bạn. <strong>Lưu ý:</strong> Cần bấm cho phép mở Popup ở góc thanh địa chỉ trình duyệt nếu bị chặn.
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleConnectDriveAction(false)}
-                        className="w-full text-center py-2 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1"
-                      >
-                        <Cloud className="w-3.5 h-3.5" />
-                        <span>Đăng nhập Google</span>
-                      </button>
-                    </div>
-                  </div>
+                  <span className="text-slate-600">
+                    Cấu trúc thư mục được lưu tại: <code className="font-mono bg-white px-1.5 py-0.5 rounded text-emerald-800 font-bold border border-emerald-200">Drive của tôi / myApp / LopU / TaiLieu</code>
+                  </span>
                 </div>
               ) : (
-                <div className="text-[11px] text-slate-600 flex items-center justify-between bg-emerald-50/50 p-2 rounded-lg border border-emerald-100">
-                  <span>Dữ liệu sơ đồ lớp học và tài liệu giảng dạy sẽ tự động lưu vào thư mục <code className="font-mono bg-emerald-100/60 px-1 py-0.5 rounded text-emerald-800 font-bold">myApp\LopU</code></span>
+                <div className="space-y-3">
+                  <div className="p-3 bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-[11px] leading-relaxed">
+                    Chưa kết nối tài khoản Google Drive. Để tự động tạo thư mục và sao lưu tài liệu trực tiếp lên <strong>drive.google.com</strong>, vui lòng đăng nhập bên dưới:
+                  </div>
+
+                  <button
+                    onClick={handleConnectDriveAction}
+                    className="w-full text-center py-2.5 px-4 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <Cloud className="w-4 h-4" />
+                    <span>Đăng nhập & Kết nối Google Drive</span>
+                  </button>
                 </div>
               )}
             </div>

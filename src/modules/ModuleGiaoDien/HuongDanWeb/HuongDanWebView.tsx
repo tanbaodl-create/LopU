@@ -86,41 +86,41 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'LopHoc',
         name: 'LopHoc (Lớp học & Bài giảng)',
         folderPath: 'src/modules/ModuleHocSinh/LopHoc',
-        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, tích hợp nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định và Vệ tinh, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đã loại bỏ hoàn toàn banner trùng lặp bên dưới thanh ngang trên cùng, đưa người dùng vào thẳng bộ lọc bài học.',
-        purpose: 'Học tập trực tiếp, loại bỏ tiêu đề lặp lại dưới thanh ngang',
+        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, tích hợp nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định và Vệ tinh, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đường dẫn mặc định: myApp/LopU/LopHoc. Đã loại bỏ hoàn toàn banner trùng lặp bên dưới thanh ngang trên cùng, đưa người dùng vào thẳng bộ lọc bài học.',
+        purpose: 'Học tập trực tiếp (Đường dẫn mặc định: myApp/LopU/LopHoc), loại bỏ tiêu đề lặp lại dưới thanh ngang',
         viewId: 'learning-classes',
         icon: BookOpen,
-        tags: ['Bài học', 'lấy tọa độ GPS', 'Giao diện tối giản', 'Bỏ banner trùng'],
+        tags: ['Bài học', 'Đường dẫn myApp/LopU/LopHoc', 'lấy tọa độ GPS', 'Giao diện tối giản', 'Bỏ banner trùng'],
       },
       {
         id: 'SoDoLop',
         name: 'SoDoLop (Sơ Đồ Lớp - Xếp Chỗ Ngồi, Nạp Vào Sơ Đồ, Tối Giản Nút Bấm, Lưu Kèm 3 Điều Kiện Cài Đặt)',
         folderPath: 'src/modules/ModuleHocSinh/SoDoLop',
-        description: 'Sơ đồ lớp học tối giản & thông minh: Bỏ nút "Auto Xếp nhanh" và "Đồng bộ phân tổ"; đổi tên nút "Auto Xếp theo Điều kiện" thành "Xếp chỗ ngồi" và "Nạp lại Danh sách" thành "Nạp vào sơ đồ". Tích hợp đầy đủ 3 điều kiện xếp chỗ (Không gần nhau, Vị trí cố định, Cặp đôi cùng tiến) kèm tự động lưu/phục hồi từ Drive.',
-        purpose: 'Sơ đồ lớp tinh gọn với nút Xếp chỗ ngồi, Nạp vào sơ đồ và tự động phục hồi 3 điều kiện cài đặt xếp chỗ',
+        description: 'Sơ đồ lớp học tối giản & thông minh: Bỏ nút "Auto Xếp nhanh" và "Đồng bộ phân tổ"; đổi tên nút "Auto Xếp theo Điều kiện" thành "Xếp chỗ ngồi" và "Nạp lại Danh sách" thành "Nạp vào sơ đồ". Tích hợp đầy đủ 3 điều kiện xếp chỗ (Không gần nhau, Vị trí cố định, Cặp đôi cùng tiến) kèm tự động lưu/phục hồi từ Drive theo đường dẫn mặc định: myApp/LopU/SoDoLop.',
+        purpose: 'Sơ đồ lớp tinh gọn (Đường dẫn mặc định: myApp/LopU/SoDoLop) với nút Xếp chỗ ngồi, Nạp vào sơ đồ và tự động phục hồi 3 điều kiện cài đặt xếp chỗ',
         viewId: 'learning-seating',
         icon: LayoutGrid,
-        tags: ['Xếp chỗ ngồi', 'Nạp vào sơ đồ', 'Tối giản nút bấm', 'Lưu kèm 3 điều kiện cài đặt', 'Drive myApp\\LopU\\SoDoLop'],
+        tags: ['Xếp chỗ ngồi', 'Nạp vào sơ đồ', 'Đường dẫn myApp/LopU/SoDoLop', 'Tối giản nút bấm', 'Lưu kèm 3 điều kiện cài đặt'],
       },
       {
         id: 'ThoiKhoaBieu',
         name: 'ThoiKhoaBieu (Thời Khóa Biểu - Lấy Tùy Chọn Lớp Từ 14 Trường Thông Tin Hồ Sơ Chi Tiết)',
         folderPath: 'src/modules/ModuleHocSinh/ThoiKhoaBieu',
-        description: 'Module Thời Khóa Biểu: Dropdown 5 "Tên lớp" rà soát trực tiếp thông tin từ trường Các Lớp Dạy/Học (14 trường thông tin người dùng trong Hồ sơ chi tiết). Nếu chưa thiết lập thì danh sách tùy chọn là rỗng chứ không tự ý thêm danh mục mặc định. Mặc định các trường Phòng học, Ghi chú trống.',
-        purpose: 'Thời khóa biểu đồng bộ chính xác danh sách lớp từ 14 trường thông tin người dùng và phân quyền linh hoạt',
+        description: 'Module Thời Khóa Biểu: Dropdown 5 "Tên lớp" rà soát trực tiếp thông tin từ trường Các Lớp Dạy/Học (14 trường thông tin người dùng trong Hồ sơ chi tiết). Đường dẫn mặc định: myApp/LopU/ThoiKhoaBieu. Nếu chưa thiết lập thì danh sách tùy chọn là rỗng chứ không tự ý thêm danh mục mặc định. Mặc định các trường Phòng học, Ghi chú trống.',
+        purpose: 'Thời khóa biểu (Đường dẫn mặc định: myApp/LopU/ThoiKhoaBieu) đồng bộ chính xác danh sách lớp từ 14 trường thông tin người dùng và phân quyền linh hoạt',
         viewId: 'learning-schedule',
         icon: Calendar,
-        tags: ['Rà soát 14 trường thông tin', 'Các Lớp Dạy/Học', 'Tùy chọn lớp rỗng nếu chưa có', 'Không tự ý thêm lớp giả'],
+        tags: ['Đường dẫn myApp/LopU/ThoiKhoaBieu', 'Rà soát 14 trường thông tin', 'Các Lớp Dạy/Học', 'Tùy chọn lớp rỗng nếu chưa có', 'Không tự ý thêm lớp giả'],
       },
       {
         id: 'DangKyLop',
-        name: 'DangKyLop (Tìm lớp & Đăng ký PIN)',
+        name: 'DangKyLop (Tìm lớp & Đăng ký)',
         folderPath: 'src/modules/ModuleHocSinh/DangKyLop',
         description: 'Tra cứu danh sách lớp mở toàn trường, gửi yêu cầu tham gia kèm nhập mã PIN bảo mật do giáo viên cấp.',
-        purpose: 'Đăng ký tham gia',
+        purpose: 'Tìm lớp & Đăng ký tham gia',
         viewId: 'learning-join',
         icon: Search,
-        tags: ['Mã PIN', 'Gia nhập lớp', 'Bảo mật'],
+        tags: ['Mã PIN', 'Tìm lớp & Đăng ký', 'Bảo mật'],
       },
     ],
   },
@@ -141,13 +141,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyLopDay',
-        name: 'QuanLyLopDay (Quản lý lớp dạy & Nghiệp vụ giảng dạy, Phân quyền xem TikZ)',
+        name: 'QuanLyLopDay (Quản lý lớp dạy, Xóa Drive trước khi xóa App & Xử lý 401 Reconnect)',
         folderPath: 'src/modules/ModuleGiaoVien/QuanLyLopDay',
-        description: '(Chỉ Giáo viên trở lên mới thấy). Nghiệp vụ giảng dạy & quản lý lớp dạy: Mỗi hàng tương ứng 1 tiết / ca dạy của giáo viên; Phân quyền xem TikZ (nút chép mã & xem TikZ chỉ hiển thị cho Giáo viên, ẩn với Học sinh); Nhãn chức danh dạng chữ không đóng khung, chia riêng 2 hàng GVCN và SĐT; đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt mã PIN. Đồng bộ số dư Ví Kim Cương 💎.',
-        purpose: 'Nghiệp vụ giảng dạy cho Giáo viên trở lên & Quản lý lớp, phân quyền ẩn nút TikZ đối với Học sinh',
+        description: '(Chỉ Giáo viên trở lên mới thấy). Giảng dạy & quản lý lớp dạy: Mỗi hàng tương ứng 1 tiết / ca dạy của giáo viên; Phân quyền xem TikZ (nút chép mã & xem TikZ chỉ hiển thị cho Giáo viên, ẩn với Học sinh); Nút chỉnh sửa đồ thị tự động giữ nguyên tham số hàm đã vẽ; Xóa Tài liệu/Chương/Bài/Vấn đề/Chuyên đề kiểm tra xóa hoàn tất trên Google Drive của giáo viên trước mới xóa bên App; Nếu phiên Drive hết hạn (401), hiển thị thông báo kèm nút "Kết nối Drive" trực tiếp; Nhãn chức danh dạng chữ không đóng khung, chia riêng 2 hàng GVCN và SĐT; đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt mã PIN.',
+        purpose: 'Giảng dạy, Xóa Drive trước khi xóa App, Xử lý 401 & Giữ đúng tham số đồ thị',
         viewId: 'teaching-management',
         icon: CheckCircle2,
-        tags: ['Quyền Giáo viên+', 'Phân quyền TikZ', 'Mỗi hàng 1 tiết/ca', 'Nghiệp vụ giảng dạy', 'Ví Kim Cương 💎', 'GPS Ba Gia', 'Đổi tên lớp'],
+        tags: ['Quyền Giáo viên+', 'Xóa Drive trước khi xóa App', 'Nút Kết nối Drive khi 401', 'Sửa đồ thị giữ đúng hàm số', 'Phân quyền TikZ', 'Mỗi hàng 1 tiết/ca', 'Giảng dạy', 'Ví Kim Cương 💎', 'GPS Ba Gia', 'Đổi tên lớp'],
       },
       {
         id: 'NhapHocSinh',
@@ -170,13 +170,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'TaiLieuCaNhan',
-        name: 'TaiLieuCaNhan (Soạn Word, Vẽ Đồ thị/BBT Trong suốt 100% Không Nền/Không Chú thích, Phân quyền nút TikZ)',
+        name: 'TaiLieuCaNhan (Lưu Trữ Phân Cấp Bền Vững, Tự Động Kết Nối Lại Drive Khi 401 & Quản Lý Thư Mục)',
         folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Quản lý tài liệu dạy học Google Drive cá nhân. Tự động kết xuất trực quan đồ thị hàm số và bảng biến thiên dạng nét trong suốt 100% (không nền, không chú thích tiêu đề thừa) đồng bộ hoàn toàn với màu văn bản. Nút chép mã và xem TikZ chỉ xuất hiện ở Giáo viên, học sinh không thấy 2 nút này. Lệnh "Chèn đồ thị" và "Chèn bảng biến thiên" có 3 menu con: 1) Từ máy tính (quét vẽ lại), 2) Nhập hàm, 3) Tự vẽ tay canvas có AI nắn chỉnh.',
-        purpose: 'Vẽ Đồ thị & BBT trong suốt 100% không nền, không chú thích, Phân quyền nút TikZ (chỉ GV thấy)',
+        description: 'Quản lý tài liệu dạy học Google Drive trực tiếp: Tuyệt đối không có chế độ Sandbox, chỉ có 2 trạng thái: ĐÃ KẾT NỐI hoặc CHƯA KẾT NỐI Google Drive. Đường dẫn mặc định: myApp/LopU/TaiLieu. Quy ước đặt tên tài liệu: {tên môn} {số lớp - ví dụ lớp 10 thì số lớp là 10} - {tên tài liệu}. Quy trình Thêm phân cấp chuẩn hóa: Khi thêm mới, hiển thị thông báo "⏳ Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...", tự động mở cửa sổ kết nối lại nếu phiên hết hạn (401), kiểm tra/tạo thư mục trên Drive rồi lưu trữ bền vững vào hệ thống phân cấp (không bị mất khi tải lại trang). Đã dọn dẹp sạch sẽ và lược bỏ hoàn toàn tính năng/nút xóa tài liệu khỏi giao diện để tránh rủi ro và giữ hệ thống sạch sẽ. Cấu trúc 2 nhóm dropdown phụ thuộc: 1) Nhóm TÀI LIỆU (Môn học + Khối lớp ➔ Tài liệu); 2) Nhóm NỘI DUNG BÀI DẠY (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề).',
+        purpose: 'Lưu trữ phân cấp bền vững (Đường dẫn mặc định: myApp/LopU/TaiLieu), Tự động mở đăng nhập Drive khi hết hạn, Giao diện tối giản gọn gàng',
         viewId: 'teaching-documents',
         icon: FolderLock,
-        tags: ['Đồ thị/BBT trong suốt 100%', 'Không nền không chú thích', 'Phân quyền nút TikZ cho GV', '3 Menu con Chèn', 'Từ máy tính', 'Nhập hàm', 'Tự vẽ Canvas'],
+        tags: ['Đường dẫn myApp/LopU/TaiLieu', 'Lưu trữ phân cấp bền vững', 'Quy ước tên {môn} {lớp} - {tên}', 'Chỉ có Đã/Chưa kết nối Drive (Không Sandbox)', 'Thông báo Xanh khi Thêm', 'Tự động mở kết nối Drive khi 401', 'Nhóm TÀI LIỆU', 'Nhóm NỘI DUNG BÀI DẠY', '4 phần Chuyên đề', 'Đồ thị TikZ'],
       },
       {
         id: 'SoanThao',
@@ -217,10 +217,10 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyNguoiDung',
-        name: 'QuanLyNguoiDung (Quản trị tài khoản, Tự sửa thông tin & Thêm TKB người thân)',
+        name: 'QuanLyNguoiDung (Quản trị, Tự sửa thông tin & Thêm TKB người thân)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Quản trị tài khoản và phân quyền cho Admin và Superadmin. Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi". Bổ sung tính năng "Thêm TKB (Con, Em...)" giúp quản trị viên và người dùng dễ dàng tạo thêm thời khóa biểu gia đình để cùng theo dõi.',
-        purpose: 'Quản trị tài khoản, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo & Thêm TKB người thân',
+        description: 'Quản trị cho Admin và Superadmin. Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi". Bổ sung tính năng "Thêm TKB (Con, Em...)" giúp quản trị viên và người dùng dễ dàng tạo thêm thời khóa biểu gia đình để cùng theo dõi.',
+        purpose: 'Quản trị, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo & Thêm TKB người thân',
         viewId: 'settings-users',
         icon: UserCog,
         tags: ['Đỗ Tấn Bảo (Th Bảo)', 'Superadmin tự sửa hồ sơ', 'Thêm TKB Con/Em', '14 Trường Firestore', 'Deduplicate tanbaodl@gmail.com'],
@@ -239,8 +239,8 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'PhanQuyenLopHoc',
         name: 'PhanQuyenLopHoc (Phân công GV & Quản lý mã PIN)',
         folderPath: 'src/modules/ModuleQuanTri/PhanQuyenLopHoc',
-        description: '(Phần sau thì Admin và Superadmin thấy: Quản trị tài khoản và phân quyền). Cấu hình phân quyền lớp học, phân công Giáo viên phụ trách theo môn học, quản lý mã PIN bảo mật lớp học và điều phối quyền mở lớp.',
-        purpose: 'Phân quyền lớp học cho Admin và Superadmin',
+        description: '(Phần sau thì Admin và Superadmin thấy: Quản trị). Cấu hình phân quyền lớp học, phân công Giáo viên phụ trách theo môn học, quản lý mã PIN bảo mật lớp học và điều phối quyền mở lớp.',
+        purpose: 'Phân quyền lớp học trong phân hệ Quản trị cho Admin và Superadmin',
         viewId: 'settings-permissions',
         icon: KeyRound,
         tags: ['Admin & Superadmin', 'Mã PIN', 'Phân công GV', 'Giám sát Quyền Ghi Drive'],
@@ -275,8 +275,8 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'GiaoDienHocSinh',
         name: 'GiaoDienHocSinh (Layout chuyên biệt Học sinh)',
         folderPath: 'src/modules/ModuleGiaoDien/GiaoDienHocSinh',
-        description: 'Bọc ngoài các màn hình học sinh với banner không gian học tập trực tuyến, huy hiệu định danh và phong cách dịu mắt.',
-        purpose: 'Trải nghiệm Học sinh',
+        description: 'Bọc ngoài các màn hình học sinh với banner Học tập trực tuyến, huy hiệu định danh và phong cách dịu mắt.',
+        purpose: 'Trải nghiệm Học tập',
         icon: GraduationCap,
         tags: ['Student Banner', 'Online Status', 'Brand Styling'],
       },
@@ -300,22 +300,22 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'Navigation',
-        name: 'Navigation (Cấu hình Menu, NavigationContainer & 3 Menu Con Chèn TikZ / BBT, Thanh Word Sticky)',
+        name: 'Navigation (Cấu hình Menu, NavigationContainer & Dropdown Tiến trình Chuyên đề, 3 Menu Con Chèn TikZ / BBT)',
         folderPath: 'src/modules/ModuleGiaoDien/Navigation',
-        description: 'Định nghĩa menuConfig dạng phân cấp, NavigationContainer và DynamicViewContainer. Cửa sổ soạn thảo Word nâng cao với thanh công cụ cố định (sticky) khi cuộn, menu "Chèn" với 3 menu con cho cả Chèn đồ thị và Chèn bảng biến thiên: 1) Từ máy tính (chọn ảnh hệ thống vẽ lại TikZ), 2) Nhập hàm (nhập biểu thức/điểm mốc vẽ lại TikZ), 3) Tự vẽ (vẽ tay canvas, hệ thống nắn chỉnh nét chuẩn TikZ/tikz-tab); hỗ trợ Chèn Bảng, MathType, file và tự động nạp mã vào câu hỏi đang chọn.',
-        purpose: 'Bộ điều hướng động, Cửa sổ Word nâng cao với thanh Sticky, 3 menu con Chèn Đồ thị & BBT: Từ máy tính, Nhập hàm, Tự vẽ',
+        description: 'Định nghĩa menuConfig dạng phân cấp, NavigationContainer và DynamicViewContainer. Cửa sổ soạn thảo Word nâng cao với thanh công cụ cố định (sticky) khi cuộn, Dropdown tiến trình chuyên đề (Kiến thức, Luyện tập, Kiểm tra, Cải thiện) đặt trước biểu tượng In đậm, menu "Chèn" với 3 menu con cho cả Chèn đồ thị và Chèn bảng biến thiên: 1) Từ máy tính (chọn ảnh hệ thống vẽ lại TikZ), 2) Nhập hàm (nhập biểu thức/điểm mốc vẽ lại TikZ), 3) Tự vẽ (vẽ tay canvas, hệ thống nắn chỉnh nét chuẩn TikZ/tikz-tab); hỗ trợ Chèn Bảng, MathType, file và tự động nạp mã vào câu hỏi đang chọn.',
+        purpose: 'Bộ điều hướng động, Cửa sổ Word nâng cao với thanh Sticky, Dropdown tiến trình chuyên đề (4 phần) trước In đậm & 3 menu con Chèn Đồ thị / BBT',
         icon: Compass,
-        tags: ['menuConfig', 'NavigationContainer', 'Thanh Word Sticky', '3 Menu con Chèn', 'Từ máy tính', 'Nhập hàm', 'Tự vẽ Canvas AI', 'Chèn đồ thị TikZ', 'Chèn BBT tikz-tab', 'Word Editor', 'Cỡ chữ 22px', 'RBAC Guard'],
+        tags: ['menuConfig', 'NavigationContainer', 'Dropdown Tiến trình Chuyên đề', '4 phần (Kiến thức, Luyện tập, Kiểm tra, Cải thiện)', 'Thanh Word Sticky', '3 Menu con Chèn', 'Từ máy tính', 'Nhập hàm', 'Tự vẽ Canvas AI', 'Chèn đồ thị TikZ', 'Chèn BBT tikz-tab', 'Word Editor', 'Cỡ chữ 22px', 'RBAC Guard'],
       },
       {
         id: 'HuongDanWeb',
-        name: 'HuongDanWeb (Sơ đồ cây, Phân tích lệnh & Kho Prompt chuẩn)',
+        name: 'HuongDanWeb (Trợ giúp, Sơ đồ cây, Phân tích lệnh & Kho Prompt chuẩn)',
         folderPath: 'src/modules/ModuleGiaoDien/HuongDanWeb',
-        description: '(Phần sau chỉ Superadmin mới thấy: Hướng dẫn web và sơ đồ cây). Sơ đồ cây module phân cấp, bộ phân tích & tạo lệnh AI siêu tốc với nút "Copy lệnh" bên trái, cho phép người dùng tự sửa trực tiếp trong ô prompt trước khi copy và Kho prompt chuẩn hỗ trợ phát triển dự án.',
-        purpose: 'Đặc quyền Superadmin: Sơ đồ cây module, Phân tích lệnh & Kho Prompt (Sửa trực tiếp prompt)',
+        description: '(Phần sau chỉ Superadmin mới thấy: Trợ giúp). Sơ đồ cây module phân cấp, bộ phân tích lệnh siêu tốc với nút "Copy lệnh" bên trái, cho phép người dùng tự sửa trực tiếp trong ô prompt trước khi copy và Kho prompt chuẩn hỗ trợ phát triển dự án.',
+        purpose: 'Đặc quyền Superadmin: Trợ giúp (Sơ đồ cây module, Phân tích lệnh & Kho Prompt)',
         viewId: 'guide-tree',
         icon: Network,
-        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích & Tạo lệnh AI', 'Copy lệnh bên trái', 'Sửa prompt trực tiếp', 'Kho Prompt Chuẩn'],
+        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích lệnh', 'Copy lệnh bên trái', 'Sửa prompt trực tiếp', 'Kho Prompt Chuẩn'],
       },
     ],
   },
@@ -336,12 +336,12 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'ConnectDrive',
-        name: 'ConnectDrive (Google Drive API, Xóa sạch 3 cấp & Bảo Mật Giáo Viên)',
+        name: 'ConnectDrive (Google Drive API, Bỏ Sandbox - Chuẩn hóa Trạng thái Kết nối Thật)',
         folderPath: 'src/modules/ConnectData/ConnectDrive',
-        description: 'Hệ thống đồng bộ hóa Google Drive của giáo viên. Đường dẫn chuẩn 7 cấp độ: myApp / LopU / TaiLieu / [Tên tài liệu] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề] và thư mục myApp\\LopU\\SoDoLop. Hỗ trợ phương thức deleteDriveFileEverywhere xóa triệt để 3 cấp: LocalStorage, Blacklist chống ghost-files và xóa thực tế qua Google Drive REST API. Hỗ trợ gói bài dạy Chuyên đề gồm KienThuc.html, Luyentap [STT].json, và DanhGia [STT].json. Tự động khởi tạo và lưu trữ tệp đa phương tiện vào các thư mục Media\\HinhAnh, Media\\AmThanh, Media\\Video ngay bên trong thư mục Chuyên đề chứa file KienThuc.html. Áp dụng Giải pháp 5: Chuẩn hóa đường dẫn tương đối (./Media/...) trong file JSON để gói tài liệu hoạt động 100% độc lập khi chuyển máy hoặc chạy sandbox cho học sinh.',
-        purpose: 'Xóa sạch 3 cấp Local-Drive-Hệ thống, Gói tệp Chuyên đề, Media\\... & Đường dẫn tương đối JSON (Giải pháp 5)',
+        description: 'Hệ thống đồng bộ hóa Google Drive trực tiếp. Đã loại bỏ hoàn toàn chế độ ảo Sandbox, chuẩn hóa trạng thái nhị phân: Đã kết nối (khi có token Google OAuth thật) hoặc Chưa kết nối. Đường dẫn mặc định chung: myApp/LopU; Lớp học: myApp/LopU/LopHoc; Thời khóa biểu: myApp/LopU/ThoiKhoaBieu; Sơ đồ lớp: myApp/LopU/SoDoLop; Tài liệu: myApp/LopU/TaiLieu / [Tên tài liệu] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề]. Tích hợp createDriveFolderIfNotExists và deleteDriveFolderHierarchy kiểm tra tồn tại và tạo/xóa thư mục trên Drive trước khi cập nhật App. Hỗ trợ phương thức deleteDriveFileEverywhere xóa triệt để 3 cấp: LocalStorage, Blacklist chống ghost-files và xóa thực tế qua Google Drive REST API. Tự động khởi tạo và lưu trữ tệp đa phương tiện vào các thư mục Media\\HinhAnh, Media\\AmThanh, Media\\Video ngay bên trong thư mục Chuyên đề chứa file KienThuc.html.',
+        purpose: 'Đồng bộ Google Drive trực tiếp (Gốc mặc định: myApp/LopU), Quản lý đường dẫn các module & Media\\...',
         icon: Cloud,
-        tags: ['Xóa sạch 3 cấp Local-Drive-Hệ thống', 'Giải pháp 5 JSON Media', 'Đường dẫn tương đối ./Media/...', 'Bảo mật Drive GV', 'Media\\HinhAnh', 'Media\\AmThanh', 'Media\\Video', 'KienThuc.html', 'Luyentap', 'DanhGia'],
+        tags: ['Gốc mặc định myApp/LopU', 'myApp/LopU/LopHoc', 'myApp/LopU/SoDoLop', 'myApp/LopU/ThoiKhoaBieu', 'myApp/LopU/TaiLieu', 'Bỏ hoàn toàn Sandbox', 'Chỉ kết nối Drive thật', 'Xóa sạch 3 cấp', 'Bảo mật Drive GV'],
       },
       {
         id: 'ConnectFirestore',
@@ -357,7 +357,7 @@ const MODULE_TREE_DATA: ModuleNode[] = [
 ];
 
 export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, onNavigateToView }) => {
-  // Phân quyền bảo vệ: Phần sau chỉ superadmin mới thấy: Hướng dẫn web và sơ đồ cây (Sơ đồ cây module, phân tích & tạo lệnh AI; kho prompt chuẩn)
+  // Phân quyền bảo vệ: Phần sau chỉ superadmin mới thấy: Trợ giúp (Sơ đồ cây module, phân tích lệnh; kho prompt chuẩn)
   if (currentRole && currentRole !== 'superadmin') {
     return (
       <div id="guide-tree-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-indigo-200 shadow-sm space-y-4">
@@ -366,7 +366,7 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
         <h3 className="text-base font-bold text-slate-900">Giới Hạn Quyền Superadmin</h3>
         <p className="text-xs text-slate-600 leading-relaxed">
-          Chỉ <strong>Superadmin</strong> mới có quyền xem và thao tác tại phân hệ <strong>Hướng dẫn web và sơ đồ cây (Sơ đồ cây module, phân tích & tạo lệnh AI; kho prompt chuẩn)</strong>.
+          Chỉ <strong>Superadmin</strong> mới có quyền xem và thao tác tại phân hệ <strong>Trợ giúp (Sơ đồ cây module, phân tích lệnh; kho prompt chuẩn)</strong>.
         </p>
       </div>
     );
@@ -537,7 +537,7 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
                 }`}
               >
                 <Zap className="w-3.5 h-3.5" />
-                <span>Trợ lý tạo lệnh AI</span>
+                <span>Phân tích lệnh</span>
               </button>
             </div>
           </div>

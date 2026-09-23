@@ -162,10 +162,10 @@ export const SoanThaoView: React.FC = () => {
       const cleanFileName = `[${chuyenDe}]_${title.trim().replace(/[\s:/\\?*]+/g, '_')}`;
       
       let successMsg = '';
-      if (conn.isConnected && conn.isRealConfigured) {
+      if (conn.isConnected) {
         successMsg = `Đã đồng bộ Drive & Lưu hệ thống thành công: ${cleanFileName} tại thư mục ${driveFolder}`;
       } else {
-        successMsg = `Đã đồng bộ Drive (Sandbox) & Lưu hệ thống thành công: ${cleanFileName}`;
+        successMsg = `Đã lưu tài liệu vào hệ thống thành công: ${cleanFileName}`;
       }
 
       if (selectedClasses.length > 0) {
