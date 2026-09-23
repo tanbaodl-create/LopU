@@ -31,13 +31,15 @@ import {
   Loader2,
   CheckCircle2,
   AlertCircle,
+  Trash2,
 } from 'lucide-react';
 import { TeacherDocument, ClassItem, UserRole, UserProfile, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
-import { getClasses, getTeacherDocuments, saveTeacherDocument, getUsers } from '../../ConnectData/ConnectFirestore';
+import { getClasses, getTeacherDocuments, saveTeacherDocument, deleteTeacherDocument, getUsers } from '../../ConnectData/ConnectFirestore';
 import {
   saveTeachingMaterialHierarchyToDrive,
   getDriveConnectionState,
   createDriveFolderIfNotExists,
+  deleteDriveFolderHierarchy,
   connectGoogleDrive,
   scanAndSyncDriveHierarchy,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
@@ -734,25 +736,171 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     e.target.value = '';
   };
   
-  // Khởi tạo các danh mục tùy chọn trực tiếp trong bộ nhớ (không lưu vĩnh viễn dữ liệu rác cũ)
-  const [customTitles, setCustomTitles] = useState<string[]>([]);
-  const [customChuongs, setCustomChuongs] = useState<string[]>([]);
+  // Khởi tạo các danh mục tùy chọn từ cây dữ liệu bền vững và loại trừ danh sách đã xóa
+  const [customTitles, setCustomTitles] = useState<string[]>(() => {
+    const store = getStoredHierarchy();
+    let deletedList: string[] = [];
+    try {
+      deletedList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+    } catch {}
+    return Object.keys(store).filter(k => !deletedList.includes(k));
+  });
+  const [customChuongs, setCustomChuongs] = useState<string[]>(() => {
+    const store = getStoredHierarchy();
+    let deletedList: string[] = [];
+    try {
+      deletedList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+    } catch {}
+    const chuongs: string[] = [];
+    Object.values(store).forEach(cObj => {
+      Object.keys(cObj || {}).forEach(ch => {
+        if (!deletedList.includes(ch) && !chuongs.includes(ch)) chuongs.push(ch);
+      });
+    });
+    return chuongs;
+  });
   const [customBais, setCustomBais] = useState<string[]>([]);
   const [customVanDes, setCustomVanDes] = useState<string[]>([]);
   const [customChuyenDes, setCustomChuyenDes] = useState<string[]>([]);
 
-  // Dọn sạch các key cache cũ từng lưu tên tài liệu đã xóa
-  useEffect(() => {
-    localStorage.removeItem('lopu_custom_titles_v1');
-    localStorage.removeItem('lopu_custom_chuongs_v1');
-    localStorage.removeItem('lopu_custom_bais_v1');
-    localStorage.removeItem('lopu_custom_vandes_v1');
-    localStorage.removeItem('lopu_custom_chuyendes_v1');
-  }, []);
-
   const [isAddingFolder, setIsAddingFolder] = useState<boolean>(false);
   const [modalAddError, setModalAddError] = useState<string | null>(null);
   const [dropdownFeedbackMsg, setDropdownFeedbackMsg] = useState<{ lvl: string; message: string; type: 'success' | 'error' } | null>(null);
+
+  // Quản lý hộp thoại "Xác nhận xóa tùy chọn"
+  const [itemToDelete, setItemToDelete] = useState<{ level: string; value: string } | null>(null);
+  const [isDeletingItem, setIsDeletingItem] = useState<boolean>(false);
+  const [deleteError, setDeleteError] = useState<boolean>(false);
+
+  const handleRequestDelete = (level: string, value: string) => {
+    setItemToDelete({ level, value });
+    setIsDeletingItem(false);
+    setDeleteError(false);
+    setOpenModalDropdown(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete || isDeletingItem) return;
+
+    setIsDeletingItem(true);
+    setDeleteError(false);
+
+    // 1. Kiểm tra tài khoản Google: Nếu chưa kết nối lập tức cho cửa sổ đăng nhập để kết nối
+    const connState = getDriveConnectionState();
+    if (!connState.isConnected) {
+      const connRes = await connectGoogleDrive();
+      if (!connRes.success) {
+        setIsDeletingItem(false);
+        setDeleteError(true);
+        return;
+      }
+    }
+
+    // 2. Tìm trên Google Drive thư mục tương ứng
+    const { level, value } = itemToDelete;
+    const pathSegments: string[] = ['myApp', 'LopU', 'TaiLieu'];
+    if (level === 'title') {
+      pathSegments.push(value);
+    } else if (level === 'chuong') {
+      pathSegments.push(newTitle || 'TaiLieuChung', value);
+    } else if (level === 'bai') {
+      pathSegments.push(newTitle || 'TaiLieuChung', newChuong || 'Chuong1', value);
+    } else if (level === 'vanDe') {
+      pathSegments.push(newTitle || 'TaiLieuChung', newChuong || 'Chuong1', newBai || 'Bai1', value);
+    } else if (level === 'chuyenDe') {
+      pathSegments.push(newTitle || 'TaiLieuChung', newChuong || 'Chuong1', newBai || 'Bai1', newVanDe || 'VanDe1', value);
+    }
+
+    try {
+      const res = await deleteDriveFolderHierarchy(pathSegments);
+      if (res.success) {
+        // 3. Nếu không có hoặc đã xóa thành công phản hồi lại thành công để app xóa tùy chọn
+        const currentStore = getStoredHierarchy();
+        if (level === 'title') {
+          delete currentStore[value];
+          setCustomTitles(prev => prev.filter(x => x !== value));
+          const matchedDocs = documents.filter(d => d.title === value);
+          for (const md of matchedDocs) {
+            await deleteTeacherDocument(md.id);
+          }
+          setDocuments(prev => prev.filter(d => d.title !== value));
+          if (newTitle === value) {
+            setNewTitle('');
+            setNewChuong('');
+            setNewBai('');
+            setNewVanDe('');
+            setNewChuyenDe('');
+          }
+        } else if (level === 'chuong') {
+          if (currentStore[newTitle]) delete currentStore[newTitle][value];
+          setCustomChuongs(prev => prev.filter(x => x !== value));
+          const matchedDocs = documents.filter(d => (!newTitle || d.title === newTitle) && d.chuong === value);
+          for (const md of matchedDocs) {
+            await deleteTeacherDocument(md.id);
+          }
+          setDocuments(prev => prev.filter(d => !((!newTitle || d.title === newTitle) && d.chuong === value)));
+          if (newChuong === value) {
+            setNewChuong('');
+            setNewBai('');
+            setNewVanDe('');
+            setNewChuyenDe('');
+          }
+        } else if (level === 'bai') {
+          if (currentStore[newTitle] && currentStore[newTitle][newChuong]) {
+            delete currentStore[newTitle][newChuong][value];
+          }
+          setCustomBais(prev => prev.filter(x => x !== value));
+          const matchedDocs = documents.filter(d => (!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && d.bai === value);
+          for (const md of matchedDocs) {
+            await deleteTeacherDocument(md.id);
+          }
+          setDocuments(prev => prev.filter(d => !((!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && d.bai === value)));
+          if (newBai === value) {
+            setNewBai('');
+            setNewVanDe('');
+            setNewChuyenDe('');
+          }
+        } else if (level === 'vanDe') {
+          if (currentStore[newTitle] && currentStore[newTitle][newChuong] && currentStore[newTitle][newChuong][newBai]) {
+            delete currentStore[newTitle][newChuong][newBai][value];
+          }
+          setCustomVanDes(prev => prev.filter(x => x !== value));
+          const matchedDocs = documents.filter(d => (!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && (!newBai || d.bai === newBai) && d.vanDe === value);
+          for (const md of matchedDocs) {
+            await deleteTeacherDocument(md.id);
+          }
+          setDocuments(prev => prev.filter(d => !((!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && (!newBai || d.bai === newBai) && d.vanDe === value)));
+          if (newVanDe === value) {
+            setNewVanDe('');
+            setNewChuyenDe('');
+          }
+        } else if (level === 'chuyenDe') {
+          if (currentStore[newTitle] && currentStore[newTitle][newChuong] && currentStore[newTitle][newChuong][newBai] && currentStore[newTitle][newChuong][newBai][newVanDe]) {
+            currentStore[newTitle][newChuong][newBai][newVanDe] = currentStore[newTitle][newChuong][newBai][newVanDe].filter((x: string) => x !== value);
+          }
+          setCustomChuyenDes(prev => prev.filter(x => x !== value));
+          const matchedDocs = documents.filter(d => (!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && (!newBai || d.bai === newBai) && (!newVanDe || d.vanDe === newVanDe) && d.chuyenDe === value);
+          for (const md of matchedDocs) {
+            await deleteTeacherDocument(md.id);
+          }
+          setDocuments(prev => prev.filter(d => !((!newTitle || d.title === newTitle) && (!newChuong || d.chuong === newChuong) && (!newBai || d.bai === newBai) && (!newVanDe || d.vanDe === newVanDe) && d.chuyenDe === value)));
+          if (newChuyenDe === value) {
+            setNewChuyenDe('');
+          }
+        }
+        saveStoredHierarchy(currentStore);
+        setIsDeletingItem(false);
+        setItemToDelete(null);
+      } else {
+        // 4. Nếu xóa không thành công thì đổi dòng Đang xóa, Vui lòng đợi... thành Xóa không được.
+        setIsDeletingItem(false);
+        setDeleteError(true);
+      }
+    } catch {
+      setIsDeletingItem(false);
+      setDeleteError(true);
+    }
+  };
 
   const handleOpenAdd = (level: string) => {
     setModalAddLevel(level);
@@ -1033,6 +1181,17 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     }`}
                   >
                     <span className="truncate flex-1">{opt}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRequestDelete(lvl, opt);
+                      }}
+                      title={`Xóa mục "${opt}"`}
+                      className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-500 hover:text-rose-700" />
+                    </button>
                   </div>
                 ))
               )}
@@ -2525,6 +2684,62 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     : modalAddType === 'kienThuc'
                     ? 'Thêm Kiến thức'
                     : 'Thêm mục'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* HỘP THOẠI XÁC NHẬN XÓA TÙY CHỌN */}
+      {itemToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <h3 className="text-rose-600 font-bold text-base">
+              Xác nhận xóa tùy chọn
+            </h3>
+            
+            <p className="text-slate-700 text-sm">
+              Bạn có chắc chắn muốn xóa mục <strong className="font-bold text-slate-900">"{itemToDelete.value}"</strong> không?
+            </p>
+
+            {/* Thông báo màu đỏ dưới dòng bạn có muốn xóa....không? và trên dòng có nút Hủy + nút Xác nhận xóa */}
+            {isDeletingItem && (
+              <div className="text-rose-600 font-bold text-xs flex items-center gap-1.5 animate-pulse">
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-rose-600" />
+                <span>Đang xóa, Vui lòng đợi...</span>
+              </div>
+            )}
+
+            {deleteError && (
+              <div className="text-rose-600 font-bold text-xs flex items-center gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                <span>Xóa không được.</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isDeletingItem}
+                onClick={() => setItemToDelete(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingItem}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
+              >
+                {isDeletingItem ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Đang xóa...</span>
+                  </>
+                ) : (
+                  <span>Xác nhận xóa</span>
                 )}
               </button>
             </div>

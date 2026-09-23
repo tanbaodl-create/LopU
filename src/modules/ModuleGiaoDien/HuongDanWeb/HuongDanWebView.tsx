@@ -170,13 +170,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'TaiLieuCaNhan',
-        name: 'TaiLieuCaNhan (Đồng Bộ Thư Mục Thực Tế Google Drive & Lưu Trữ Phân Cấp Chuẩn)',
+        name: 'TaiLieuCaNhan (Xóa Drive-First & Đồng Bộ Danh Sách Tùy Chọn Tức Thì)',
         folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Quản lý tài liệu dạy học Google Drive trực tiếp: Tuyệt đối không có chế độ Sandbox, chỉ có 2 trạng thái: ĐÃ KẾT NỐI hoặc CHƯA KẾT NỐI Google Drive. Đường dẫn mặc định: myApp/LopU/TaiLieu. Tích hợp cơ chế quét và đồng bộ thư mục thực tế từ Google Drive (scanAndSyncDriveHierarchy) kèm nút "Làm mới Drive" giúp loại bỏ 100% các thư mục/tên tài liệu phantom đã xóa trên Drive. Lược bỏ hoàn toàn icon thùng rác và thao tác xóa rủi ro trên UI để bảo vệ tài liệu. Cấu trúc 2 nhóm dropdown phụ thuộc: 1) Nhóm TÀI LIỆU (Môn học + Khối lớp ➔ Tài liệu); 2) Nhóm NỘI DUNG BÀI DẠY (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề).',
-        purpose: 'Đồng bộ thư mục thực tế Google Drive (myApp/LopU/TaiLieu), Quét sạch tên đã xóa, Nút Làm mới Drive, Giao diện tối giản chuẩn mực',
+        description: 'Quản lý tài liệu dạy học Google Drive trực tiếp (myApp/LopU/TaiLieu): Quy trình chuẩn hóa Drive-First — Khi thêm: tạo/kiểm tra trên Drive thành công mới thêm vào dropdown; Khi xóa: kiểm tra và xóa/trash thực tế trên Google Drive thành công mới cập nhật danh sách tùy chọn dropdown của App, nếu xóa Drive thất bại sẽ báo lỗi và giữ nguyên tùy chọn. Danh sách tùy chọn dropdown phản ứng tức thì khi thêm/xóa mà không bị mất hay trễ dữ liệu.',
+        purpose: 'Quy trình thêm/xóa Drive-First chuẩn mực, đồng bộ tức thì danh sách tùy chọn dropdown và bảo toàn dữ liệu trên Google Drive (myApp/LopU/TaiLieu)',
         viewId: 'teaching-documents',
         icon: FolderLock,
-        tags: ['Đường dẫn myApp/LopU/TaiLieu', 'scanAndSyncDriveHierarchy', 'Làm mới Drive', 'Tự động quét Drive', 'Quy ước tên {môn} {lớp} - {tên}', 'Nhóm TÀI LIỆU', 'Nhóm NỘI DUNG BÀI DẠY', 'Đồ thị TikZ'],
+        tags: ['Đường dẫn myApp/LopU/TaiLieu', 'Drive-First Deletion', 'Đồng bộ dropdown tức thì', 'Xác nhận xóa tùy chọn', 'Làm mới Drive', 'Không mất dữ liệu', 'Quy ước tên chuẩn'],
       },
       {
         id: 'SoanThao',

@@ -952,3 +952,82 @@ export async function purchaseDocument(docId: string, studentId: string): Promis
   };
 }
 
+/**
+ * Dọn dẹp toàn bộ bộ nhớ đệm (Cache), ServiceWorker, dữ liệu tạm dư thừa của trình duyệt và Firestore
+ */
+export async function clearAllAppCacheAndRedundantData(options?: { reload?: boolean }): Promise<{ success: boolean; clearedCount: number; message: string }> {
+  let clearedCount = 0;
+
+  try {
+    // 1. Xóa toàn bộ Service Worker Caches
+    if ('caches' in window) {
+      const cacheNames = await caches.keys();
+      for (const name of cacheNames) {
+        await caches.delete(name);
+        clearedCount++;
+      }
+    }
+
+    // 2. Dọn sạch các key cache rác / phantom / dữ liệu tạm trong localStorage
+    const obsoletePrefixes = [
+      'lopu_temp_',
+      'lopu_custom_titles_',
+      'lopu_custom_chuongs_',
+      'lopu_custom_bais_',
+      'lopu_custom_vandes_',
+      'lopu_custom_chuyendes_',
+      'firebase:previous_websocket_failure',
+      'loglevel',
+    ];
+
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key) {
+        if (obsoletePrefixes.some(p => key.startsWith(p))) {
+          keysToRemove.push(key);
+        }
+      }
+    }
+
+    keysToRemove.forEach(k => {
+      localStorage.removeItem(k);
+      clearedCount++;
+    });
+
+    // 3. Dọn sạch sessionStorage
+    sessionStorage.clear();
+
+    // 4. Dọn dẹp dữ liệu trùng lặp trong Firestore User & Document Store
+    const users = await getUsers();
+    const uniqueUsersMap = new Map<string, UserProfile>();
+    users.forEach(u => {
+      const key = u.email?.toLowerCase().trim() || u.id;
+      if (!uniqueUsersMap.has(key)) {
+        uniqueUsersMap.set(key, u);
+      }
+    });
+    if (uniqueUsersMap.size < users.length) {
+      setLocalItem(STORAGE_KEYS.USERS, Array.from(uniqueUsersMap.values()));
+    }
+
+    if (options?.reload) {
+      window.location.reload();
+    }
+
+    return {
+      success: true,
+      clearedCount,
+      message: `Đã dọn dẹp sạch sẽ toàn bộ Cache trình duyệt, ServiceWorker và ${clearedCount} mục dữ liệu dư thừa!`,
+    };
+  } catch (err) {
+    console.error('Lỗi dọn cache:', err);
+    return {
+      success: false,
+      clearedCount,
+      message: 'Có lỗi trong quá trình dọn dẹp cache.',
+    };
+  }
+}
+
+
