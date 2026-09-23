@@ -170,13 +170,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'TaiLieuCaNhan',
-        name: 'TaiLieuCaNhan (Lưu Trữ Phân Cấp Bền Vững, Tự Động Kết Nối Lại Drive Khi 401 & Quản Lý Thư Mục)',
+        name: 'TaiLieuCaNhan (Đồng Bộ Thư Mục Thực Tế Google Drive & Lưu Trữ Phân Cấp Chuẩn)',
         folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Quản lý tài liệu dạy học Google Drive trực tiếp: Tuyệt đối không có chế độ Sandbox, chỉ có 2 trạng thái: ĐÃ KẾT NỐI hoặc CHƯA KẾT NỐI Google Drive. Đường dẫn mặc định: myApp/LopU/TaiLieu. Quy ước đặt tên tài liệu: {tên môn} {số lớp - ví dụ lớp 10 thì số lớp là 10} - {tên tài liệu}. Quy trình Thêm phân cấp chuẩn hóa: Khi thêm mới, hiển thị thông báo "⏳ Đang kiểm tra và thêm vào hệ thống. Vui lòng đợi...", tự động mở cửa sổ kết nối lại nếu phiên hết hạn (401), kiểm tra/tạo thư mục trên Drive rồi lưu trữ bền vững vào hệ thống phân cấp (không bị mất khi tải lại trang). Đã dọn dẹp sạch sẽ và lược bỏ hoàn toàn tính năng/nút xóa tài liệu khỏi giao diện để tránh rủi ro và giữ hệ thống sạch sẽ. Cấu trúc 2 nhóm dropdown phụ thuộc: 1) Nhóm TÀI LIỆU (Môn học + Khối lớp ➔ Tài liệu); 2) Nhóm NỘI DUNG BÀI DẠY (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề).',
-        purpose: 'Lưu trữ phân cấp bền vững (Đường dẫn mặc định: myApp/LopU/TaiLieu), Tự động mở đăng nhập Drive khi hết hạn, Giao diện tối giản gọn gàng',
+        description: 'Quản lý tài liệu dạy học Google Drive trực tiếp: Tuyệt đối không có chế độ Sandbox, chỉ có 2 trạng thái: ĐÃ KẾT NỐI hoặc CHƯA KẾT NỐI Google Drive. Đường dẫn mặc định: myApp/LopU/TaiLieu. Tích hợp cơ chế quét và đồng bộ thư mục thực tế từ Google Drive (scanAndSyncDriveHierarchy) kèm nút "Làm mới Drive" giúp loại bỏ 100% các thư mục/tên tài liệu phantom đã xóa trên Drive. Lược bỏ hoàn toàn icon thùng rác và thao tác xóa rủi ro trên UI để bảo vệ tài liệu. Cấu trúc 2 nhóm dropdown phụ thuộc: 1) Nhóm TÀI LIỆU (Môn học + Khối lớp ➔ Tài liệu); 2) Nhóm NỘI DUNG BÀI DẠY (Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề).',
+        purpose: 'Đồng bộ thư mục thực tế Google Drive (myApp/LopU/TaiLieu), Quét sạch tên đã xóa, Nút Làm mới Drive, Giao diện tối giản chuẩn mực',
         viewId: 'teaching-documents',
         icon: FolderLock,
-        tags: ['Đường dẫn myApp/LopU/TaiLieu', 'Lưu trữ phân cấp bền vững', 'Quy ước tên {môn} {lớp} - {tên}', 'Chỉ có Đã/Chưa kết nối Drive (Không Sandbox)', 'Thông báo Xanh khi Thêm', 'Tự động mở kết nối Drive khi 401', 'Nhóm TÀI LIỆU', 'Nhóm NỘI DUNG BÀI DẠY', '4 phần Chuyên đề', 'Đồ thị TikZ'],
+        tags: ['Đường dẫn myApp/LopU/TaiLieu', 'scanAndSyncDriveHierarchy', 'Làm mới Drive', 'Tự động quét Drive', 'Quy ước tên {môn} {lớp} - {tên}', 'Nhóm TÀI LIỆU', 'Nhóm NỘI DUNG BÀI DẠY', 'Đồ thị TikZ'],
       },
       {
         id: 'SoanThao',
@@ -217,13 +217,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyNguoiDung',
-        name: 'QuanLyNguoiDung (Quản trị, Tự sửa thông tin & Thêm TKB người thân)',
+        name: 'QuanLyNguoiDung (Quản trị, Mặc định vai trò cao nhất khi Đăng nhập & Sửa 14 trường)',
         folderPath: 'src/modules/ModuleQuanTri/QuanLyNguoiDung',
-        description: 'Quản trị cho Admin và Superadmin. Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi". Bổ sung tính năng "Thêm TKB (Con, Em...)" giúp quản trị viên và người dùng dễ dàng tạo thêm thời khóa biểu gia đình để cùng theo dõi.',
-        purpose: 'Quản trị, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo & Thêm TKB người thân',
+        description: 'Quản trị cho Admin và Superadmin. Mỗi tài khoản khi đăng nhập vào hệ thống sẽ luôn tự động nhận và kích hoạt vai trò cao nhất theo thứ bậc phân quyền (Superadmin > Admin > Manager > Teacher > Assistant > Student > Parent > Guest). Tên và biệt danh của 2 tài khoản Superadmin được chuẩn hóa thành "Đỗ Tấn Bảo" và "Th Bảo". Bản thân tài khoản Superadmin có thể tự do chỉnh sửa trọn bộ 14 trường thông tin của chính mình (Họ tên, Biệt danh, GPS, Lớp, Môn...) thông qua nút "14 Trường" hoặc nút 1-click "Sửa thông tin của tôi". Bổ sung tính năng "Thêm TKB (Con, Em...)" giúp quản trị viên và người dùng dễ dàng tạo thêm thời khóa biểu gia đình để cùng theo dõi.',
+        purpose: 'Quản trị, Mặc định vào vai trò cao nhất khi Đăng nhập, Chuẩn hóa tên Superadmin Đỗ Tấn Bảo & Thêm TKB người thân',
         viewId: 'settings-users',
         icon: UserCog,
-        tags: ['Đỗ Tấn Bảo (Th Bảo)', 'Superadmin tự sửa hồ sơ', 'Thêm TKB Con/Em', '14 Trường Firestore', 'Deduplicate tanbaodl@gmail.com'],
+        tags: ['Mặc định vai trò cao nhất', 'Đỗ Tấn Bảo (Th Bảo)', 'Superadmin tự sửa hồ sơ', 'Thêm TKB Con/Em', '14 Trường Firestore', 'Deduplicate tanbaodl@gmail.com'],
       },
       {
         id: 'BaoCaoGiamSat',

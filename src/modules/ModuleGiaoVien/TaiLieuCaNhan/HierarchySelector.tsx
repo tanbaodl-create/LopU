@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layers, FolderTree, Plus, Check, ChevronDown, Trash2, X, AlertTriangle, Loader2, Cloud, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Layers, FolderTree, Plus, Check, ChevronDown, X, AlertTriangle, Loader2, Cloud, CheckCircle2, AlertCircle, RotateCcw } from 'lucide-react';
 import {
   HierarchyStore,
   getStoredHierarchy,
@@ -15,9 +15,9 @@ import {
 } from './TaiLieuCaNhanView';
 import {
   createDriveFolderIfNotExists,
-  deleteDriveFolderHierarchy,
   getDriveConnectionState,
   connectGoogleDrive,
+  scanAndSyncDriveHierarchy,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
 
 export interface HierarchySelectorProps {
@@ -75,6 +75,38 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   // Quản lý trạng thái mở dropdown cho từng cấp độ
   const [openDropdown, setOpenDropdown] = useState<HierarchyLevel | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Tự động đồng bộ cây thư mục thực tế từ Google Drive khi nạp module
+  useEffect(() => {
+    async function syncFromDrive() {
+      const conn = getDriveConnectionState();
+      if (conn.isConnected) {
+        const driveStore = await scanAndSyncDriveHierarchy();
+        if (driveStore) {
+          setStore(driveStore);
+        }
+      }
+    }
+    syncFromDrive();
+  }, []);
+
+  const handleManualSyncFromDrive = async () => {
+    setIsProcessing(true);
+    setConfirmNotice('Đang quét và đồng bộ thư mục thực tế từ Google Drive...');
+    const conn = getDriveConnectionState();
+    if (!conn.isConnected) {
+      await connectGoogleDrive();
+    }
+    const driveStore = await scanAndSyncDriveHierarchy();
+    if (driveStore) {
+      setStore(driveStore);
+      setConfirmNotice('Đã đồng bộ chính xác toàn bộ thư mục từ Google Drive!');
+    } else {
+      setConfirmNotice('Đã hoàn tất kiểm tra Google Drive.');
+    }
+    setIsProcessing(false);
+    setTimeout(() => setConfirmNotice(null), 4000);
+  };
 
   // Đóng dropdown khi click ra ngoài
   useEffect(() => {
@@ -575,6 +607,16 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
             <Layers className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
           </span>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleManualSyncFromDrive}
+              disabled={isProcessing}
+              title="Quét và đồng bộ lại danh mục thư mục thực tế từ Google Drive"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <RotateCcw className={`w-3 h-3 text-indigo-600 ${isProcessing ? 'animate-spin' : ''}`} />
+              <span>Làm mới Drive</span>
+            </button>
             <span className="text-[10px] text-indigo-600 font-semibold hidden sm:inline">Môn học + Khối lớp ➔ Tài liệu</span>
             {renderDriveStatusIndicator(true)}
           </div>

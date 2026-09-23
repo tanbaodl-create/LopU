@@ -297,6 +297,78 @@ export async function createDriveFolderIfNotExists(
 }
 
 /**
+ * Quét toàn bộ cây thư mục thực tế từ Google Drive (đường dẫn: myApp / LopU / TaiLieu)
+ * để đồng bộ chuẩn xác với ứng dụng, tự động loại bỏ triệt để các thư mục/tài liệu đã bị xóa trên Drive.
+ */
+export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
+  const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+  if (!isRealGoogleOAuthToken(token)) {
+    return null;
+  }
+  try {
+    const taiLieuId = await findFolderPathIdOnDrive(token!, ['myApp', 'LopU', 'TaiLieu']);
+    if (!taiLieuId) {
+      return {};
+    }
+
+    const url = `https://www.googleapis.com/drive/v3/files?q='${taiLieuId}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const docFolders: Array<{ id: string; name: string }> = data.files || [];
+
+    const newStore: Record<string, any> = {};
+    for (const docF of docFolders) {
+      newStore[docF.name] = {};
+      try {
+        const chuongUrl = `https://www.googleapis.com/drive/v3/files?q='${docF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
+        const chuongRes = await fetch(chuongUrl, { headers: { Authorization: `Bearer ${token}` } });
+        if (chuongRes.ok) {
+          const chuongData = await chuongRes.json();
+          const chuongs = chuongData.files || [];
+          for (const chF of chuongs) {
+            newStore[docF.name][chF.name] = {};
+            const baiUrl = `https://www.googleapis.com/drive/v3/files?q='${chF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
+            const baiRes = await fetch(baiUrl, { headers: { Authorization: `Bearer ${token}` } });
+            if (baiRes.ok) {
+              const baiData = await baiRes.json();
+              const bais = baiData.files || [];
+              for (const bF of bais) {
+                newStore[docF.name][chF.name][bF.name] = {};
+                const vdUrl = `https://www.googleapis.com/drive/v3/files?q='${bF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
+                const vdRes = await fetch(vdUrl, { headers: { Authorization: `Bearer ${token}` } });
+                if (vdRes.ok) {
+                  const vdData = await vdRes.json();
+                  const vds = vdData.files || [];
+                  for (const vdF of vds) {
+                    newStore[docF.name][chF.name][bF.name][vdF.name] = [];
+                    const cdUrl = `https://www.googleapis.com/drive/v3/files?q='${vdF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
+                    const cdRes = await fetch(cdUrl, { headers: { Authorization: `Bearer ${token}` } });
+                    if (cdRes.ok) {
+                      const cdData = await cdRes.json();
+                      const cds = cdData.files || [];
+                      newStore[docF.name][chF.name][bF.name][vdF.name] = cds.map((c: any) => c.name);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Lỗi khi nạp cây con Drive:', err);
+      }
+    }
+
+    localStorage.setItem('lopu_teaching_hierarchy_tree_v3', JSON.stringify(newStore));
+    return newStore;
+  } catch (err) {
+    console.warn('scanAndSyncDriveHierarchy error:', err);
+    return null;
+  }
+}
+
+/**
  * Xóa thư mục phân cấp tương ứng trên Google Drive trước khi xóa trên App:
  * - Chờ phản hồi đã xóa xong bên Drive mới xóa khỏi App.
  * - Tuyệt đối không có Sandbox: Nếu chưa kết nối Drive, không xóa khỏi tùy chọn dropdown.

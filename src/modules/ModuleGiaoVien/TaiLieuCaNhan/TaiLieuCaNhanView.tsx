@@ -14,7 +14,6 @@ import {
   LogIn,
   ChevronDown,
   User,
-  Trash2,
   FileUp,
   FileCode,
   TrendingUp,
@@ -40,6 +39,7 @@ import {
   getDriveConnectionState,
   createDriveFolderIfNotExists,
   connectGoogleDrive,
+  scanAndSyncDriveHierarchy,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
 import { getStoredHierarchy, saveStoredHierarchy } from './hierarchyData';
 import { HierarchySelector } from './HierarchySelector';
@@ -734,62 +734,21 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     e.target.value = '';
   };
   
-  const [customTitles, setCustomTitles] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_custom_titles_v1');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [customChuongs, setCustomChuongs] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_custom_chuongs_v1');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [customBais, setCustomBais] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_custom_bais_v1');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [customVanDes, setCustomVanDes] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_custom_vandes_v1');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
-  const [customChuyenDes, setCustomChuyenDes] = useState<string[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_custom_chuyendes_v1');
-      return raw ? JSON.parse(raw) : [];
-    } catch {
-      return [];
-    }
-  });
+  // Khởi tạo các danh mục tùy chọn trực tiếp trong bộ nhớ (không lưu vĩnh viễn dữ liệu rác cũ)
+  const [customTitles, setCustomTitles] = useState<string[]>([]);
+  const [customChuongs, setCustomChuongs] = useState<string[]>([]);
+  const [customBais, setCustomBais] = useState<string[]>([]);
+  const [customVanDes, setCustomVanDes] = useState<string[]>([]);
+  const [customChuyenDes, setCustomChuyenDes] = useState<string[]>([]);
 
+  // Dọn sạch các key cache cũ từng lưu tên tài liệu đã xóa
   useEffect(() => {
-    localStorage.setItem('lopu_custom_titles_v1', JSON.stringify(customTitles));
-  }, [customTitles]);
-  useEffect(() => {
-    localStorage.setItem('lopu_custom_chuongs_v1', JSON.stringify(customChuongs));
-  }, [customChuongs]);
-  useEffect(() => {
-    localStorage.setItem('lopu_custom_bais_v1', JSON.stringify(customBais));
-  }, [customBais]);
-  useEffect(() => {
-    localStorage.setItem('lopu_custom_vandes_v1', JSON.stringify(customVanDes));
-  }, [customVanDes]);
-  useEffect(() => {
-    localStorage.setItem('lopu_custom_chuyendes_v1', JSON.stringify(customChuyenDes));
-  }, [customChuyenDes]);
+    localStorage.removeItem('lopu_custom_titles_v1');
+    localStorage.removeItem('lopu_custom_chuongs_v1');
+    localStorage.removeItem('lopu_custom_bais_v1');
+    localStorage.removeItem('lopu_custom_vandes_v1');
+    localStorage.removeItem('lopu_custom_chuyendes_v1');
+  }, []);
 
   const [isAddingFolder, setIsAddingFolder] = useState<boolean>(false);
   const [modalAddError, setModalAddError] = useState<string | null>(null);
@@ -1145,27 +1104,23 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       const uList = await getUsers();
       setUsers(uList);
 
-      // Đồng bộ toàn bộ danh mục tài liệu & cấu trúc phân cấp từ docs vào custom lists
-      const titlesFromDocs = docs.map(d => d.title).filter((x): x is string => Boolean(x));
-      const chuongsFromDocs = docs.map(d => d.chuong).filter((x): x is string => Boolean(x));
-      const baisFromDocs = docs.map(d => d.bai).filter((x): x is string => Boolean(x));
-      const vanDesFromDocs = docs.map(d => d.vanDe).filter((x): x is string => Boolean(x));
-      const chuyenDesFromDocs = docs.map(d => d.chuyenDe).filter((x): x is string => Boolean(x));
+      // Đồng bộ toàn bộ danh mục tài liệu & cấu trúc phân cấp trực tiếp từ danh sách documents thực tế
+      const titlesFromDocs = Array.from(new Set(docs.map(d => d.title).filter((x): x is string => Boolean(x))));
+      const chuongsFromDocs = Array.from(new Set(docs.map(d => d.chuong).filter((x): x is string => Boolean(x))));
+      const baisFromDocs = Array.from(new Set(docs.map(d => d.bai).filter((x): x is string => Boolean(x))));
+      const vanDesFromDocs = Array.from(new Set(docs.map(d => d.vanDe).filter((x): x is string => Boolean(x))));
+      const chuyenDesFromDocs = Array.from(new Set(docs.map(d => d.chuyenDe).filter((x): x is string => Boolean(x))));
 
-      if (titlesFromDocs.length > 0) {
-        setCustomTitles(prev => Array.from(new Set([...prev, ...titlesFromDocs])));
-      }
-      if (chuongsFromDocs.length > 0) {
-        setCustomChuongs(prev => Array.from(new Set([...prev, ...chuongsFromDocs])));
-      }
-      if (baisFromDocs.length > 0) {
-        setCustomBais(prev => Array.from(new Set([...prev, ...baisFromDocs])));
-      }
-      if (vanDesFromDocs.length > 0) {
-        setCustomVanDes(prev => Array.from(new Set([...prev, ...vanDesFromDocs])));
-      }
-      if (chuyenDesFromDocs.length > 0) {
-        setCustomChuyenDes(prev => Array.from(new Set([...prev, ...chuyenDesFromDocs])));
+      setCustomTitles(titlesFromDocs);
+      setCustomChuongs(chuongsFromDocs);
+      setCustomBais(baisFromDocs);
+      setCustomVanDes(vanDesFromDocs);
+      setCustomChuyenDes(chuyenDesFromDocs);
+
+      // Quét và đồng bộ chính xác từ Google Drive
+      const conn = getDriveConnectionState();
+      if (conn.isConnected) {
+        await scanAndSyncDriveHierarchy();
       }
     }
     load();
@@ -2141,9 +2096,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           type="button"
                           onClick={() => setAttachedFiles(prev => prev.filter((_, i) => i !== idx))}
                           className="p-1 text-slate-400 hover:text-rose-600 cursor-pointer"
-                          title="Xóa tệp đính kèm"
+                          title="Bỏ tệp đính kèm"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <span className="text-xs font-bold leading-none">✕</span>
                         </button>
                       </div>
                     ))}

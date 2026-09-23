@@ -60,6 +60,42 @@ import { GpsPickerModal } from '../../../components/GpsPickerModal';
 
 export const TKB_DRIVE_FOLDER_PATH = 'myApp\\LopU\\ThoiKhoaBieu\\TKB {Tên tài khoản} lần k';
 
+export const ROLE_HIERARCHY: UserRole[] = [
+  'superadmin',
+  'admin',
+  'manager',
+  'teacher',
+  'assistant',
+  'student',
+  'parent',
+  'guest',
+];
+
+export const getHighestUserRole = (
+  user?: Partial<UserProfile | ExtendedUserProfile> | null,
+  email?: string
+): UserRole => {
+  const targetEmail = (user?.email || email || '').trim().toLowerCase();
+  if (SUPERADMIN_EMAILS.some(e => e.toLowerCase() === targetEmail)) {
+    return 'superadmin';
+  }
+  if (!user) return 'student';
+
+  const allRoles: UserRole[] = [];
+  if (user.role) allRoles.push(user.role);
+  if (Array.isArray(user.roles)) {
+    allRoles.push(...user.roles);
+  }
+
+  for (const r of ROLE_HIERARCHY) {
+    if (allRoles.includes(r)) {
+      return r;
+    }
+  }
+
+  return user.role || 'student';
+};
+
 export interface ExtendedUserProfile extends UserProfile {
   nickname?: string;
   gps?: string;
@@ -259,7 +295,17 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
       deleteUser(dupId).catch(() => {});
     }
 
-    const cleanedList = Array.from(emailMap.values());
+    // Chuẩn hóa và gán vai trò mặc định cao nhất cho từng tài khoản
+    const cleanedList = Array.from(emailMap.values()).map(u => {
+      const highest = getHighestUserRole(u, u.email);
+      const allRoles = Array.from(new Set([highest, ...(u.roles || []), u.role].filter(Boolean))) as UserRole[];
+      return {
+        ...u,
+        role: highest,
+        roles: allRoles,
+      };
+    });
+
     if (duplicateIdsToDelete.length > 0) {
       try {
         localStorage.setItem('lopu_users_data', JSON.stringify(cleanedList));
@@ -267,11 +313,56 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
     }
 
     setUsers(cleanedList);
+
+    // Tự động chuyển vai trò hiện tại của tài khoản đăng nhập sang vai trò cao nhất
+    const currentAuthUser = auth?.currentUser;
+    const driveConn = getDriveConnectionState();
+    const activeEmail = (
+      currentAuthUser?.email ||
+      driveEmail ||
+      driveConn.email ||
+      localStorage.getItem('lopu_active_user_email') ||
+      ''
+    ).trim();
+
+    if (activeEmail && onChangeRole) {
+      const matchedUser = cleanedList.find(
+        u => (u.email || '').trim().toLowerCase() === activeEmail.toLowerCase()
+      );
+      const userHighestRole = getHighestUserRole(matchedUser, activeEmail);
+      if (!currentRole || currentRole !== userHighestRole) {
+        onChangeRole(userHighestRole);
+      }
+    }
   };
 
   useEffect(() => {
     loadData();
   }, []);
+
+  // Khi driveEmail hoặc auth thay đổi, luôn tự động đặt vai trò mặc định cao nhất
+  useEffect(() => {
+    if (!onChangeRole) return;
+    const currentAuthUser = auth?.currentUser;
+    const driveConn = getDriveConnectionState();
+    const activeEmail = (
+      currentAuthUser?.email ||
+      driveEmail ||
+      driveConn.email ||
+      localStorage.getItem('lopu_active_user_email') ||
+      ''
+    ).trim();
+
+    if (activeEmail && users.length > 0) {
+      const matchedUser = users.find(
+        u => (u.email || '').trim().toLowerCase() === activeEmail.toLowerCase()
+      );
+      const userHighestRole = getHighestUserRole(matchedUser, activeEmail);
+      if (currentRole !== userHighestRole) {
+        onChangeRole(userHighestRole);
+      }
+    }
+  }, [driveEmail, users, currentRole, onChangeRole]);
 
   const isSuperadminProtected = (user: UserProfile) => {
     return user.isProtected || SUPERADMIN_EMAILS.some(e => e.toLowerCase() === user.email.toLowerCase());
