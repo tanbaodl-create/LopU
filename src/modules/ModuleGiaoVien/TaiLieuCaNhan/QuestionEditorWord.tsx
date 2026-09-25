@@ -65,69 +65,7 @@ export const TRUE_FALSE_SCORE_MAP: Record<number, number> = {
   4: 1.0,  // Đúng 4 ý: 1.0 điểm
 };
 
-const DEFAULT_QUESTIONS: QuestionItem[] = [
-  {
-    id: 'q_1',
-    questionNumber: 1,
-    content: 'Tập xác định của hàm số $y = \\sqrt{x - 2}$ là:',
-    level: 1, // Mức 1: 0 -> <=2 điểm
-    type: 'multiple_choice',
-    options: [
-      { key: 'A', text: '$D = [2; +\\infty)$' },
-      { key: 'B', text: '$D = (2; +\\infty)$' },
-      { key: 'C', text: '$D = (-\\infty; 2]$' },
-      { key: 'D', text: '$D = \\mathbb{R} \\setminus \\{2\\}$' },
-    ],
-    correctAnswer: 'A',
-    solution: 'Hàm số xác định khi và chỉ khi biểu thức dưới dấu căn không âm: $x - 2 \\ge 0 \\Leftrightarrow x \\ge 2$. Vậy tập xác định là $D = [2; +\\infty)$.',
-    points: 0.25, // Điểm mặc định trắc nghiệm lựa chọn
-  },
-  {
-    id: 'q_2',
-    questionNumber: 2,
-    content: 'Cho hàm số bậc hai $y = f(x) = ax^2 + bx + c$ có đồ thị như hình vẽ. Xét tính đúng sai của các mệnh đề sau:',
-    level: 3, // Mức 3: 4 -> <6 điểm
-    type: 'true_false',
-    options: [],
-    correctAnswer: 'a: Đúng; b: Sai; c: Đúng; d: Đúng',
-    tfStatements: [
-      { key: 'a', text: 'Hệ số $a > 0$ do bề lõm của parabol quay lên trên.', isCorrect: true },
-      { key: 'b', text: 'Tọa độ đỉnh của parabol có hoành độ $x_I = -\\frac{b}{2a} < 0$.', isCorrect: false },
-      { key: 'c', text: 'Đồ thị cắt trục tung tại điểm có tung độ dương $c > 0$.', isCorrect: true },
-      { key: 'd', text: 'Phương trình $f(x) = 0$ có hai nghiệm phân biệt $x_1, x_2$.', isCorrect: true },
-    ],
-    solution: 'a) Đúng vì parabol hướng lên trên nên $a > 0$.\nb) Sai vì đỉnh $I$ nằm ở góc phần tư thứ nhất nên hoành độ $x_I > 0$.\nc) Đúng vì giao điểm với trục tung có tung độ nằm trên trục hoành.\nd) Đúng vì parabol cắt trục hoành tại hai điểm phân biệt.',
-    points: 1.0, // Điểm tối đa 4 ý
-  },
-  {
-    id: 'q_3',
-    questionNumber: 3,
-    content: 'Tìm giá trị nhỏ nhất của hàm số $f(x) = x + \\frac{4}{x}$ trên khoảng $(0; +\\infty)$.',
-    level: 4, // Mức 4: 6 -> <8 điểm
-    type: 'short_answer',
-    options: [],
-    correctAnswer: '4',
-    shortAnswerText: '4',
-    solution: 'Áp dụng bất đẳng thức Cô-si cho hai số dương $x$ và $\\frac{4}{x}$:\n$f(x) = x + \\frac{4}{x} \\ge 2\\sqrt{x \\cdot \\frac{4}{x}} = 2 \\cdot 2 = 4$.\nDấu "=" xảy ra khi và chỉ khi $x = \\frac{4}{x} \\Leftrightarrow x^2 = 4 \\Leftrightarrow x = 2$ (do $x > 0$).\nVậy giá trị nhỏ nhất bằng 4.',
-    points: 0.5, // Điểm mặc định câu trả lời ngắn
-  },
-  {
-    id: 'q_4',
-    questionNumber: 4,
-    content: 'Tìm tất cả các giá trị thực của tham số $m$ để phương trình $x^2 - 2(m-1)x + m^2 - 3m = 0$ có hai nghiệm phân biệt $x_1, x_2$ thỏa mãn $x_1^2 + x_2^2 = 14$.',
-    level: 5, // Mức 5: 8 -> 9 điểm
-    type: 'multiple_choice',
-    options: [
-      { key: 'A', text: '$m = 3$' },
-      { key: 'B', text: '$m = -1$' },
-      { key: 'C', text: '$m = 3$ hoặc $m = -1$' },
-      { key: 'D', text: '$m = 2$' },
-    ],
-    correctAnswer: 'A',
-    solution: '1. Điều kiện để phương trình có 2 nghiệm phân biệt: $\\Delta\' = (m-1)^2 - (m^2 - 3m) = m + 1 > 0 \\Leftrightarrow m > -1$.\n2. Theo định lý Vi-ét: $x_1 + x_2 = 2(m-1)$ và $x_1 x_2 = m^2 - 3m$.\n3. Ta có $x_1^2 + x_2^2 = (x_1+x_2)^2 - 2x_1 x_2 = 4(m-1)^2 - 2(m^2 - 3m) = 2m^2 - 2m + 4$.\nTheo bài ra: $2m^2 - 2m + 4 = 14 \\Leftrightarrow 2m^2 - 2m - 10 = 0 \\Leftrightarrow m^2 - m - 6 = 0 \\Leftrightarrow m = 3$ (nhận) hoặc $m = -2$ (loại do $m > -1$).\nVậy $m = 3$.',
-    points: 0.25,
-  },
-];
+const DEFAULT_QUESTIONS: QuestionItem[] = [];
 
 export interface QuestionEditorWordProps {
   title: string;
@@ -535,10 +473,6 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
 
   // Xóa câu hỏi
   const handleDeleteQuestion = (qId: string) => {
-    if (questions.length <= 1) {
-      alert('Bài luyện tập/đánh giá cần có ít nhất 1 câu hỏi.');
-      return;
-    }
     setQuestions(prev => {
       const filtered = prev.filter(q => q.id !== qId);
       return filtered.map((q, idx) => ({ ...q, questionNumber: idx + 1 }));
@@ -1007,6 +941,35 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
             onInsert={type => handleInsertQuestionAt(0, type)}
             label="+ Thêm câu hỏi ở vị trí đầu tiên"
           />
+
+          {/* Hiển thị trạng thái rỗng nếu chưa có câu hỏi nào */}
+          {questions.length === 0 && (
+            <div className="py-12 px-4 text-center bg-white border-2 border-dashed border-indigo-200 rounded-2xl my-4 space-y-3 shadow-xs">
+              <FileText className="w-10 h-10 text-indigo-400 mx-auto" />
+              <div className="text-sm font-bold text-indigo-950">Nội dung / Bài tập đang ở trạng thái rỗng</div>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Nội dung mặc định của phần soạn thảo hiện ở dạng rỗng. Hãy bấm nút dưới đây hoặc dùng thanh công cụ Word để tạo nội dung mới.
+              </p>
+              <div className="pt-2 flex flex-wrap justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleAddQuestion('multiple_choice')}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Thêm câu hỏi trắc nghiệm</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAddQuestion('true_false')}
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Thêm câu hỏi đúng/sai</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Danh sách từng câu hỏi */}
           <div className="space-y-3">

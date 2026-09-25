@@ -12,9 +12,11 @@ import {
   subscribeDriveStatus,
   listAppFilesFromDrive,
   downloadFileJson,
+  deleteAppFileFromDrive,
+  clearAppTrashFilesFromDrive,
   DriveStoredFile,
 } from '../../ConnectData/ConnectDrive';
-import { Cloud, X, CheckCircle2, Download } from 'lucide-react';
+import { Cloud, X, CheckCircle2, Download, Trash2, RotateCcw } from 'lucide-react';
 
 interface AppLayoutProps {
   initialView?: ViewId;
@@ -168,6 +170,21 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
     disconnectGoogleDrive();
     setDriveModalMessage('Đã ngắt kết nối Google Drive.');
     setTimeout(() => setDriveModalMessage(null), 3000);
+  };
+
+  const handleDeleteSingleDriveFile = async (fileId: string, fileName: string) => {
+    deleteAppFileFromDrive(fileId);
+    const updatedFiles = await listAppFilesFromDrive();
+    setDriveFiles(updatedFiles);
+    setDriveModalMessage(`Đã xóa tệp "${fileName}" khỏi danh sách đồng bộ.`);
+    setTimeout(() => setDriveModalMessage(null), 4000);
+  };
+
+  const handleCleanDriveTrashFiles = async () => {
+    clearAppTrashFilesFromDrive();
+    setDriveFiles([]);
+    setDriveModalMessage('Đã dọn dẹp sạch sẽ toàn bộ tệp rác & tệp trùng lặp.');
+    setTimeout(() => setDriveModalMessage(null), 4000);
   };
 
   const handleChangeRole = async (newRole: UserRole) => {
@@ -390,7 +407,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px]">
                   Tệp Tin Đã Đồng Bộ Trên Google Drive ({driveFiles.length})
                 </span>
-                <span className="text-[11px] text-slate-400">Tự động sao lưu</span>
+                {driveFiles.length > 0 && (
+                  <button
+                    onClick={handleCleanDriveTrashFiles}
+                    title="Xóa triệt để tệp trùng lặp và tệp rác"
+                    className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Dọn dẹp tệp rác</span>
+                  </button>
+                )}
               </div>
 
               {driveFiles.length > 0 ? (
@@ -411,19 +437,28 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => downloadFileJson(file)}
-                        title="Tải về máy tính"
-                        className="p-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 transition-colors shrink-0 cursor-pointer"
-                      >
-                        <Download className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => downloadFileJson(file)}
+                          title="Tải về máy tính"
+                          className="p-2 rounded-lg bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 transition-colors cursor-pointer"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSingleDriveFile(file.id, file.name)}
+                          title="Xóa tệp này khỏi danh sách đồng bộ"
+                          className="p-2 rounded-lg bg-slate-100 hover:bg-rose-50 hover:text-rose-600 text-slate-500 transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="p-6 text-center text-slate-400 italic bg-slate-50 rounded-xl">
-                  Chưa có tệp nào được lưu vào Drive. Sử dụng nút lưu Drive ở các màn hình Thời khóa biểu, Sơ đồ, Điểm danh để đồng bộ.
+                  Chưa có tệp nào được lưu vào Drive. Các tệp rác đã được quét sạch sẽ!
                 </div>
               )}
             </div>
@@ -469,22 +504,50 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
             {authError === 'unauthorized-domain' ? (
               <div className="space-y-4 text-xs text-slate-600">
                 <div className="p-3 bg-amber-50 border border-amber-200 text-amber-950 rounded-xl leading-relaxed">
-                  ⚠️ <strong>Lỗi auth/unauthorized-domain:</strong> Firebase Authentication chặn các yêu cầu đăng nhập từ tên miền ứng dụng hiện tại vì nó chưa được liệt kê trong danh sách được phép (Authorized Domains).
+                  ⚠️ <strong>Lỗi auth/unauthorized-domain:</strong> Firebase Authentication chặn các yêu cầu đăng nhập từ tên miền ứng dụng hiện tại vì nó chưa được kích hoạt trong danh sách được phép (Authorized Domains) của Firebase.
                 </div>
 
                 <div className="space-y-2">
                   <h4 className="font-bold text-slate-800 text-[13px]">Các bước cấp phép tên miền trong Firebase:</h4>
                   <ol className="list-decimal pl-4 space-y-1.5 leading-relaxed text-slate-600">
-                    <li>Truy cập vào <strong>Firebase Console</strong> dự án của bạn.</li>
+                    <li>Truy cập vào <strong>Firebase Console</strong> dự án của bạn (<em>lopu-8a032</em> hoặc project tương ứng).</li>
                     <li>Vào mục <strong>Authentication</strong> ➔ Tab <strong>Settings</strong> (Cài đặt).</li>
                     <li>Ở danh sách cột trái, chọn <strong>Authorized domains</strong> (Tên miền được ủy quyền).</li>
-                    <li>Bấm nút <strong>Add domain</strong> (Thêm tên miền) và sao chép/dán hai tên miền bên dưới vào:</li>
+                    <li>Bấm nút <strong>Add domain</strong> (Thêm tên miền), dán chính xác <strong>Tên miền hiện tại</strong> bên dưới vào rồi bấm Save (Lưu):</li>
                   </ol>
                 </div>
 
                 <div className="space-y-2.5 pt-1">
+                  {/* Tên miền hiện tại của trình duyệt */}
+                  <div className="p-3 bg-indigo-50/60 rounded-xl border border-indigo-200">
+                    <span className="text-[10px] uppercase font-black text-indigo-900 block mb-1">
+                      👉 Tên miền ứng dụng đang chạy hiện tại (Cần thêm vào Firebase):
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={typeof window !== 'undefined' ? window.location.hostname : 'lopu2.vercel.app'}
+                        className="flex-1 font-mono font-bold text-xs bg-white border border-indigo-300 px-3 py-1.5 rounded-lg text-indigo-950 outline-none select-all shadow-2xs"
+                      />
+                      <button
+                        onClick={() => {
+                          if (typeof window !== 'undefined') {
+                            navigator.clipboard.writeText(window.location.hostname);
+                          }
+                        }}
+                        className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 cursor-pointer shadow-xs shrink-0"
+                      >
+                        Sao chép
+                      </button>
+                    </div>
+                    <span className="text-[10px] text-slate-500 block mt-1.5 italic">
+                      Lưu ý: Sau khi bấm "Add domain" trong Firebase, có thể mất 30 giây - 1 phút để hệ thống Google cập nhật có hiệu lực.
+                    </span>
+                  </div>
+
                   <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Tên miền Development:</span>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Tên miền AI Studio Dev & Preview:</span>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
@@ -494,25 +557,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       />
                       <button
                         onClick={() => navigator.clipboard.writeText("ais-dev-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app")}
-                        className="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg font-bold hover:bg-indigo-100 cursor-pointer"
-                      >
-                        Sao chép
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Tên miền Production / Share:</span>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value="ais-pre-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app"
-                        className="flex-1 font-mono text-[11px] bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-slate-700 outline-none select-all"
-                      />
-                      <button
-                        onClick={() => navigator.clipboard.writeText("ais-pre-l5bsxmqhasi2bjkz6rqwz5-111135435575.asia-southeast1.run.app")}
-                        className="px-2.5 py-1.5 text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-lg font-bold hover:bg-indigo-100 cursor-pointer"
+                        className="px-2.5 py-1.5 text-[11px] bg-slate-100 text-slate-700 border border-slate-200 rounded-lg font-bold hover:bg-slate-200 cursor-pointer"
                       >
                         Sao chép
                       </button>
@@ -535,6 +580,15 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                 className="px-4 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
               >
                 Đóng
+              </button>
+              <button
+                onClick={() => {
+                  setAuthError(null);
+                  handleSignInGoogle();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs"
+              >
+                Thử đăng nhập lại
               </button>
             </div>
           </div>

@@ -12,6 +12,10 @@ import {
   TaiLieuCaNhanView,
   TheoDoiHocSinhView,
   ThuongMaiTaiLieuView,
+  QuanLyDriveView,
+  createByPath,
+  deleteByPath,
+  getNestedDriveTree,
 } from '../../ModuleGiaoVien';
 import {
   BaoCaoGiamSatView,
@@ -64,6 +68,8 @@ import {
   Calculator,
   RotateCcw,
   Loader2,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
 import {
@@ -71,6 +77,8 @@ import {
   getDriveConnectionState,
   createDriveFolderIfNotExists,
   deleteDriveFolderHierarchy,
+  connectGoogleDrive,
+  isRealGoogleOAuthToken,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
 
 /**
@@ -584,6 +592,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Danh mục phân cấp & dropdown quản lý
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [isSidePanelCollapsed, setIsSidePanelCollapsed] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [addingLevel, setAddingLevel] = useState<string>('');
   const [newItemText, setNewItemText] = useState<string>('');
@@ -606,8 +615,59 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       setClasses(cls);
       const docs = await getTeacherDocuments();
       setDocuments(docs);
-      if (docs.length > 0) {
-        setTitleList(Array.from(new Set(docs.map(d => d.title).filter(Boolean))));
+      
+      const docTitlesFromStore = docs.map(d => d.title).filter(Boolean);
+      setTitleList(prev => Array.from(new Set([...prev, ...docTitlesFromStore])));
+
+      // Tự động quét và đồng bộ trực tiếp danh mục từ Google Drive ngay khi vừa vào Word Soạn Thảo
+      try {
+        const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']);
+        if (res.success && res.tree && res.tree.children) {
+          const titles: string[] = [];
+          const chuongs: string[] = [];
+          const bais: string[] = [];
+          const vanDes: string[] = [];
+          const chuyenDes: string[] = [];
+
+          for (const docNode of res.tree.children) {
+            if (docNode.type === 'folder') {
+              titles.push(docNode.name);
+              if (docNode.children) {
+                for (const chNode of docNode.children) {
+                  if (chNode.type === 'folder') {
+                    chuongs.push(chNode.name);
+                    if (chNode.children) {
+                      for (const bNode of chNode.children) {
+                        if (bNode.type === 'folder') {
+                          bais.push(bNode.name);
+                          if (bNode.children) {
+                            for (const vNode of bNode.children) {
+                              if (vNode.type === 'folder') {
+                                vanDes.push(vNode.name);
+                                if (vNode.children) {
+                                  for (const cdNode of vNode.children) {
+                                    chuyenDes.push(cdNode.name);
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+          setTitleList(prev => Array.from(new Set([...prev, ...titles])));
+          setChuongList(prev => Array.from(new Set([...prev, ...chuongs])));
+          setBaiList(prev => Array.from(new Set([...prev, ...bais])));
+          setVanDeList(prev => Array.from(new Set([...prev, ...vanDes])));
+          setChuyenDeList(prev => Array.from(new Set([...prev, ...chuyenDes])));
+        }
+      } catch (err) {
+        console.warn('NavigationContainer auto drive sync error:', err);
       }
     }
     load();
@@ -823,6 +883,103 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setOpenDropdown(null);
   };
 
+  const [isWordResyncing, setIsWordResyncing] = useState<boolean>(false);
+
+  const handleWordResyncFromDrive = async () => {
+    setIsWordResyncing(true);
+    setNotification({ text: 'Đang quét và đồng bộ cấu trúc từ Google Drive (QuanLyDrive)...', type: 'info' });
+    try {
+      // 1. Kiểm tra / Tự động kết nối Drive nếu chưa có token OAuth thực
+      let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+      if (!isRealGoogleOAuthToken(token)) {
+        const connRes = await connectGoogleDrive();
+        if (!connRes.success) {
+          setNotification({ text: `Vui lòng đăng nhập Google Drive: ${connRes.message}`, type: 'error' });
+          setIsWordResyncing(false);
+          return;
+        }
+        token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+      }
+
+      // 2. Tự động tạo thư mục chuẩn myApp/LopU/TaiLieu trên Google Drive nếu chưa có
+      await createByPath(['myApp', 'LopU', 'TaiLieu']);
+
+      // 3. Quét cây phân cấp trực tiếp từ Google Drive
+      const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']);
+
+      // 4. Lấy dữ liệu chuẩn từ Firestore getTeacherDocuments()
+      const firestoreDocs = await getTeacherDocuments();
+      setDocuments(firestoreDocs);
+      const fsTitles = firestoreDocs.map(d => d.title).filter((x): x is string => Boolean(x));
+      const fsChuongs = firestoreDocs.map(d => d.chuong).filter((x): x is string => Boolean(x));
+      const fsBais = firestoreDocs.map(d => d.bai).filter((x): x is string => Boolean(x));
+      const fsVanDes = firestoreDocs.map(d => d.vanDe).filter((x): x is string => Boolean(x));
+      const fsChuyenDes = firestoreDocs.map(d => d.chuyenDe).filter((x): x is string => Boolean(x));
+
+      const titles: string[] = [...fsTitles];
+      const chuongs: string[] = [...fsChuongs];
+      const bais: string[] = [...fsBais];
+      const vanDes: string[] = [...fsVanDes];
+      const chuyenDes: string[] = [...fsChuyenDes];
+
+      if (res.success && res.tree && res.tree.children) {
+        for (const docNode of res.tree.children) {
+          if (docNode.type === 'folder') {
+            titles.push(docNode.name);
+            if (docNode.children) {
+              for (const chNode of docNode.children) {
+                if (chNode.type === 'folder') {
+                  chuongs.push(chNode.name);
+                  if (chNode.children) {
+                    for (const bNode of chNode.children) {
+                      if (bNode.type === 'folder') {
+                        bais.push(bNode.name);
+                        if (bNode.children) {
+                          for (const vNode of bNode.children) {
+                            if (vNode.type === 'folder') {
+                              vanDes.push(vNode.name);
+                              if (vNode.children) {
+                                for (const cdNode of vNode.children) {
+                                  chuyenDes.push(cdNode.name);
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      const finalTitles = Array.from(new Set(titles));
+      const finalChuongs = Array.from(new Set(chuongs));
+      const finalBais = Array.from(new Set(bais));
+      const finalVanDes = Array.from(new Set(vanDes));
+      const finalChuyenDes = Array.from(new Set(chuyenDes));
+
+      setTitleList(finalTitles);
+      setChuongList(finalChuongs);
+      setBaiList(finalBais);
+      setVanDeList(finalVanDes);
+      setChuyenDeList(finalChuyenDes);
+
+      setNotification({
+        text: `Đã đồng bộ thành công! Tìm thấy ${finalTitles.length} tài liệu, ${finalChuongs.length} chương, ${finalBais.length} bài, ${finalVanDes.length} vấn đề, ${finalChuyenDes.length} chuyên đề.`,
+        type: 'success',
+      });
+    } catch (err: any) {
+      setNotification({ text: `Lỗi đồng bộ Drive: ${err?.message || 'Có lỗi xảy ra'}`, type: 'error' });
+    } finally {
+      setIsWordResyncing(false);
+      setTimeout(() => setNotification(null), 6000);
+    }
+  };
+
   const handleConfirmAddItem = async () => {
     if (!newItemText.trim() || isAddingFolder) return;
     const raw = newItemText.trim();
@@ -851,11 +1008,11 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setIsAddingFolder(true);
     setModalAddError(null);
 
-    const driveRes = await createDriveFolderIfNotExists(pathSegments);
+    const driveRes = await createByPath(pathSegments);
 
     if (!driveRes.success) {
       setIsAddingFolder(false);
-      const errMsg = driveRes.error || 'Tạo chưa thành công trên Google Drive';
+      const errMsg = driveRes.message || 'Tạo chưa thành công trên Google Drive';
       setModalAddError(errMsg);
       return;
     }
@@ -899,19 +1056,13 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setModalAddError(null);
     setShowAddModal(false);
 
-    if (driveRes.isRealDrive) {
-      setNotification({
-        text: driveRes.alreadyExists
-          ? `Đã liên kết thư mục "${val}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`
-          : `Đã tạo thành công thư mục "${val}" trên Google Drive (Đường dẫn: Drive của tôi ➔ myApp ➔ LopU ➔ TaiLieu)!`,
-        type: 'success',
-      });
-    } else {
-      setNotification({
-        text: `Đã thêm "${val}" vào ứng dụng. (Chưa kết nối Google Drive - Hãy bấm Kết nối Drive để đồng bộ lên drive.google.com)`,
-        type: 'info',
-      });
-    }
+    const isExisted = driveRes.status === 'existed';
+    setNotification({
+      text: isExisted
+        ? `[QuanLyDrive] Thư mục "${val}" đã tồn tại và được liên kết thành công!`
+        : `[QuanLyDrive] Đã tạo mới thành công thư mục "${val}" trên Google Drive (ID: ${driveRes.id || 'N/A'})!`,
+      type: 'success',
+    });
     setTimeout(() => setNotification(null), 6000);
   };
 
@@ -920,26 +1071,42 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setDeleteConfirm({ level: lvl, item: itm });
   };
 
-  const executeDeleteItem = () => {
+  const executeDeleteItem = async () => {
     if (!deleteConfirm) return;
     const { level: lvl, item: itm } = deleteConfirm;
-    if (lvl === 'title') {
-      setTitleList(prev => prev.filter(x => x !== itm));
-      if (title === itm) setTitle('');
-    } else if (lvl === 'chuong') {
-      setChuongList(prev => prev.filter(x => x !== itm));
-      if (chuong === itm) setChuong('');
-    } else if (lvl === 'bai') {
-      setBaiList(prev => prev.filter(x => x !== itm));
-      if (bai === itm) setBai('');
-    } else if (lvl === 'vanDe') {
-      setVanDeList(prev => prev.filter(x => x !== itm));
-      if (vanDe === itm) setVanDe('');
-    } else if (lvl === 'chuyenDe') {
-      setChuyenDeList(prev => prev.filter(x => x !== itm));
-      if (chuyenDe === itm) setChuyenDe('');
+
+    const pathSegments: string[] = ['myApp', 'LopU', 'TaiLieu'];
+    if (lvl === 'title') pathSegments.push(itm);
+    else if (lvl === 'chuong') pathSegments.push(title || 'TaiLieuChung', itm);
+    else if (lvl === 'bai') pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', itm);
+    else if (lvl === 'vanDe') pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', itm);
+    else if (lvl === 'chuyenDe') pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', vanDe || 'VanDe1', itm);
+
+    const deleteRes = await deleteByPath(pathSegments);
+
+    if (deleteRes.success) {
+      if (lvl === 'title') {
+        setTitleList(prev => prev.filter(x => x !== itm));
+        if (title === itm) setTitle('');
+      } else if (lvl === 'chuong') {
+        setChuongList(prev => prev.filter(x => x !== itm));
+        if (chuong === itm) setChuong('');
+      } else if (lvl === 'bai') {
+        setBaiList(prev => prev.filter(x => x !== itm));
+        if (bai === itm) setBai('');
+      } else if (lvl === 'vanDe') {
+        setVanDeList(prev => prev.filter(x => x !== itm));
+        if (vanDe === itm) setVanDe('');
+      } else if (lvl === 'chuyenDe') {
+        setChuyenDeList(prev => prev.filter(x => x !== itm));
+        if (chuyenDe === itm) setChuyenDe('');
+      }
+      setNotification({ text: `[QuanLyDrive] Đã xóa vĩnh viễn mục "${itm}" trên Google Drive (Thùng rác) và ứng dụng!`, type: 'success' });
+    } else {
+      setNotification({ text: `Xóa không thành công: ${deleteRes.message}`, type: 'error' });
     }
     setDeleteConfirm(null);
+    setTimeout(() => setNotification(null), 5000);
   };
 
   // Render dropdown gọn gàng: BỎ nút "+ Nhập ngoài" bên ngoài, Nút trong đổi thành "Thêm"
@@ -954,9 +1121,21 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
     return (
       <div className="space-y-1 relative">
-        <label className={`text-[11px] font-bold block ${isPrimary ? 'text-indigo-900' : 'text-slate-700'}`}>
-          {label}
-        </label>
+        <div className="flex items-center justify-between">
+          <label className={`text-[11px] font-bold block ${isPrimary ? 'text-indigo-900' : 'text-slate-700'}`}>
+            {label}
+          </label>
+          <button
+            type="button"
+            onClick={handleWordResyncFromDrive}
+            disabled={isWordResyncing}
+            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+            title="Bấm để quét và đồng bộ lại cấu trúc từ Google Drive"
+          >
+            <RotateCcw className={`w-3 h-3 ${isWordResyncing ? 'animate-spin' : ''}`} />
+            <span>{isWordResyncing ? 'Đang đồng bộ...' : 'Đồng bộ lại từ Drive'}</span>
+          </button>
+        </div>
         
         {/* Nút trigger dropdown (đã bỏ nút Nhập ngoài bên ngoài) */}
         <div className="relative">
@@ -1048,6 +1227,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         }
                       } else if (lvl === 'chuyenDe') {
                         setChuyenDe(opt);
+                        if (opt) {
+                          setIsSidePanelCollapsed(true);
+                        }
                       }
                       setOpenDropdown(null);
                     }}
@@ -1164,132 +1346,192 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       )}
 
       {/* Layout 2 cột: Cột trái Dropdown phân cấp (đã bỏ nút Nhập ngoài ngoài, nút trong là Thêm) & Cột phải Trình soạn thảo Word */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Cột trái (4 cột): TÀI LIỆU & NỘI DUNG BÀI DẠY */}
-        <div className="lg:col-span-4 space-y-4">
-          {/* 1. NHÓM TÀI LIỆU (GỒM MÔN HỌC + KHỐI LỚP VÀ DROPDOWN TÊN TÀI LIỆU) */}
-          <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
-            <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
-              <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
-                <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        {/* Cột trái (Thu gọn 2-3 cột / Mở rộng 4 cột): TÀI LIỆU & NỘI DUNG BÀI DẠY */}
+        {isSidePanelCollapsed ? (
+          /* DẠNG THU NHỎ 1 GÓC KHI ĐÃ CHỌN CHUYÊN ĐỀ DÀNH TOÀN BỘ MÀN HÌNH CHO SOẠN THẢO */
+          <div className="lg:col-span-2 bg-white p-3 rounded-2xl border border-indigo-200 shadow-xs space-y-2.5 animate-fade-in sticky top-2 z-20">
+            <div className="flex items-center justify-between border-b border-indigo-100 pb-1.5">
+              <span className="text-[10px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1">
+                <FolderLock className="w-3 h-3 text-indigo-600" /> Khung T.Liệu
               </span>
-              <span className="text-[10px] text-indigo-600 font-semibold">Môn học + Khối lớp ➔ Tên tài liệu</span>
+              <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                Thu gọn
+              </span>
             </div>
 
-            {/* Hàng 1 của nhóm Tài liệu: Môn học & Khối lớp (đứng trước dropdown chọn Tên tài liệu) */}
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="text-[11px] space-y-1.5 bg-indigo-50/60 p-2 rounded-xl border border-indigo-100/80">
               <div>
-                <label className="text-[10px] font-bold text-slate-600 block mb-1">Môn học</label>
-                <select
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
-                >
-                  <option value="">-- (Để trống) --</option>
-                  <option value="Toán Học">Toán Học</option>
-                  <option value="Vật Lý">Vật Lý</option>
-                  <option value="Hóa Học">Hóa Học</option>
-                  <option value="Ngữ Văn">Ngữ Văn</option>
-                  <option value="Tiếng Anh">Tiếng Anh</option>
-                  <option value="Sinh Học">Sinh Học</option>
-                </select>
+                <span className="text-[9px] font-bold text-slate-400 block uppercase">Tài liệu:</span>
+                <span className="font-bold text-indigo-950 truncate block" title={title || 'Chưa chọn'}>
+                  {title || '(Chưa chọn)'}
+                </span>
               </div>
               <div>
-                <label className="text-[10px] font-bold text-slate-600 block mb-1">Khối lớp</label>
-                <select
-                  value={grade}
-                  onChange={(e) => setGrade(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
-                >
-                  <option value="">-- (Để trống) --</option>
-                  <option value="Khối 10">Khối 10</option>
-                  <option value="Khối 11">Khối 11</option>
-                  <option value="Khối 12">Khối 12</option>
-                </select>
+                <span className="text-[9px] font-bold text-slate-400 block uppercase">Chuyên đề:</span>
+                <span className="font-bold text-emerald-800 truncate block" title={chuyenDe || 'Chuyên đề'}>
+                  {chuyenDe || '(Chưa chọn)'}
+                </span>
               </div>
             </div>
 
-            {/* Hàng tiếp theo của nhóm Tài liệu: Dropdown chọn Tên tài liệu */}
-            <div className="pt-1">
-              {renderCleanDropdown('title', 'Tên tài liệu', title, titleList, true)}
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsSidePanelCollapsed(false)}
+              className="w-full px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 shadow-2xs transition-colors cursor-pointer"
+              title="Mở rộng lại khung tài liệu và nội dung bài học"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>📂 Xem / Mở rộng</span>
+            </button>
           </div>
+        ) : (
+          /* DẠNG MỞ RỘNG ĐẦY ĐỦ CỦA KHUNG TÀI LIỆU VÀ NỘI DUNG BÀI DẠY */
+          <div className="lg:col-span-4 space-y-4 animate-fade-in">
+            {/* 1. NHÓM TÀI LIỆU (GỒM MÔN HỌC + KHỐI LỚP VÀ DROPDOWN TÊN TÀI LIỆU) */}
+            <div className="bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between border-b border-indigo-100 pb-2 flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
+                    <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleWordResyncFromDrive}
+                    disabled={isWordResyncing}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    title="Bấm để đồng bộ lại từ Google Drive"
+                  >
+                    <RotateCcw className={`w-3 h-3 ${isWordResyncing ? 'animate-spin' : ''}`} />
+                    <span>{isWordResyncing ? 'Đang đồng bộ...' : 'Đồng bộ lại từ Drive'}</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSidePanelCollapsed(true)}
+                  className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 flex items-center gap-1 cursor-pointer"
+                  title="Thu gọn khung tài liệu & dành màn hình rộng cho soạn thảo"
+                >
+                  <Minimize2 className="w-3 h-3 text-slate-500" />
+                  <span>Thu gọn</span>
+                </button>
+              </div>
 
-          {/* 2. NHÓM NỘI DUNG BÀI DẠY (CHỈ CÒN CHƯƠNG, BÀI, VẤN ĐỀ, CHUYÊN ĐỀ) */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-              <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-                <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
-              </span>
-              <span className="text-[10px] text-slate-400 italic">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+              {/* Hàng 1 của nhóm Tài liệu: Môn học & Khối lớp (đứng trước dropdown chọn Tên tài liệu) */}
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Môn học</label>
+                  <select
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
+                  >
+                    <option value="">-- (Để trống) --</option>
+                    <option value="Toán Học">Toán Học</option>
+                    <option value="Vật Lý">Vật Lý</option>
+                    <option value="Hóa Học">Hóa Học</option>
+                    <option value="Ngữ Văn">Ngữ Văn</option>
+                    <option value="Tiếng Anh">Tiếng Anh</option>
+                    <option value="Sinh Học">Sinh Học</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-600 block mb-1">Khối lớp</label>
+                  <select
+                    value={grade}
+                    onChange={(e) => setGrade(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
+                  >
+                    <option value="">-- (Để trống) --</option>
+                    <option value="Khối 10">Khối 10</option>
+                    <option value="Khối 11">Khối 11</option>
+                    <option value="Khối 12">Khối 12</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Hàng tiếp theo của nhóm Tài liệu: Dropdown chọn Tên tài liệu */}
+              <div className="pt-1">
+                {renderCleanDropdown('title', 'Tên tài liệu', title, titleList, true)}
+              </div>
             </div>
 
-            {/* Các cấp độ: Chương -> Bài -> Vấn đề -> Chuyên đề */}
-            {!isDanhGia(title) ? (
-              <>
-                {renderCleanDropdown('chuong', 'Chương', chuong, chuongList)}
-                {!isDanhGia(chuong) ? (
-                  <>
-                    {renderCleanDropdown('bai', 'Bài', bai, baiList)}
-                    {!isDanhGia(bai) ? (
-                      <>
-                        {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
-                        {!isDanhGia(vanDe) ? (
-                          renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)
-                        ) : (
-                          <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                            ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                        ℹ️ Bài là bài đánh giá — Đã ẩn Vấn đề và Chuyên đề cấp con.
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                    ℹ️ Chương là bài đánh giá — Đã ẩn Bài, Vấn đề và Chuyên đề cấp con.
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                ℹ️ Tài liệu là bài đánh giá — Đã ẩn toàn bộ các cấp con bên dưới.
+            {/* 2. NHÓM NỘI DUNG BÀI DẠY (CHỈ CÒN CHƯƠNG, BÀI, VẤN ĐỀ, CHUYÊN ĐỀ) */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+                  <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+                </span>
+                <span className="text-[10px] text-slate-400 italic">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
               </div>
-            )}
 
-            {/* Cấu hình phát hành & bán bằng Kim Cương */}
-            <div className="pt-2 border-t border-slate-100 space-y-2">
-              <label className="flex items-center justify-between cursor-pointer">
-                <span className="text-[11px] font-bold text-slate-700">Bán thu phí bằng Kim Cương:</span>
-                <input
-                  type="checkbox"
-                  checked={isForSale}
-                  onChange={e => setIsForSale(e.target.checked)}
-                  className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
-                />
-              </label>
-              {isForSale && (
-                <div className="flex items-center gap-2 pt-1">
-                  <span className="text-[11px] text-amber-800 font-bold">💎 Giá:</span>
-                  <input
-                    type="number"
-                    min={5}
-                    value={priceDiamonds}
-                    onChange={e => setPriceDiamonds(parseInt(e.target.value) || 5)}
-                    className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs font-bold text-amber-700"
-                  />
-                  <span className="text-[10px] text-slate-500">Kim Cương</span>
+              {/* Các cấp độ: Chương -> Bài -> Vấn đề -> Chuyên đề */}
+              {!isDanhGia(title) ? (
+                <>
+                  {renderCleanDropdown('chuong', 'Chương', chuong, chuongList)}
+                  {!isDanhGia(chuong) ? (
+                    <>
+                      {renderCleanDropdown('bai', 'Bài', bai, baiList)}
+                      {!isDanhGia(bai) ? (
+                        <>
+                          {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
+                          {!isDanhGia(vanDe) ? (
+                            renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)
+                          ) : (
+                            <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                              ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                          ℹ️ Bài là bài đánh giá — Đã ẩn Vấn đề và Chuyên đề cấp con.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                      ℹ️ Chương là bài đánh giá — Đã ẩn Bài, Vấn đề và Chuyên đề cấp con.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                  ℹ️ Tài liệu là bài đánh giá — Đã ẩn toàn bộ các cấp con bên dưới.
                 </div>
               )}
+
+              {/* Cấu hình phát hành & bán bằng Kim Cương */}
+              <div className="pt-2 border-t border-slate-100 space-y-2">
+                <label className="flex items-center justify-between cursor-pointer">
+                  <span className="text-[11px] font-bold text-slate-700">Bán thu phí bằng Kim Cương:</span>
+                  <input
+                    type="checkbox"
+                    checked={isForSale}
+                    onChange={e => setIsForSale(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                </label>
+                {isForSale && (
+                  <div className="flex items-center gap-2 pt-1">
+                    <span className="text-[11px] text-amber-800 font-bold">💎 Giá:</span>
+                    <input
+                      type="number"
+                      min={5}
+                      value={priceDiamonds}
+                      onChange={e => setPriceDiamonds(parseInt(e.target.value) || 5)}
+                      className="w-20 px-2 py-1 border border-amber-300 rounded-lg text-xs font-bold text-amber-700"
+                    />
+                    <span className="text-[10px] text-slate-500">Kim Cương</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Cột phải (8 cột): THANH CÔNG CỤ WORD & TRANG SOẠN THẢO */}
-        <div className="lg:col-span-8 space-y-4">
+        {/* Cột phải (10 cột khi thu gọn / 8 cột khi mở rộng): THANH CÔNG CỤ WORD & TRANG SOẠN THẢO */}
+        <div className={isSidePanelCollapsed ? 'lg:col-span-10 space-y-4 transition-all' : 'lg:col-span-8 space-y-4 transition-all'}>
           {/* Menu Thanh công cụ Word - Cố định ở đầu trang khi cuộn xuống dưới */}
           <div className="sticky top-0 z-30 bg-slate-100/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-md flex flex-wrap items-center gap-1.5 transition-all">
             {/* 0. DROPDOWN TIẾN TRÌNH CHUYÊN ĐỀ (ĐỨNG TRƯỚC BIỂU TƯỢNG IN ĐẬM): Gồm 4 phần: Kiến thức, Luyện tập, Kiểm tra, Cải thiện */}
@@ -2624,6 +2866,8 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
           onOpenDriveConnect={onOpenDriveConnect}
         />
       );
+    case 'teaching-drive':
+      return <QuanLyDriveView />;
     case 'teaching-monetization':
       return <ThuongMaiTaiLieuView />;
     case 'teaching-students':

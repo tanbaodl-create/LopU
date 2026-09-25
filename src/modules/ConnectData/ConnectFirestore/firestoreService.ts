@@ -26,6 +26,12 @@ import {
   INITIAL_SEATING_PLANS,
   INITIAL_TEACHER_DOCS,
 } from '../../../services/mockInitialData';
+import {
+  buildHierarchyFromDocuments,
+  saveStoredHierarchy,
+  getDeletedFoldersBlacklist,
+  addDeletedFolderToBlacklist,
+} from '../../ModuleGiaoVien/TaiLieuCaNhan/hierarchyData';
 
 const STORAGE_KEYS = {
   CLASSES: 'lopu_firestore_classes_v1',
@@ -812,20 +818,37 @@ export async function saveStudent(student: StudentProfile): Promise<void> {
 // ==========================================
 
 export async function getTeacherDocuments(): Promise<TeacherDocument[]> {
-  const local = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, INITIAL_TEACHER_DOCS);
+  const deletedList = getDeletedFoldersBlacklist();
+  
   if (isFirebaseConfigured && db) {
     try {
       const snap = await getDocs(collection(db, 'documents'));
-      if (!snap.empty) {
-        const remote = snap.docs.map(d => parseRemoteDocument<TeacherDocument>({ id: d.id, ...d.data() }));
-        const resolved = mergeAndResolveConflicts(local, remote);
-        setLocalItem(STORAGE_KEYS.DOCUMENTS, resolved);
-        return resolved;
-      }
+      // Firestore is the definitive single source of truth:
+      // Even when empty (e.g. after deletion), remote is the authoritative state.
+      const remote = snap.docs
+        .map(d => parseRemoteDocument<TeacherDocument>({ id: d.id, ...d.data() }))
+        .filter(d => d.title && !deletedList.includes(d.title.trim()));
+      
+      // Overwrite local storage cache completely with Firestore authoritative data
+      setLocalItem(STORAGE_KEYS.DOCUMENTS, remote);
+
+      // Rebuild and sanitize hierarchy tree based on Firestore data
+      const updatedHierarchy = buildHierarchyFromDocuments(remote);
+      saveStoredHierarchy(updatedHierarchy);
+
+      return remote;
     } catch (err) {
-      console.warn('Sync documents fallback:', err);
+      console.warn('Sync documents fallback to local cache:', err);
     }
   }
+
+  const local = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, INITIAL_TEACHER_DOCS)
+    .filter(d => d.title && !deletedList.includes(d.title.trim()));
+  
+  // Re-sync local hierarchy
+  const updatedHierarchy = buildHierarchyFromDocuments(local);
+  saveStoredHierarchy(updatedHierarchy);
+
   return local;
 }
 
@@ -834,7 +857,18 @@ export async function saveTeacherDocument(docItem: TeacherDocument): Promise<voi
     ...docItem,
     updatedAt: docItem.updatedAt || new Date().toLocaleString('vi-VN'),
   };
-  const list = await getTeacherDocuments();
+
+  // Directly save to Firestore if configured
+  if (isFirebaseConfigured && db) {
+    try {
+      await setDoc(doc(db, 'documents', docWithTimestamp.id), docWithTimestamp);
+    } catch (err) {
+      console.warn('Direct Firestore save failed, enqueuing sync task:', err);
+    }
+  }
+
+  // Update local storage cache
+  const list = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, []);
   const idx = list.findIndex(d => d.id === docWithTimestamp.id);
   if (idx >= 0) {
     list[idx] = docWithTimestamp;
@@ -843,13 +877,35 @@ export async function saveTeacherDocument(docItem: TeacherDocument): Promise<voi
   }
   setLocalItem(STORAGE_KEYS.DOCUMENTS, list);
 
+  // Rebuild hierarchy immediately
+  const updatedHierarchy = buildHierarchyFromDocuments(list);
+  saveStoredHierarchy(updatedHierarchy);
+
   enqueueSyncTask('firestore', 'setDoc', 'documents', docWithTimestamp.id, docWithTimestamp);
 }
 
 export async function deleteTeacherDocument(docId: string): Promise<void> {
-  const list = await getTeacherDocuments();
+  const list = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, []);
+  const targetDoc = list.find(d => d.id === docId);
+  if (targetDoc?.title) {
+    addDeletedFolderToBlacklist(targetDoc.title);
+  }
+
+  // Directly delete from Firestore if configured
+  if (isFirebaseConfigured && db) {
+    try {
+      await deleteDoc(doc(db, 'documents', docId));
+    } catch (err) {
+      console.warn('Direct Firestore delete failed, enqueuing sync task:', err);
+    }
+  }
+
   const filtered = list.filter(d => d.id !== docId);
   setLocalItem(STORAGE_KEYS.DOCUMENTS, filtered);
+
+  // Rebuild hierarchy immediately
+  const updatedHierarchy = buildHierarchyFromDocuments(filtered);
+  saveStoredHierarchy(updatedHierarchy);
 
   enqueueSyncTask('firestore', 'deleteDoc', 'documents', docId, null);
 }

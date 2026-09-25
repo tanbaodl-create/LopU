@@ -6,6 +6,7 @@ import {
   Search,
   BookOpen,
   FolderLock,
+  FolderTree,
   LineChart,
   UserCog,
   KeyRound,
@@ -26,6 +27,7 @@ export type ViewId =
   | 'teaching-soanthao'
   | 'teaching-management'
   | 'teaching-documents'
+  | 'teaching-drive'
   | 'teaching-monetization'
   | 'teaching-students'
   | 'reports-progress'

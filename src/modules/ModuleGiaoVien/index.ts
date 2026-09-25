@@ -4,3 +4,5 @@ export { TheoDoiHocSinhView } from './TheoDoiHocSinh/TheoDoiHocSinhView';
 export { ModalThemHocSinhExcel } from './NhapHocSinh/ModalThemHocSinhExcel';
 export { ThuongMaiTaiLieuView } from './ThuongMaiTaiLieu/ThuongMaiTaiLieuView';
 export { SoanThaoView } from './SoanThao/SoanThaoView';
+export { QuanLyDriveView } from './QuanLyDrive/QuanLyDriveView';
+export * from './QuanLyDrive/driveManagerService';

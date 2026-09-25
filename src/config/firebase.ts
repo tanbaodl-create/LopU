@@ -47,8 +47,8 @@ try {
     firestoreDb = getFirestore(app);
     firebaseAuth = getAuth(app);
 
-    // Initialize Analytics if supported in current browser environment
-    if (typeof window !== 'undefined') {
+    // Initialize Analytics if supported in current browser environment and valid measurementId is configured
+    if (typeof window !== 'undefined' && firebaseConfig.measurementId && firebaseConfig.measurementId.startsWith('G-')) {
       isSupported().then(supported => {
         if (supported && app) {
           analyticsInstance = getAnalytics(app);

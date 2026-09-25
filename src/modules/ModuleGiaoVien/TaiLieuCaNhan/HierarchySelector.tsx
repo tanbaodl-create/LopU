@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layers, FolderTree, Plus, Check, ChevronDown, X, AlertTriangle, Loader2, Cloud, CheckCircle2, AlertCircle, RotateCcw, Trash2 } from 'lucide-react';
+import { Layers, FolderTree, Plus, Check, ChevronDown, X, AlertTriangle, Loader2, Cloud, CheckCircle2, AlertCircle, RotateCcw } from 'lucide-react';
 import {
   HierarchyStore,
   getStoredHierarchy,
   saveStoredHierarchy,
+  formatDocumentTitle,
 } from './hierarchyData';
 import {
   isDanhGia,
@@ -15,7 +16,6 @@ import {
 } from './TaiLieuCaNhanView';
 import {
   createDriveFolderIfNotExists,
-  deleteDriveFolderHierarchy,
   getDriveConnectionState,
   connectGoogleDrive,
   scanAndSyncDriveHierarchy,
@@ -266,114 +266,6 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   const [customAddType, setCustomAddType] = useState<string>('standard');
   const [modalErrorMessage, setModalErrorMessage] = useState<string | null>(null);
 
-  // Quản lý hộp thoại "Xác nhận xóa tùy chọn"
-  const [itemToDelete, setItemToDelete] = useState<{ level: HierarchyLevel; value: string } | null>(null);
-  const [isDeletingItem, setIsDeletingItem] = useState<boolean>(false);
-  const [deleteError, setDeleteError] = useState<boolean>(false);
-
-  const handleRequestDelete = (level: HierarchyLevel, value: string) => {
-    setItemToDelete({ level, value });
-    setIsDeletingItem(false);
-    setDeleteError(false);
-    setOpenDropdown(null);
-  };
-
-  const handleConfirmDelete = async () => {
-    if (!itemToDelete || isDeletingItem) return;
-
-    setIsDeletingItem(true);
-    setDeleteError(false);
-
-    // 1. Kiểm tra tài khoản Google: Nếu chưa kết nối lập tức cho cửa sổ đăng nhập để kết nối
-    const connState = getDriveConnectionState();
-    if (!connState.isConnected) {
-      const connRes = await connectGoogleDrive();
-      if (!connRes.success) {
-        setIsDeletingItem(false);
-        setDeleteError(true);
-        return;
-      }
-    }
-
-    // 2. Tìm trên Google Drive thư mục tương ứng
-    const { level, value } = itemToDelete;
-    const pathSegments: string[] = ['myApp', 'LopU', 'TaiLieu'];
-    if (level === 'title') {
-      pathSegments.push(value);
-    } else if (level === 'chuong') {
-      pathSegments.push(title || 'TaiLieuChung', value);
-    } else if (level === 'bai') {
-      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', value);
-    } else if (level === 'vanDe') {
-      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', value);
-    } else if (level === 'chuyenDe') {
-      pathSegments.push(title || 'TaiLieuChung', chuong || 'Chuong1', bai || 'Bai1', vanDe || 'VanDe1', value);
-    }
-
-    try {
-      const res = await deleteDriveFolderHierarchy(pathSegments);
-      if (res.success) {
-        // 3. Nếu không có hoặc đã xóa thành công phản hồi lại thành công để app xóa tùy chọn
-        const newStore = { ...store };
-        if (level === 'title') {
-          delete newStore[value];
-          if (title === value) {
-            onChangeTitle('');
-            onChangeChuong('');
-            onChangeBai('');
-            onChangeVanDe('');
-            onChangeChuyenDe('');
-          }
-        } else if (level === 'chuong') {
-          if (newStore[title]) {
-            delete newStore[title][value];
-          }
-          if (chuong === value) {
-            onChangeChuong('');
-            onChangeBai('');
-            onChangeVanDe('');
-            onChangeChuyenDe('');
-          }
-        } else if (level === 'bai') {
-          if (newStore[title] && newStore[title][chuong]) {
-            delete newStore[title][chuong][value];
-          }
-          if (bai === value) {
-            onChangeBai('');
-            onChangeVanDe('');
-            onChangeChuyenDe('');
-          }
-        } else if (level === 'vanDe') {
-          if (newStore[title] && newStore[title][chuong] && newStore[title][chuong][bai]) {
-            delete newStore[title][chuong][bai][value];
-          }
-          if (vanDe === value) {
-            onChangeVanDe('');
-            onChangeChuyenDe('');
-          }
-        } else if (level === 'chuyenDe') {
-          if (newStore[title] && newStore[title][chuong] && newStore[title][chuong][bai] && newStore[title][chuong][bai][vanDe]) {
-            newStore[title][chuong][bai][vanDe] = newStore[title][chuong][bai][vanDe].filter(x => x !== value);
-          }
-          if (chuyenDe === value) {
-            onChangeChuyenDe('');
-          }
-        }
-        setStore(newStore);
-        saveStoredHierarchy(newStore);
-        setIsDeletingItem(false);
-        setItemToDelete(null);
-      } else {
-        // 4. Nếu xóa không thành công thì đổi dòng Đang xóa, Vui lòng đợi... thành Xóa không được.
-        setIsDeletingItem(false);
-        setDeleteError(true);
-      }
-    } catch {
-      setIsDeletingItem(false);
-      setDeleteError(true);
-    }
-  };
-
   const openCustomModal = (level: HierarchyLevel) => {
     setActiveLevel(level);
     setCustomInputValue('');
@@ -391,7 +283,9 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     }
 
     let trimmed = raw;
-    if (customAddType === 'danhGia') {
+    if (activeLevel === 'title') {
+      trimmed = formatDocumentTitle(subject || 'Toán', grade || '10', raw);
+    } else if (customAddType === 'danhGia') {
       trimmed = formatDanhGiaFileName(raw);
     } else if (customAddType === 'luyenTap') {
       trimmed = formatLuyenTapFileName(raw);
@@ -676,17 +570,6 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
                     }`}
                   >
                     <span className="truncate flex-1">{opt}</span>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRequestDelete(level, opt);
-                      }}
-                      title={`Xóa tùy chọn "${opt}"`}
-                      className="p-1 text-slate-300 hover:text-rose-600 rounded transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 text-rose-500 hover:text-rose-700" />
-                    </button>
                   </div>
                 ))
               )}
@@ -959,62 +842,6 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
                     <Plus className="w-3.5 h-3.5" />
                     <span>Thêm mục</span>
                   </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* HỘP THOẠI XÁC NHẬN XÓA TÙY CHỌN */}
-      {itemToDelete && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
-            <h3 className="text-rose-600 font-bold text-base">
-              Xác nhận xóa tùy chọn
-            </h3>
-            
-            <p className="text-slate-700 text-sm">
-              Bạn có chắc chắn muốn xóa mục <strong className="font-bold text-slate-900">"{itemToDelete.value}"</strong> không?
-            </p>
-
-            {/* Thông báo màu đỏ dưới dòng bạn có muốn xóa....không? và trên dòng có nút Hủy + nút Xác nhận xóa */}
-            {isDeletingItem && (
-              <div className="text-rose-600 font-bold text-xs flex items-center gap-1.5 animate-pulse">
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0 text-rose-600" />
-                <span>Đang xóa, Vui lòng đợi...</span>
-              </div>
-            )}
-
-            {deleteError && (
-              <div className="text-rose-600 font-bold text-xs flex items-center gap-1.5">
-                <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
-                <span>Xóa không được.</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="button"
-                disabled={isDeletingItem}
-                onClick={() => setItemToDelete(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                disabled={isDeletingItem}
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 text-xs font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl transition-colors shadow-xs cursor-pointer disabled:opacity-60 flex items-center gap-1.5"
-              >
-                {isDeletingItem ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang xóa...</span>
-                  </>
-                ) : (
-                  <span>Xác nhận xóa</span>
                 )}
               </button>
             </div>

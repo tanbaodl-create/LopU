@@ -8,6 +8,11 @@
 import { TeacherDocument } from '../../../services/storageTypes';
 import { isGoogleClientConfigured } from '../../../config/firebase';
 import {
+  saveStoredHierarchy,
+  sanitizeHierarchyStore,
+  getDeletedFoldersBlacklist,
+} from '../../ModuleGiaoVien/TaiLieuCaNhan/hierarchyData';
+import {
   DriveStoredFile,
   connectGoogleDrive,
   disconnectGoogleDrive,
@@ -110,6 +115,7 @@ async function createFolderOnDrive(token: string, name: string, parentId?: strin
 
 // Helper function to delete a file or folder on real Google Drive
 async function deleteItemOnDrive(token: string, fileId: string): Promise<boolean> {
+  let deleteSuccess = false;
   // 1. Thử gọi DELETE trực tiếp
   try {
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
@@ -122,6 +128,7 @@ async function deleteItemOnDrive(token: string, fileId: string): Promise<boolean
       throw new Error('Phiên kết nối Google Drive đã hết hạn (401). Vui lòng bấm Kết nối Drive để xác thực lại.');
     }
     if (res.ok || res.status === 404 || res.status === 204) {
+      deleteSuccess = true;
       return true;
     }
   } catch (err: any) {
@@ -144,13 +151,20 @@ async function deleteItemOnDrive(token: string, fileId: string): Promise<boolean
       throw new Error('Phiên kết nối Google Drive đã hết hạn (401). Vui lòng bấm Kết nối Drive để xác thực lại.');
     }
     if (patchRes.ok || patchRes.status === 404) {
+      deleteSuccess = true;
       return true;
     }
+    let errorDetail = patchRes.statusText;
+    try {
+      const errJson = await patchRes.json();
+      errorDetail = errJson.error?.message || JSON.stringify(errJson);
+    } catch {}
+    throw new Error(`Google Drive từ chối xóa (mã ${patchRes.status}): ${errorDetail}`);
   } catch (err: any) {
-    if (err.message && err.message.includes('401')) throw err;
+    if (err.message && (err.message.includes('401') || err.message.includes('từ chối'))) throw err;
   }
 
-  return true;
+  return deleteSuccess;
 }
 
 // Helper function to find all folders by name on real Google Drive
@@ -227,6 +241,49 @@ export function isRealGoogleOAuthToken(token?: string | null): boolean {
 }
 
 /**
+ * Kiểm tra mã Token Google Drive có tồn tại và còn hiệu lực hay không.
+ * Nếu chưa kết nối hoặc phiên kết nối đã hết hạn (401/403/token không hợp lệ),
+ * tự động bật cửa sổ đăng nhập Google (OAuth popup) để kết nối lại trước khi thực hiện các yêu cầu.
+ */
+export async function ensureValidDriveToken(): Promise<string | null> {
+  let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+  
+  let isValid = false;
+  if (isRealGoogleOAuthToken(token)) {
+    try {
+      // Test nhanh quyền truy cập API Google Drive
+      const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        isValid = true;
+      } else if (res.status === 401 || res.status === 403) {
+        console.warn('Phiên kết nối Google Drive đã hết hạn (401/403). Xóa token cũ...');
+        localStorage.removeItem('lopu_google_drive_token_v1');
+        localStorage.removeItem('lopu_gdrive_token');
+        token = null;
+      }
+    } catch (err) {
+      console.warn('Lỗi kiểm tra tính hợp lệ của Token Google Drive:', err);
+    }
+  }
+
+  if (!isValid) {
+    console.log('Mở cửa sổ đăng nhập Google Drive để kết nối lại...');
+    const conn = await connectGoogleDrive();
+    if (conn.success) {
+      token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+      if (isRealGoogleOAuthToken(token)) {
+        return token;
+      }
+    }
+    return null;
+  }
+
+  return token;
+}
+
+/**
  * Kiểm tra và tạo thư mục phân cấp trên Google Drive nếu chưa tồn tại:
  * myApp / LopU / TaiLieu / [Tài liệu] / [Chương] / [Bài] / [Vấn đề] / [Chuyên đề]
  * - Nếu đã có trên Google Drive: không tạo mới, phản hồi đã có thành công để thêm vào App.
@@ -237,30 +294,15 @@ export function isRealGoogleOAuthToken(token?: string | null): boolean {
 export async function createDriveFolderIfNotExists(
   pathSegments: string[]
 ): Promise<{ success: boolean; created: boolean; alreadyExists: boolean; isRealDrive: boolean; folderId?: string; error?: string }> {
-  let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-  
-  // Nếu chưa có token OAuth 2 thực, thử tự động kết nối qua popup
-  if (!isRealGoogleOAuthToken(token)) {
-    const conn = await connectGoogleDrive();
-    if (!conn.success) {
-      return {
-        success: false,
-        created: false,
-        alreadyExists: false,
-        isRealDrive: false,
-        error: 'Chưa kết nối Google Drive. Vui lòng kết nối Google Drive để tạo thư mục trên Drive.',
-      };
-    }
-    token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-  }
-
-  if (!isRealGoogleOAuthToken(token)) {
+  // Đảm bảo token hợp lệ; nếu hết hạn hoặc chưa kết nối thì tự động bật cửa sổ đăng nhập
+  const token = await ensureValidDriveToken();
+  if (!token) {
     return {
       success: false,
       created: false,
       alreadyExists: false,
       isRealDrive: false,
-      error: 'Chưa kết nối Google Drive. Vui lòng bấm Kết nối Drive để xác thực tài khoản Google.',
+      error: 'Chưa kết nối Google Drive hoặc phiên đăng nhập đã hết hạn.',
     };
   }
 
@@ -328,23 +370,21 @@ export async function createDriveFolderIfNotExists(
   }
 }
 
+export const createByPath = createDriveFolderIfNotExists;
+
 /**
  * Quét toàn bộ cây thư mục thực tế từ Google Drive (đường dẫn: myApp / LopU / TaiLieu)
  * để đồng bộ chuẩn xác với ứng dụng, tự động loại bỏ triệt để các thư mục/tài liệu đã bị xóa trên Drive.
  */
 export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
-  const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-  if (!isRealGoogleOAuthToken(token)) {
+  const token = await ensureValidDriveToken();
+  if (!token) {
     return null;
   }
   try {
-    let deletedList: string[] = [];
-    try {
-      deletedList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
-    } catch {}
+    const deletedList = getDeletedFoldersBlacklist();
 
-    const taiLieuId = (await findFolderPathIdOnDrive(token!, ['myApp', 'LopU', 'TaiLieu'])) ||
-                      (await findFolderPathIdOnDrive(token!, ['LopU', 'TaiLieu']));
+    const taiLieuId = await findFolderPathIdOnDrive(token, ['myApp', 'LopU', 'TaiLieu']);
     if (!taiLieuId) {
       return {};
     }
@@ -353,7 +393,7 @@ export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const data = await res.json();
-    const docFolders: Array<{ id: string; name: string }> = (data.files || []).filter((f: any) => !deletedList.includes(f.name));
+    const docFolders: Array<{ id: string; name: string }> = (data.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
 
     const newStore: Record<string, any> = {};
     for (const docF of docFolders) {
@@ -363,28 +403,28 @@ export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
         const chuongRes = await fetch(chuongUrl, { headers: { Authorization: `Bearer ${token}` } });
         if (chuongRes.ok) {
           const chuongData = await chuongRes.json();
-          const chuongs = (chuongData.files || []).filter((f: any) => !deletedList.includes(f.name));
+          const chuongs = (chuongData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
           for (const chF of chuongs) {
             newStore[docF.name][chF.name] = {};
             const baiUrl = `https://www.googleapis.com/drive/v3/files?q='${chF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
             const baiRes = await fetch(baiUrl, { headers: { Authorization: `Bearer ${token}` } });
             if (baiRes.ok) {
               const baiData = await baiRes.json();
-              const bais = (baiData.files || []).filter((f: any) => !deletedList.includes(f.name));
+              const bais = (baiData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
               for (const bF of bais) {
                 newStore[docF.name][chF.name][bF.name] = {};
                 const vdUrl = `https://www.googleapis.com/drive/v3/files?q='${bF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
                 const vdRes = await fetch(vdUrl, { headers: { Authorization: `Bearer ${token}` } });
                 if (vdRes.ok) {
                   const vdData = await vdRes.json();
-                  const vds = (vdData.files || []).filter((f: any) => !deletedList.includes(f.name));
+                  const vds = (vdData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
                   for (const vdF of vds) {
                     newStore[docF.name][chF.name][bF.name][vdF.name] = [];
                     const cdUrl = `https://www.googleapis.com/drive/v3/files?q='${vdF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
                     const cdRes = await fetch(cdUrl, { headers: { Authorization: `Bearer ${token}` } });
                     if (cdRes.ok) {
                       const cdData = await cdRes.json();
-                      const cds = (cdData.files || []).filter((f: any) => !deletedList.includes(f.name));
+                      const cds = (cdData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
                       newStore[docF.name][chF.name][bF.name][vdF.name] = cds.map((c: any) => c.name);
                     }
                   }
@@ -398,8 +438,9 @@ export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
       }
     }
 
-    localStorage.setItem('lopu_teaching_hierarchy_tree_v3', JSON.stringify(newStore));
-    return newStore;
+    const sanitizedStore = sanitizeHierarchyStore(newStore);
+    saveStoredHierarchy(sanitizedStore);
+    return sanitizedStore;
   } catch (err) {
     console.warn('scanAndSyncDriveHierarchy error:', err);
     return null;
@@ -415,24 +456,12 @@ export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
 export async function deleteDriveFolderHierarchy(
   pathSegments: string[]
 ): Promise<{ success: boolean; error?: string }> {
-  let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-  
-  // 1. Nếu chưa có token OAuth 2 thực, bắt buộc kết nối/đăng nhập Google Drive
-  if (!isRealGoogleOAuthToken(token)) {
-    const conn = await connectGoogleDrive();
-    if (!conn.success) {
-      return {
-        success: false,
-        error: 'Chưa kết nối Google Drive. Vui lòng đăng nhập Google Drive để thực hiện xóa thư mục trên Drive.',
-      };
-    }
-    token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-  }
-
-  if (!isRealGoogleOAuthToken(token)) {
+  // 1. Đảm bảo token hợp lệ; nếu chưa kết nối hoặc phiên hết hạn tự động mở cửa sổ đăng nhập
+  const token = await ensureValidDriveToken();
+  if (!token) {
     return {
       success: false,
-      error: 'Chưa kết nối Google Drive. Vui lòng bấm Kết nối Drive để xác thực tài khoản Google.',
+      error: 'Chưa kết nối Google Drive hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập Google.',
     };
   }
 
@@ -458,10 +487,23 @@ export async function deleteDriveFolderHierarchy(
       }
     }
 
-    // 4. Tìm kiếm trực tiếp tất cả thư mục có tên này trên Google Drive để xóa triệt để
-    const matchingIds = await findFoldersByNameOnDrive(token!, targetFolderName);
-    for (const mId of matchingIds) {
-      deletedFolderIds.add(mId);
+    // 4. Tìm kiếm trực tiếp tất cả thư mục có tên này trên Google Drive
+    const nameVariations = new Set<string>([targetFolderName]);
+    if (targetFolderName.includes(' - ')) {
+      const suffix = targetFolderName.split(' - ').slice(1).join(' - ').trim();
+      if (suffix) nameVariations.add(suffix);
+    }
+    // Ngược lại nếu tên ngắn, thử tìm các biến thể có tiền tố
+    const strippedClean = targetFolderName.replace(/^(Toán Học|Toán|Vật Lý|Hóa Học|Sinh Học|Ngữ Văn|Tiếng Anh)\s*(Khối\s*\d+|\d+)?\s*-\s*/i, '').trim();
+    if (strippedClean) {
+      nameVariations.add(strippedClean);
+    }
+
+    for (const nameVar of nameVariations) {
+      const matchingIds = await findFoldersByNameOnDrive(token!, nameVar);
+      for (const mId of matchingIds) {
+        deletedFolderIds.add(mId);
+      }
     }
 
     // Thực hiện xóa/chuyển vào thùng rác tất cả các ID tìm thấy

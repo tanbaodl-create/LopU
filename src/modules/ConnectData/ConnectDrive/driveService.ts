@@ -337,10 +337,42 @@ export async function saveLessonDocToDrive(
   return { success: true, fileId: fileItem.id, fileName };
 }
 
-// List all files created/saved by LopU in Google Drive
+// List all files created/saved by LopU in Google Drive, sanitizing blacklisted & duplicate files
 export async function listAppFilesFromDrive(): Promise<DriveStoredFile[]> {
   const files = getStoredDriveFiles();
-  return files.map(file => {
+  let deletedList: string[] = [];
+  try {
+    deletedList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+  } catch {}
+
+  // Filter out any file whose name contains or matches a blacklisted string (e.g. đss, sss)
+  const validFiles = files.filter(file => {
+    if (!file || !file.name) return false;
+    const cleanName = file.name.trim();
+    for (const del of deletedList) {
+      if (del && del.trim() && cleanName.toLowerCase().includes(del.trim().toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  // Deduplicate files by file.name (keep the first/newest occurrence)
+  const seenNames = new Set<string>();
+  const deduplicatedFiles: DriveStoredFile[] = [];
+  for (const file of validFiles) {
+    if (!seenNames.has(file.name)) {
+      seenNames.add(file.name);
+      deduplicatedFiles.push(file);
+    }
+  }
+
+  // Persist cleaned & deduplicated list if changes occurred
+  if (deduplicatedFiles.length !== files.length) {
+    saveStoredDriveFiles(deduplicatedFiles);
+  }
+
+  return deduplicatedFiles.map(file => {
     if (file.content && (file.content as any)._encrypted && (file.content as any).data) {
       try {
         return {
@@ -353,6 +385,32 @@ export async function listAppFilesFromDrive(): Promise<DriveStoredFile[]> {
     }
     return file;
   });
+}
+
+// Delete a specific file from the synced Drive storage list
+export function deleteAppFileFromDrive(fileId: string): DriveStoredFile[] {
+  const files = getStoredDriveFiles();
+  const targetFile = files.find(f => f.id === fileId);
+  if (targetFile?.name) {
+    try {
+      const deletedListRaw = localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]';
+      let deletedList: string[] = JSON.parse(deletedListRaw);
+      const cleanName = targetFile.name.replace(/^LopU_TuSach_/, '').replace(/\.[^/.]+$/, '');
+      if (cleanName && !deletedList.includes(cleanName)) {
+        deletedList.push(cleanName);
+        localStorage.setItem('lopu_deleted_drive_folders_v1', JSON.stringify(deletedList));
+      }
+    } catch {}
+  }
+  const updated = files.filter(f => f.id !== fileId);
+  saveStoredDriveFiles(updated);
+  return updated;
+}
+
+// Clear all garbage / blacklisted / duplicate files from synced Drive storage
+export function clearAppTrashFilesFromDrive(): DriveStoredFile[] {
+  saveStoredDriveFiles([]);
+  return [];
 }
 
 // Download file content
