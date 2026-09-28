@@ -71,6 +71,10 @@ export const ROLE_HIERARCHY: UserRole[] = [
   'guest',
 ];
 
+export const isTeacherOrHigher = (role?: UserRole): boolean => {
+  return role === 'teacher' || role === 'manager' || role === 'admin' || role === 'superadmin';
+};
+
 export const getHighestUserRole = (
   user?: Partial<UserProfile | ExtendedUserProfile> | null,
   email?: string
@@ -1294,6 +1298,21 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
             <GraduationCap className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
             <span><strong>Giáo viên</strong>: Mở lớp, thêm/xóa HS, Drive giáo án</span>
           </div>
+        </div>
+
+        {/* Đặc quyền Soạn bài trên menu Word dành cho Giáo viên trở lên */}
+        <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200/80 text-[11px] text-indigo-950 space-y-1">
+          <div className="flex items-center gap-1.5 font-bold text-indigo-900">
+            <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+            <span>Đặc quyền vai trò Giáo viên trở lên: Menu Soạn bài ▾ trên thanh công cụ Word</span>
+          </div>
+          <p className="text-slate-600 text-[10px] leading-relaxed">
+            Tài khoản Giáo viên hoặc cao hơn (Giáo viên, Quản lý, Quản trị, Superadmin) được tích hợp nút <strong>"Soạn bài ▾"</strong> với cấu trúc:
+            <br />
+            • <strong>── LÝ THUYẾT ──</strong> (chỉ có khi tiến trình là Kiến thức): <em>+ Khái niệm / Định nghĩa, + Định lý / Tính chất, + Hệ quả / Chú ý, + Phương pháp giải (Dạng toán)</em>
+            <br />
+            • <strong>── VÍ DỤ & BÀI TẬP ──</strong> (có trong Kiến thức, Luyện tập, Kiểm tra): <em>+ Ví dụ minh họa, + Bài tập Tự luận, + Trắc nghiệm 4 lựa chọn (A, B, C, D), + Trắc nghiệm Đúng / Sai, + Trắc nghiệm Trả lời ngắn</em>
+          </p>
         </div>
       </div>
 

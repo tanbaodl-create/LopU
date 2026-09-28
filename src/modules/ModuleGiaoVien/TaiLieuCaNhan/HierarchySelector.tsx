@@ -5,6 +5,8 @@ import {
   getStoredHierarchy,
   saveStoredHierarchy,
   formatDocumentTitle,
+  matchesSubjectAndGrade,
+  getGradeNumber,
 } from './hierarchyData';
 import {
   isDanhGia,
@@ -49,6 +51,9 @@ const LEVEL_LABELS: Record<HierarchyLevel, string> = {
   chuyenDe: 'Chuyên đề',
 };
 
+const SUBJECT_OPTIONS = ['Toán Học', 'Vật Lý', 'Hóa Học', 'Ngữ Văn', 'Tiếng Anh', 'Sinh Học'];
+const GRADE_OPTIONS = ['Khối 10', 'Khối 11', 'Khối 12'];
+
 export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   title,
   onChangeTitle,
@@ -75,6 +80,7 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
 
   // Quản lý trạng thái mở dropdown cho từng cấp độ
   const [openDropdown, setOpenDropdown] = useState<HierarchyLevel | null>(null);
+  const [syncingLevel, setSyncingLevel] = useState<HierarchyLevel | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Tự động đồng bộ cây thư mục thực tế từ Google Drive khi nạp module
@@ -125,23 +131,211 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     deletedList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
   } catch {}
 
-  // 1. Danh sách TÀI LIỆU
-  const docTitles = Object.keys(store).filter(t => !deletedList.includes(t));
+  // 1. Danh sách TÀI LIỆU (thư mục trực tiếp trong thư mục gốc) - Chỉ đồng bộ khi cả Môn học và Khối lớp đều khác rỗng
+  const allDocTitles = Object.keys(store).filter(t => !deletedList.includes(t));
+  const docTitles = (subject && subject.trim() !== '' && grade && grade.trim() !== '')
+    ? allDocTitles.filter(t => matchesSubjectAndGrade(t, subject, grade))
+    : [];
 
-  // 2. Danh sách Cấp 1: Chương (lồng theo TÀI LIỆU)
-  const currentDocObj = store[title] || {};
-  const chuongList = Object.keys(currentDocObj).filter(ch => !deletedList.includes(ch));
+  // 2. Danh sách Cấp 1: Chương (lồng theo TÀI LIỆU) - Chỉ lấy thư mục con của tài liệu đang chọn
+  const currentDocObj = (title && title.trim() && store[title]) ? store[title] : {};
+  const chuongList = (title && title.trim())
+    ? Object.keys(currentDocObj).filter(ch => !deletedList.includes(ch))
+    : [];
 
-  // 3. Danh sách Cấp 2: Bài (lồng theo Chương)
-  const currentChuongObj = currentDocObj[chuong] || {};
-  const baiList = Object.keys(currentChuongObj).filter(b => !deletedList.includes(b));
+  // 3. Danh sách Cấp 2: Bài (lồng theo Chương) - Chỉ lấy con của Chương đang chọn trong Tài liệu đang chọn
+  const currentChuongObj = (chuong && currentDocObj[chuong]) ? currentDocObj[chuong] : {};
+  const baiList = (title && chuong)
+    ? Object.keys(currentChuongObj).filter(b => !deletedList.includes(b))
+    : [];
 
   // 4. Danh sách Cấp 3: Vấn đề (lồng theo Bài)
-  const currentBaiObj = currentChuongObj[bai] || {};
-  const vanDeList = Object.keys(currentBaiObj).filter(v => !deletedList.includes(v));
+  const currentBaiObj = (bai && currentChuongObj[bai]) ? currentChuongObj[bai] : {};
+  const vanDeList = (title && chuong && bai)
+    ? Object.keys(currentBaiObj).filter(v => !deletedList.includes(v))
+    : [];
 
   // 5. Danh sách Cấp 4: Chuyên đề (lồng theo Vấn đề)
-  const chuyenDeList = (currentBaiObj[vanDe] || []).filter(cd => !deletedList.includes(cd));
+  const chuyenDeList = (title && chuong && bai && vanDe && Array.isArray(currentBaiObj[vanDe]))
+    ? currentBaiObj[vanDe].filter(cd => !deletedList.includes(cd))
+    : [];
+
+  // Quy tắc: Nếu có duy nhất 1 tùy chọn thì mặc định chọn nó; nếu nhiều hơn 1 tùy chọn thì mặc định là rỗng
+  useEffect(() => {
+    // Dropdown Môn học: nếu chỉ có 1 tùy chọn thì chọn, nếu nhiều hơn 1 thì mặc định rỗng
+    if (onChangeSubject) {
+      if (SUBJECT_OPTIONS.length === 1 && subject !== SUBJECT_OPTIONS[0]) {
+        onChangeSubject(SUBJECT_OPTIONS[0]);
+      } else if (SUBJECT_OPTIONS.length > 1 && subject && !SUBJECT_OPTIONS.includes(subject)) {
+        onChangeSubject('');
+      }
+    }
+    // Dropdown Khối lớp: nếu chỉ có 1 tùy chọn thì chọn, nếu nhiều hơn 1 thì mặc định rỗng
+    if (onChangeGrade) {
+      if (GRADE_OPTIONS.length === 1 && grade !== GRADE_OPTIONS[0]) {
+        onChangeGrade(GRADE_OPTIONS[0]);
+      } else if (GRADE_OPTIONS.length > 1 && grade && !GRADE_OPTIONS.includes(grade)) {
+        onChangeGrade('');
+      }
+    }
+  }, []);
+
+  // Khi chọn Môn học và Khối lớp: lập tức đồng bộ Tên tài liệu
+  const prevSubjectRef = useRef(subject);
+  const prevGradeRef = useRef(grade);
+
+  useEffect(() => {
+    const subjectChanged = prevSubjectRef.current !== subject;
+    const gradeChanged = prevGradeRef.current !== grade;
+    prevSubjectRef.current = subject;
+    prevGradeRef.current = grade;
+
+    if (subjectChanged || gradeChanged) {
+      if (subject && subject.trim() !== '' && grade && grade.trim() !== '') {
+        setSyncingLevel('title');
+        setTimeout(() => setSyncingLevel(null), 600);
+      } else {
+        setSyncingLevel(null);
+      }
+      if (docTitles.length === 1) {
+        if (title !== docTitles[0]) onChangeTitle(docTitles[0]);
+      } else {
+        if (title) onChangeTitle('');
+      }
+      if (chuong) onChangeChuong('');
+      if (bai) onChangeBai('');
+      if (vanDe) onChangeVanDe('');
+      if (chuyenDe) onChangeChuyenDe('');
+    } else {
+      if (docTitles.length === 1) {
+        if (title !== docTitles[0]) onChangeTitle(docTitles[0]);
+      } else if (docTitles.length > 1) {
+        if (title && !docTitles.includes(title)) onChangeTitle('');
+      } else {
+        if (title) onChangeTitle('');
+      }
+    }
+  }, [subject, grade, docTitles]);
+
+  // Tự động chọn Chương: 1 tùy chọn -> chọn, >1 -> rỗng; đồng bộ Chương khi chọn Tài liệu
+  const prevTitleRef = useRef(title);
+  useEffect(() => {
+    const titleChanged = prevTitleRef.current !== title;
+    prevTitleRef.current = title;
+
+    if (titleChanged) {
+      if (title && title.trim() !== '') {
+        setSyncingLevel('chuong');
+        setTimeout(() => setSyncingLevel(null), 600);
+      } else {
+        setSyncingLevel(null);
+      }
+      if (chuongList.length === 1) {
+        if (chuong !== chuongList[0]) onChangeChuong(chuongList[0]);
+      } else {
+        if (chuong) onChangeChuong('');
+      }
+      if (bai) onChangeBai('');
+      if (vanDe) onChangeVanDe('');
+      if (chuyenDe) onChangeChuyenDe('');
+    } else {
+      if (!title) {
+        if (chuong) onChangeChuong('');
+        return;
+      }
+      if (chuongList.length === 1) {
+        if (chuong !== chuongList[0]) onChangeChuong(chuongList[0]);
+      } else if (chuongList.length > 1) {
+        if (chuong && !chuongList.includes(chuong)) onChangeChuong('');
+      } else {
+        if (chuong) onChangeChuong('');
+      }
+    }
+  }, [title, chuongList]);
+
+  // Tự động chọn Bài: 1 tùy chọn -> chọn, >1 -> rỗng
+  const prevChuongRef = useRef(chuong);
+  useEffect(() => {
+    const chuongChanged = prevChuongRef.current !== chuong;
+    prevChuongRef.current = chuong;
+
+    if (chuongChanged) {
+      if (baiList.length === 1) {
+        if (bai !== baiList[0]) onChangeBai(baiList[0]);
+      } else {
+        if (bai) onChangeBai('');
+      }
+      if (vanDe) onChangeVanDe('');
+      if (chuyenDe) onChangeChuyenDe('');
+    } else {
+      if (!chuong) {
+        if (bai) onChangeBai('');
+        return;
+      }
+      if (baiList.length === 1) {
+        if (bai !== baiList[0]) onChangeBai(baiList[0]);
+      } else if (baiList.length > 1) {
+        if (bai && !baiList.includes(bai)) onChangeBai('');
+      } else {
+        if (bai) onChangeBai('');
+      }
+    }
+  }, [chuong, baiList]);
+
+  // Tự động chọn Vấn đề: 1 tùy chọn -> chọn, >1 -> rỗng
+  const prevBaiRef = useRef(bai);
+  useEffect(() => {
+    const baiChanged = prevBaiRef.current !== bai;
+    prevBaiRef.current = bai;
+
+    if (baiChanged) {
+      if (vanDeList.length === 1) {
+        if (vanDe !== vanDeList[0]) onChangeVanDe(vanDeList[0]);
+      } else {
+        if (vanDe) onChangeVanDe('');
+      }
+      if (chuyenDe) onChangeChuyenDe('');
+    } else {
+      if (!bai) {
+        if (vanDe) onChangeVanDe('');
+        return;
+      }
+      if (vanDeList.length === 1) {
+        if (vanDe !== vanDeList[0]) onChangeVanDe(vanDeList[0]);
+      } else if (vanDeList.length > 1) {
+        if (vanDe && !vanDeList.includes(vanDe)) onChangeVanDe('');
+      } else {
+        if (vanDe) onChangeVanDe('');
+      }
+    }
+  }, [bai, vanDeList]);
+
+  // Tự động chọn Chuyên đề: 1 tùy chọn -> chọn, >1 -> rỗng
+  const prevVanDeRef = useRef(vanDe);
+  useEffect(() => {
+    const vanDeChanged = prevVanDeRef.current !== vanDe;
+    prevVanDeRef.current = vanDe;
+
+    if (vanDeChanged) {
+      if (chuyenDeList.length === 1) {
+        if (chuyenDe !== chuyenDeList[0]) onChangeChuyenDe(chuyenDeList[0]);
+      } else {
+        if (chuyenDe) onChangeChuyenDe('');
+      }
+    } else {
+      if (!vanDe) {
+        if (chuyenDe) onChangeChuyenDe('');
+        return;
+      }
+      if (chuyenDeList.length === 1) {
+        if (chuyenDe !== chuyenDeList[0]) onChangeChuyenDe(chuyenDeList[0]);
+      } else if (chuyenDeList.length > 1) {
+        if (chuyenDe && !chuyenDeList.includes(chuyenDe)) onChangeChuyenDe('');
+      } else {
+        if (chuyenDe) onChangeChuyenDe('');
+      }
+    }
+  }, [vanDe, chuyenDeList]);
 
   const handleSelectLevel = (level: HierarchyLevel, value: string) => {
     setOpenDropdown(null);
@@ -149,7 +343,7 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     switch (level) {
       case 'title': {
         onChangeTitle(value);
-        if (isDanhGia(value)) {
+        if (!value || isDanhGia(value)) {
           onChangeChuong('');
           onChangeBai('');
           onChangeVanDe('');
@@ -158,21 +352,21 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         }
         const nextDoc = store[value] || {};
         const chList = Object.keys(nextDoc);
-        if (chList.length > 0) {
+        if (chList.length === 1) {
           const firstCh = chList[0];
           onChangeChuong(firstCh);
           const nextCh = nextDoc[firstCh] || {};
           const bList = Object.keys(nextCh);
-          if (bList.length > 0) {
+          if (bList.length === 1) {
             const firstB = bList[0];
             onChangeBai(firstB);
             const nextB = nextCh[firstB] || {};
             const vList = Object.keys(nextB);
-            if (vList.length > 0) {
+            if (vList.length === 1) {
               const firstV = vList[0];
               onChangeVanDe(firstV);
               const cList = nextB[firstV] || [];
-              onChangeChuyenDe(cList.length > 0 ? cList[0] : '');
+              onChangeChuyenDe(cList.length === 1 ? cList[0] : '');
             } else {
               onChangeVanDe('');
               onChangeChuyenDe('');
@@ -200,16 +394,16 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         }
         const nextCh = currentDocObj[value] || {};
         const bList = Object.keys(nextCh);
-        if (bList.length > 0) {
+        if (bList.length === 1) {
           const firstB = bList[0];
           onChangeBai(firstB);
           const nextB = nextCh[firstB] || {};
           const vList = Object.keys(nextB);
-          if (vList.length > 0) {
+          if (vList.length === 1) {
             const firstV = vList[0];
             onChangeVanDe(firstV);
             const cList = nextB[firstV] || [];
-            onChangeChuyenDe(cList.length > 0 ? cList[0] : '');
+            onChangeChuyenDe(cList.length === 1 ? cList[0] : '');
           } else {
             onChangeVanDe('');
             onChangeChuyenDe('');
@@ -230,11 +424,11 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         }
         const nextB = currentChuongObj[value] || {};
         const vList = Object.keys(nextB);
-        if (vList.length > 0) {
+        if (vList.length === 1) {
           const firstV = vList[0];
           onChangeVanDe(firstV);
           const cList = nextB[firstV] || [];
-          onChangeChuyenDe(cList.length > 0 ? cList[0] : '');
+          onChangeChuyenDe(cList.length === 1 ? cList[0] : '');
         } else {
           onChangeVanDe('');
           onChangeChuyenDe('');
@@ -248,7 +442,7 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
           break;
         }
         const cList = currentBaiObj[value] || [];
-        if (cList.length > 0) {
+        if (cList.length === 1) {
           onChangeChuyenDe(cList[0]);
         } else {
           onChangeChuyenDe('');
@@ -486,12 +680,18 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     return (
       <div className="space-y-1 relative">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <label className={`text-[11px] font-bold ${isHighlight ? 'text-indigo-800' : 'text-slate-700'}`}>
               {label}
             </label>
+            {((isProcessing && activeLevel === level) || syncingLevel === level) && (
+              <span className="text-red-600 font-bold text-[10px] ml-1 animate-pulse flex items-center gap-1">
+                <RotateCcw className="w-2.5 h-2.5 text-red-600 animate-spin shrink-0" />
+                <span>Đang đồng bộ</span>
+              </span>
+            )}
             {/* Chỉ báo trạng thái đồng bộ Drive cạnh nhãn danh mục */}
-            {currentValue && (
+            {currentValue && !((isProcessing && activeLevel === level) || syncingLevel === level) && (
               <span
                 className="inline-flex items-center gap-0.5 text-[9px] font-medium text-emerald-600 bg-emerald-50/80 px-1.5 py-0.2 rounded border border-emerald-200"
                 title={`Mục "${currentValue}" đã được đồng bộ với Google Drive`}
@@ -634,25 +834,43 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
             <div>
               <label className="text-[10px] font-bold text-slate-600 block mb-1">Môn học</label>
               <select
-                value={subject || 'Toán Học'}
-                onChange={(e) => onChangeSubject(e.target.value)}
+                value={subject || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChangeSubject(val);
+                  onChangeTitle('');
+                  onChangeChuong('');
+                  onChangeBai('');
+                  onChangeVanDe('');
+                  onChangeChuyenDe('');
+                }}
                 className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
               >
-                <option value="Toán Học">Toán Học</option>
-                <option value="Vật Lý">Vật Lý</option>
-                <option value="Hóa Học">Hóa Học</option>
-                <option value="Ngữ Văn">Ngữ Văn</option>
-                <option value="Tiếng Anh">Tiếng Anh</option>
-                <option value="Sinh Học">Sinh Học</option>
+                <option value="">-- Chọn Môn học --</option>
+                <option value="Toán">Toán</option>
+                <option value="Lý">Lý</option>
+                <option value="Hóa">Hóa</option>
+                <option value="Sinh">Sinh</option>
+                <option value="Tin">Tin</option>
+                <option value="Anh">Anh</option>
               </select>
             </div>
             <div>
               <label className="text-[10px] font-bold text-slate-600 block mb-1">Khối lớp</label>
               <select
-                value={grade || 'Khối 10'}
-                onChange={(e) => onChangeGrade(e.target.value)}
+                value={grade || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onChangeGrade(val);
+                  onChangeTitle('');
+                  onChangeChuong('');
+                  onChangeBai('');
+                  onChangeVanDe('');
+                  onChangeChuyenDe('');
+                }}
                 className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white cursor-pointer"
               >
+                <option value="">-- Chọn Khối lớp --</option>
                 <option value="Khối 10">Khối 10</option>
                 <option value="Khối 11">Khối 11</option>
                 <option value="Khối 12">Khối 12</option>
@@ -667,62 +885,68 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         </div>
       </div>
 
-      {/* 2. NỘI DUNG BÀI DẠY: Chỉ còn Chương, Bài, Vấn đề, Chuyên đề */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
-          <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
-            <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
-          </span>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-slate-400 italic hidden sm:inline">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
-            {renderDriveStatusIndicator(true)}
+      {/* 2. NỘI DUNG BÀI DẠY: Chỉ hiện khi có tên tài liệu khác rỗng */}
+      {title && title.trim() !== '' ? (
+        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3.5 animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+            <span className="text-[11px] font-black uppercase text-slate-700 tracking-wider flex items-center gap-1.5">
+              <FolderTree className="w-3.5 h-3.5 text-slate-500" /> NỘI DUNG BÀI DẠY
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-slate-400 italic hidden sm:inline">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
+              {renderDriveStatusIndicator(true)}
+            </div>
+          </div>
+
+          {/* 4 Cấp độ: Khi chọn bài đánh giá thì ẩn các cấp độ con tương ứng */}
+          {!isDanhGia(title) ? (
+            <>
+              {renderDropdown('chuong', 'Chương', chuong, chuongList)}
+              {!isDanhGia(chuong) ? (
+                <>
+                  {renderDropdown('bai', 'Bài', bai, baiList)}
+                  {!isDanhGia(bai) ? (
+                    <>
+                      {renderDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
+                      {!isDanhGia(vanDe) ? (
+                        renderDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)
+                      ) : (
+                        <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                          ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                      ℹ️ Bài là bài đánh giá — Đã ẩn Vấn đề và Chuyên đề cấp con.
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                  ℹ️ Chương là bài đánh giá — Đã ẩn Bài, Vấn đề và Chuyên đề cấp con.
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+              ℹ️ Tài liệu là bài đánh giá — Đã ẩn toàn bộ các cấp con bên dưới.
+            </div>
+          )}
+
+          {/* Live Preview Đường dẫn Drive */}
+          <div className="pt-2 text-[10px] text-slate-500 font-mono border-t border-slate-100 flex items-center gap-1">
+            <span className="font-bold text-indigo-600">Đường dẫn Drive:</span>
+            <span className="truncate">
+              myApp / LopU / TaiLieu / {title || '[Tên tài liệu]'} / {chuong || '[Tên chương]'} / {bai || '[Tên bài]'} / {vanDe || '[Tên vấn đề]'} / {chuyenDe || '[Tên chuyên đề]'}
+            </span>
           </div>
         </div>
-
-        {/* 4 Cấp độ: Khi chọn bài đánh giá thì ẩn các cấp độ con tương ứng */}
-        {!isDanhGia(title) ? (
-          <>
-            {renderDropdown('chuong', 'Chương', chuong, chuongList)}
-            {!isDanhGia(chuong) ? (
-              <>
-                {renderDropdown('bai', 'Bài', bai, baiList)}
-                {!isDanhGia(bai) ? (
-                  <>
-                    {renderDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
-                    {!isDanhGia(vanDe) ? (
-                      renderDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)
-                    ) : (
-                      <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                        ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                    ℹ️ Bài là bài đánh giá — Đã ẩn Vấn đề và Chuyên đề cấp con.
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                ℹ️ Chương là bài đánh giá — Đã ẩn Bài, Vấn đề và Chuyên đề cấp con.
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-            ℹ️ Tài liệu là bài đánh giá — Đã ẩn toàn bộ các cấp con bên dưới.
-          </div>
-        )}
-
-        {/* Live Preview Đường dẫn Drive */}
-        <div className="pt-2 text-[10px] text-slate-500 font-mono border-t border-slate-100 flex items-center gap-1">
-          <span className="font-bold text-indigo-600">Đường dẫn Drive:</span>
-          <span className="truncate">
-            myApp / LopU / TaiLieu / {title || '[Tên tài liệu]'} / {chuong || '[Tên chương]'} / {bai || '[Tên bài]'} / {vanDe || '[Tên vấn đề]'} / {chuyenDe || '[Tên chuyên đề]'}
-          </span>
+      ) : (
+        <div className="p-3.5 bg-slate-50 border border-dashed border-slate-300 rounded-2xl text-center text-xs text-slate-500 font-medium">
+          ℹ️ Vui lòng chọn hoặc thêm <strong>TÀI LIỆU</strong> ở trên để hiển thị <strong>NỘI DUNG BÀI DẠY</strong> (Chương, Bài, Vấn đề, Chuyên đề). Khi tên tài liệu để trống, các cấp độ con đều rỗng.
         </div>
-      </div>
+      )}
 
       {/* POPUP / MODAL XÁC NHẬN THÊM VÀO TÀI LIỆU / PHÂN CẤP */}
       {modalOpen && (

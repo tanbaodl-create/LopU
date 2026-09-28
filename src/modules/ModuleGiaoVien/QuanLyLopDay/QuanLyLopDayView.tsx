@@ -16,6 +16,8 @@ import {
   Cloud,
   AlertCircle,
   Loader2,
+  BookOpen,
+  FileText,
 } from 'lucide-react';
 import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile, UserProfile, UserRole, QUESTION_LEVELS } from '../../../services/storageTypes';
 import {
@@ -39,6 +41,48 @@ import { GpsPickerModal } from '../../../components/GpsPickerModal';
 import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 export { inferAxesLabels, convertMathExprToTikz } from '../TaiLieuCaNhan/TaiLieuCaNhanView';
 export { convertMathExprToJs } from '../TaiLieuCaNhan/TikZVisualRenderer';
+
+// Cấu trúc quy chuẩn tiến trình bài giảng:
+// - Kiến thức: gồm lý thuyết và bài tập (ví dụ - gồm tự luận, trắc nghiệm lựa chọn/đúng sai/trả lời ngắn)
+// - Luyện tập và kiểm tra: chỉ có bài tập
+export const TIEN_TRINH_BAI_DAY_STRUCTURE = {
+  kienThuc: {
+    title: 'Kiến thức (Lý thuyết & Bài tập)',
+    theoryGroup: [
+      'Khái niệm / Định nghĩa',
+      'Định lý / Tính chất',
+      'Hệ quả / Chú ý',
+      'Phương pháp giải (Dạng toán)',
+    ],
+    exerciseGroup: [
+      'Ví dụ minh họa',
+      'Bài tập Tự luận',
+      'Trắc nghiệm 4 lựa chọn (A, B, C, D)',
+      'Trắc nghiệm Đúng / Sai',
+      'Trắc nghiệm Trả lời ngắn',
+    ],
+  },
+  luyenTap: {
+    title: 'Luyện tập (Chỉ có Bài tập)',
+    exerciseGroup: [
+      'Ví dụ minh họa',
+      'Bài tập Tự luận',
+      'Trắc nghiệm 4 lựa chọn (A, B, C, D)',
+      'Trắc nghiệm Đúng / Sai',
+      'Trắc nghiệm Trả lời ngắn',
+    ],
+  },
+  kiemTra: {
+    title: 'Kiểm tra (Chỉ có Bài tập)',
+    exerciseGroup: [
+      'Ví dụ minh họa',
+      'Bài tập Tự luận',
+      'Trắc nghiệm 4 lựa chọn (A, B, C, D)',
+      'Trắc nghiệm Đúng / Sai',
+      'Trắc nghiệm Trả lời ngắn',
+    ],
+  },
+};
 
 // Helper component hiển thị Khung Thẻ Bàn Học Sinh hình vuông bo góc với 4 nhãn chức danh nằm ngoài vòng tròn icon nhưng nằm trong hình vuông
 export interface StudentCardBoxProps {
@@ -450,6 +494,15 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
           </p>
           <div className="mt-2 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 font-medium">
             <span>🛡️ <strong>Bảo mật Drive giáo viên:</strong> Toàn bộ dữ liệu điểm số, sơ đồ lớp và giáo án lưu tại Google Drive của giáo viên. Hệ thống đảm bảo chỉ chính giáo viên và ứng dụng có quyền truy cập; học sinh không thể lấy tài liệu gốc từ Drive.</span>
+          </div>
+
+          <div className="mt-2 text-[10px] text-indigo-900 bg-indigo-50/80 px-2.5 py-1.5 rounded-lg border border-indigo-200 flex flex-wrap items-center gap-2 font-medium">
+            <span className="font-bold text-indigo-700 flex items-center gap-1">
+              <BookOpen className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Quy chuẩn bài dạy:</span>
+            </span>
+            <span>• <strong>Kiến thức:</strong> gồm Lý thuyết (Khái niệm, Định lý, Hệ quả, Phương pháp giải) & Bài tập (Ví dụ minh họa, Tự luận, Trắc nghiệm 4 lựa chọn/Đúng sai/Trả lời ngắn).</span>
+            <span>• <strong>Luyện tập & Kiểm tra:</strong> Chỉ gồm Bài tập.</span>
           </div>
         </div>
 

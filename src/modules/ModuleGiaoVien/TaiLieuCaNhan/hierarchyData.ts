@@ -1,4 +1,5 @@
 import { TeacherDocument } from '../../../services/storageTypes';
+import { auth } from '../../../config/firebase';
 
 export interface HierarchyStore {
   [documentTitle: string]: {
@@ -13,27 +14,135 @@ export interface HierarchyStore {
 // Làm rỗng hoàn toàn dữ liệu demo các cấp độ theo yêu cầu
 export const INITIAL_HIERARCHY_DATA: HierarchyStore = {};
 
-export const HIERARCHY_STORAGE_KEY = 'lopu_teaching_hierarchy_tree_v3';
+/**
+ * Lấy Email của tài khoản người dùng đang đăng nhập để định danh bộ nhớ máy
+ */
+export function getActiveUserEmail(): string {
+  try {
+    if (auth && auth.currentUser && auth.currentUser.email) {
+      return auth.currentUser.email.toLowerCase().trim();
+    }
+  } catch {}
+
+  try {
+    const authEmail = localStorage.getItem('lopu_auth_email');
+    if (authEmail && authEmail.includes('@')) {
+      return authEmail.toLowerCase().trim();
+    }
+    const driveEmail = localStorage.getItem('lopu_drive_email');
+    if (driveEmail && driveEmail.includes('@')) {
+      return driveEmail.toLowerCase().trim();
+    }
+    const profileRaw = localStorage.getItem('lopu_current_user_profile');
+    if (profileRaw) {
+      const p = JSON.parse(profileRaw);
+      if (p.email && p.email.includes('@')) return p.email.toLowerCase().trim();
+    }
+  } catch {}
+
+  return 'tanbaodl@gmail.com';
+}
+
+/**
+ * Định danh tên dữ liệu tại máy (localStorage) theo đúng yêu cầu:
+ * LopUTaiLieu-{Email tài khoản đăng nhập}
+ */
+export function getHierarchyStorageKey(overrideEmail?: string): string {
+  const email = (overrideEmail || getActiveUserEmail()).toLowerCase().trim();
+  return `LopUTaiLieu-${email}`;
+}
+
+export const HIERARCHY_STORAGE_KEY = getHierarchyStorageKey();
 export const DELETED_FOLDERS_KEY = 'lopu_deleted_drive_folders_v1';
 
 /**
- * Chuẩn hóa Quy ước Đặt Tên Tài liệu: {tên môn học} {Số lớp}-{tên tài liệu}
- * Ví dụ: Toán 10-T0CoBan
+ * Lấy số lớp từ chuỗi khối lớp (ví dụ: "Khối 10" -> "10", "11" -> "11")
+ */
+export function getGradeNumber(grade?: string | number): string {
+  if (!grade) return '';
+  const num = String(grade).replace(/\D+/g, '');
+  return num || String(grade).trim();
+}
+
+/**
+ * Chuẩn hóa Quy ước Đặt Tên Tài liệu Bắt buộc: {Môn học} {Số lớp} - {Tên tài liệu}
+ * Ví dụ: Toán 10 - Đại Số 10, Lý 12 - Dao Động Cơ, Tin 10 - Lập Trình Python
  */
 export function formatDocumentTitle(subject?: string, grade?: string | number, title?: string): string {
-  const cleanSubject = (subject || '').trim() || 'Toán';
-  const cleanGrade = String(grade || '').replace(/\D+/g, '') || '10';
+  const cleanSubject = (subject || '').trim().replace(/^(Môn\s+)/i, '') || 'Toán';
+  const cleanGrade = getGradeNumber(grade) || '10';
   let cleanTitle = (title || '').trim();
 
   if (!cleanTitle) {
-    cleanTitle = 'TaiLieuMoi';
+    cleanTitle = 'Tài liệu mới';
   }
 
   // Loại bỏ các tiền tố trùng lặp nếu người dùng đã gõ sẵn môn và lớp
-  const prefixRegex = new RegExp(`^${cleanSubject}\\s*${cleanGrade}\\s*-\\s*`, 'i');
-  cleanTitle = cleanTitle.replace(prefixRegex, '');
+  const prefixRegex = new RegExp(`^(${cleanSubject}|Toán Học|Toán|Vật Lý|Lý|Hóa Học|Hóa|Sinh Học|Sinh|Tin Học|Tin|Tiếng Anh|Anh|Ngữ Văn|Văn)?\\s*(${cleanGrade}|Khối\\s*${cleanGrade})?\\s*-\\s*`, 'i');
+  cleanTitle = cleanTitle.replace(prefixRegex, '').trim();
 
-  return `${cleanSubject} ${cleanGrade}-${cleanTitle}`;
+  // Loại bỏ trường hợp người dùng gõ số lớp trước: ví dụ "10 - Đại số"
+  cleanTitle = cleanTitle.replace(/^\d+\s*-\s*/, '').trim();
+
+  return `${cleanSubject} ${cleanGrade} - ${cleanTitle}`;
+}
+
+/**
+ * Kiểm tra Tên tài liệu (thư mục trực tiếp trong thư mục gốc) có khớp với Môn học và Khối lớp
+ * Tuân theo quy ước bắt buộc: "{Môn học} {Số lớp} - {Tên tài liệu}"
+ */
+export function matchesSubjectAndGrade(title: string, subject?: string, grade?: string | number): boolean {
+  if (!title) return false;
+  const s = (subject || '').trim().replace(/^(Môn\s+)/i, '');
+  const gNum = getGradeNumber(grade);
+  if (!s && !gNum) return true;
+
+  const lowerTitle = title.toLowerCase().trim();
+
+  // Tạo danh sách các biến thể tên môn (ví dụ: Toán <-> Toán Học, Lý <-> Vật Lý, Tin <-> Tin Học, Anh <-> Tiếng Anh, Sinh <-> Sinh Học, Hóa <-> Hóa Học)
+  const getSubjVariants = (rawSubj: string): string[] => {
+    const raw = rawSubj.toLowerCase().trim();
+    if (!raw) return [];
+    const set = new Set<string>([raw]);
+    if (raw === 'toán' || raw === 'toán học') { set.add('toán'); set.add('toán học'); }
+    if (raw === 'lý' || raw === 'vật lý' || raw === 'vật lí') { set.add('lý'); set.add('vật lý'); set.add('vật lí'); }
+    if (raw === 'hóa' || raw === 'hóa học') { set.add('hóa'); set.add('hóa học'); }
+    if (raw === 'sinh' || raw === 'sinh học') { set.add('sinh'); set.add('sinh học'); }
+    if (raw === 'tin' || raw === 'tin học') { set.add('tin'); set.add('tin học'); }
+    if (raw === 'anh' || raw === 'tiếng anh') { set.add('anh'); set.add('tiếng anh'); }
+    if (raw === 'văn' || raw === 'ngữ văn') { set.add('văn'); set.add('ngữ văn'); }
+    return Array.from(set);
+  };
+
+  const variants = s ? getSubjVariants(s) : [];
+
+  if (s && gNum) {
+    for (const v of variants) {
+      if (
+        lowerTitle.startsWith(`${v} ${gNum} -`) ||
+        lowerTitle.startsWith(`${v} ${gNum}-`) ||
+        lowerTitle.startsWith(`${v}${gNum} -`) ||
+        (lowerTitle.includes(v) && lowerTitle.includes(gNum))
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (s) {
+    for (const v of variants) {
+      if (lowerTitle.includes(v)) return true;
+    }
+    return false;
+  }
+
+  if (gNum) {
+    const reg = new RegExp(`(^|\\s|-)(${gNum}|khối\\s*${gNum})(\\s|-|$)`, 'i');
+    return reg.test(lowerTitle) || lowerTitle.includes(` ${gNum} `) || lowerTitle.includes(` ${gNum}-`) || lowerTitle.includes(` ${gNum} -`);
+  }
+
+  return true;
 }
 
 /**
@@ -181,9 +290,20 @@ export function sanitizeHierarchyStore(rawStore: any, validDocs?: TeacherDocumen
   return cleaned;
 }
 
-export function getStoredHierarchy(validDocs?: TeacherDocument[]): HierarchyStore {
+export function getStoredHierarchy(validDocs?: TeacherDocument[], overrideEmail?: string): HierarchyStore {
   try {
-    const raw = localStorage.getItem(HIERARCHY_STORAGE_KEY);
+    const key = getHierarchyStorageKey(overrideEmail);
+    let raw = localStorage.getItem(key);
+
+    // Tự động kế thừa và di chuyển dữ liệu cũ nếu khóa LopUTaiLieu-{Email} chưa có
+    if (!raw) {
+      const legacyRaw = localStorage.getItem('lopu_teaching_hierarchy_tree_v3');
+      if (legacyRaw) {
+        localStorage.setItem(key, legacyRaw);
+        raw = legacyRaw;
+      }
+    }
+
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === 'object') {
@@ -196,10 +316,11 @@ export function getStoredHierarchy(validDocs?: TeacherDocument[]): HierarchyStor
   return INITIAL_HIERARCHY_DATA;
 }
 
-export function saveStoredHierarchy(data: HierarchyStore): void {
+export function saveStoredHierarchy(data: HierarchyStore, overrideEmail?: string): void {
   try {
+    const key = getHierarchyStorageKey(overrideEmail);
     const sanitized = sanitizeHierarchyStore(data);
-    localStorage.setItem(HIERARCHY_STORAGE_KEY, JSON.stringify(sanitized));
+    localStorage.setItem(key, JSON.stringify(sanitized));
   } catch (e) {
     console.error('Failed to save hierarchy data:', e);
   }
@@ -208,8 +329,10 @@ export function saveStoredHierarchy(data: HierarchyStore): void {
 /**
  * Xóa sạch hoàn toàn cache Cây phân cấp
  */
-export function clearHierarchyCache(): void {
+export function clearHierarchyCache(overrideEmail?: string): void {
   try {
-    localStorage.removeItem(HIERARCHY_STORAGE_KEY);
+    const key = getHierarchyStorageKey(overrideEmail);
+    localStorage.removeItem(key);
+    localStorage.removeItem('lopu_teaching_hierarchy_tree_v3');
   } catch {}
 }

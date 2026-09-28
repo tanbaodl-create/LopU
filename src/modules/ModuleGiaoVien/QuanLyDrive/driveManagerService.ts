@@ -92,9 +92,82 @@ export function parsePathInput(pathInput: string | string[]): string[] {
     .filter((s) => s.length > 0 && s !== 'Drive của tôi');
 }
 
+// BỘ NHỚ ĐỆM (CACHE) FOLDER ID TRUY CẬP SIÊU TỐC - LƯU TẠI MÁY (LOCALSTORAGE)
+// Lưu ánh xạ đường dẫn (Path) ➔ FolderID / FileID để đồng bộ thư mục con nhanh gấp nhiều lần,
+// không phải truy vấn dò tìm từng cấp tên thư mục mỗi khi người dùng chọn.
+const DRIVE_FOLDER_ID_CACHE_KEY = 'lopu_drive_folder_id_cache_v2';
+
+// In-memory cache đồng bộ để đọc tức thì không có độ trễ
+let inMemoryFolderIdCache: Record<string, string> | null = null;
+
+function getFolderIdMap(): Record<string, string> {
+  if (inMemoryFolderIdCache) return inMemoryFolderIdCache;
+  try {
+    const raw = localStorage.getItem(DRIVE_FOLDER_ID_CACHE_KEY);
+    if (raw) {
+      inMemoryFolderIdCache = JSON.parse(raw);
+      return inMemoryFolderIdCache || {};
+    }
+  } catch {}
+  inMemoryFolderIdCache = {};
+  return inMemoryFolderIdCache;
+}
+
+export function getCachedDriveFolderId(pathStr: string): string | null {
+  if (!pathStr) return null;
+  try {
+    const map = getFolderIdMap();
+    const cleanKey = pathStr.toLowerCase().trim().replace(/\\/g, '/');
+    if (map[cleanKey]) return map[cleanKey];
+
+    // Thử các biến thể đường dẫn (bỏ tiền tố myApp/LopU/ hoặc chỉ lấy phần sau TaiLieu)
+    const withoutPrefix = cleanKey.replace(/^myapp\/lopu\//i, '');
+    if (map[withoutPrefix]) return map[withoutPrefix];
+
+    const withPrefix = `myapp/lopu/${withoutPrefix}`;
+    if (map[withPrefix]) return map[withPrefix];
+  } catch {}
+  return null;
+}
+
+export function setCachedDriveFolderId(pathStr: string, id: string): void {
+  if (!pathStr || !id) return;
+  try {
+    const map = getFolderIdMap();
+    const cleanKey = pathStr.toLowerCase().trim().replace(/\\/g, '/');
+    map[cleanKey] = id;
+
+    // Lưu thêm biến thể không có tiền tố myApp/LopU/
+    const withoutPrefix = cleanKey.replace(/^myapp\/lopu\//i, '');
+    if (withoutPrefix !== cleanKey) {
+      map[withoutPrefix] = id;
+    }
+    const withPrefix = `myapp/lopu/${withoutPrefix}`;
+    map[withPrefix] = id;
+
+    inMemoryFolderIdCache = map;
+    localStorage.setItem(DRIVE_FOLDER_ID_CACHE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+export function removeCachedDriveFolderId(pathStr: string): void {
+  if (!pathStr) return;
+  try {
+    const map = getFolderIdMap();
+    const cleanKey = pathStr.toLowerCase().trim().replace(/\\/g, '/');
+    delete map[cleanKey];
+    const withoutPrefix = cleanKey.replace(/^myapp\/lopu\//i, '');
+    delete map[withoutPrefix];
+    delete map[`myapp/lopu/${withoutPrefix}`];
+
+    inMemoryFolderIdCache = map;
+    localStorage.setItem(DRIVE_FOLDER_ID_CACHE_KEY, JSON.stringify(map));
+  } catch {}
+}
+
 /**
  * HÀM 1A: Đường dẫn (path) -> FileID / FolderID
- * Kiểm tra tuần tự từng cấp thư mục/tệp từ root
+ * Kiểm tra tuần tự từng cấp thư mục/tệp từ root (có hỗ trợ cache ID siêu tốc)
  */
 export async function resolvePathToDriveId(
   pathInput: string | string[],
@@ -125,6 +198,34 @@ export async function resolvePathToDriveId(
     };
   }
 
+  // 0. TỐI ƯU SIÊU TỐC BẰNG FOLDER ID CACHE:
+  // Nếu đã nhớ FolderID của đường dẫn này, kiểm tra trực tiếp qua 1 request duy nhất
+  const cachedId = getCachedDriveFolderId(fullPath);
+  if (cachedId) {
+    try {
+      const chkRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files/${cachedId}?fields=id,name,mimeType,parents,trashed`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (chkRes.ok) {
+        const chkData = await chkRes.json();
+        if (!chkData.trashed) {
+          return {
+            found: true,
+            id: chkData.id,
+            type: chkData.mimeType === 'application/vnd.google-apps.folder' ? 'folder' : 'file',
+            mimeType: chkData.mimeType,
+            name: chkData.name,
+            parentId: chkData.parents?.[0],
+            fullPath,
+            pathArray,
+          };
+        }
+      }
+    } catch {}
+    removeCachedDriveFolderId(fullPath);
+  }
+
   // Helper để tìm chuỗi thư mục từ 1 parentId chỉ định
   const tryResolveFromParent = async (startParentId: string, segments: string[]): Promise<PathToIdResult | null> => {
     let currentParentId = startParentId;
@@ -132,21 +233,69 @@ export async function resolvePathToDriveId(
 
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
+      const partialPath = segments.slice(0, i + 1).join('/');
+
+      // Kiểm tra cache cho từng cấp con
+      const cachedPartial = getCachedDriveFolderId(partialPath);
+      if (cachedPartial) {
+        try {
+          const chk = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${cachedPartial}?fields=id,name,mimeType,parents,trashed`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (chk.ok) {
+            const chkMeta = await chk.json();
+            if (!chkMeta.trashed) {
+              currentMetadata = chkMeta;
+              currentParentId = chkMeta.id;
+              continue;
+            }
+          }
+        } catch {}
+      }
+
       try {
-        const query = `'${currentParentId}' in parents and name = '${segment.replace(/'/g, "\\'")}' and trashed = false`;
-        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,parents)&pageSize=10`;
+        const isTaiLieuVariant = segment.toLowerCase() === 'tailieu' || segment.toLowerCase() === 'taillieu';
+        const nameFilter = isTaiLieuVariant
+          ? `(name = 'TaiLieu' or name = 'TailLieu')`
+          : `name = '${segment.replace(/'/g, "\\'")}'`;
+
+        const query = `'${currentParentId}' in parents and ${nameFilter} and trashed = false`;
+        const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,parents,trashed)&pageSize=10`;
         const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return null;
         const data = await res.json();
-        if (!data.files || data.files.length === 0) return null;
-        currentMetadata = data.files[0];
+        let validFile = (data.files || []).find((f: any) => !f.trashed);
+        if (!validFile) {
+          // Fallback đối soát tất cả thư mục con của currentParentId có chuẩn hóa Unicode NFC/NFD
+          const fallbackQuery = `'${currentParentId}' in parents and trashed = false`;
+          const fbUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(fallbackQuery)}&fields=files(id,name,mimeType,parents,trashed)&pageSize=100`;
+          const fbRes = await fetch(fbUrl, { headers: { Authorization: `Bearer ${token}` } });
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            const segNorm = segment.normalize('NFC').trim().toLowerCase();
+            validFile = (fbData.files || []).find((f: any) => {
+              if (f.trashed) return false;
+              const fNameNorm = (f.name || '').normalize('NFC').trim().toLowerCase();
+              if (fNameNorm === segNorm) return true;
+              if ((segNorm === 'tailieu' && fNameNorm === 'taillieu') || (segNorm === 'taillieu' && fNameNorm === 'tailieu')) {
+                return true;
+              }
+              return false;
+            });
+          }
+        }
+        if (!validFile) return null;
+        currentMetadata = validFile;
         currentParentId = currentMetadata.id;
+        // Ghi nhớ ID của cấp này vào cache
+        setCachedDriveFolderId(partialPath, currentMetadata.id);
       } catch {
         return null;
       }
     }
 
-    if (!currentMetadata) return null;
+    if (!currentMetadata || currentMetadata.trashed) return null;
     return {
       found: true,
       id: currentMetadata.id,
@@ -159,9 +308,76 @@ export async function resolvePathToDriveId(
     };
   };
 
-  // Chỉ giải mã đường dẫn chính xác từng cấp từ root (root -> myApp -> LopU -> TaiLieu)
+  // 1. Giải mã đường dẫn chính xác từng cấp từ root (root -> myApp -> LopU -> TaiLieu -> ...)
   const res = await tryResolveFromParent('root', pathArray);
-  if (res && res.found) return res;
+  if (res && res.found) {
+    if (res.id) setCachedDriveFolderId(fullPath, res.id);
+    return res;
+  }
+
+  // 2. Thử tìm từ thư mục TaiLieu / TailLieu nếu có trong đường dẫn
+  const taiLieuIndex = pathArray.findIndex(p => p.toLowerCase() === 'tailieu' || p.toLowerCase() === 'taillieu');
+  if (taiLieuIndex !== -1) {
+    try {
+      const qTaiLieu = `(name = 'TaiLieu' or name = 'TailLieu') and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      const resTL = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qTaiLieu)}&fields=files(id,name,mimeType,parents,trashed)&pageSize=5`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (resTL.ok) {
+        const dataTL = await resTL.json();
+        const validTL = (dataTL.files || []).find((f: any) => !f.trashed);
+        if (validTL) {
+          const remainingSegments = pathArray.slice(taiLieuIndex + 1);
+          if (remainingSegments.length === 0) {
+            setCachedDriveFolderId(fullPath, validTL.id);
+            return {
+              found: true,
+              id: validTL.id,
+              type: 'folder',
+              mimeType: validTL.mimeType,
+              name: validTL.name,
+              parentId: validTL.parents?.[0],
+              fullPath,
+              pathArray,
+            };
+          }
+          const subRes = await tryResolveFromParent(validTL.id, remainingSegments);
+          if (subRes && subRes.found) {
+            if (subRes.id) setCachedDriveFolderId(fullPath, subRes.id);
+            return subRes;
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // 3. Fallback: Tìm trực tiếp theo tên thư mục cuối cùng (leaf folder)
+  const targetName = pathArray[pathArray.length - 1];
+  if (targetName) {
+    try {
+      const qLeaf = `name = '${targetName.replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+      const resLeaf = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qLeaf)}&fields=files(id,name,mimeType,parents,trashed)&pageSize=5`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (resLeaf.ok) {
+        const dataLeaf = await resLeaf.json();
+        const validLeaf = (dataLeaf.files || []).find((f: any) => !f.trashed);
+        if (validLeaf) {
+          setCachedDriveFolderId(fullPath, validLeaf.id);
+          return {
+            found: true,
+            id: validLeaf.id,
+            type: 'folder',
+            mimeType: validLeaf.mimeType,
+            name: validLeaf.name,
+            parentId: validLeaf.parents?.[0],
+            fullPath,
+            pathArray,
+          };
+        }
+      }
+    } catch {}
+  }
 
   return {
     found: false,
@@ -373,6 +589,7 @@ export async function createByPath(
 
         const newFolder = await createRes.json();
         currentParentId = newFolder.id;
+        setCachedDriveFolderId(partialPath.join('/'), newFolder.id);
         createdFolders.push(segment);
       } catch (err: any) {
         return {
@@ -463,6 +680,7 @@ export async function createByPath(
     }
   }
 
+  setCachedDriveFolderId(fullPath, currentParentId);
   return {
     success: true,
     id: currentParentId,
@@ -514,6 +732,7 @@ export async function deleteByPath(
 
   // Nếu không tìm thấy hoặc đã xóa trước đó -> Báo thành công theo quy tắc 3
   if (!check.found || !check.id) {
+    removeCachedDriveFolderId(fullPath);
     return {
       success: true,
       status: 'already_deleted_or_not_found',
@@ -535,6 +754,7 @@ export async function deleteByPath(
     });
 
     if (res.ok) {
+      removeCachedDriveFolderId(fullPath);
       return {
         success: true,
         status: 'deleted',
@@ -590,10 +810,14 @@ export async function getNestedDriveTree(
   const rootFolderIdsSet = new Set<string>();
   let rootPath = '';
 
-  if (typeof parentFolderPathOrId === 'string' && (parentFolderPathOrId === 'root' || parentFolderPathOrId.startsWith('1'))) {
+  if (typeof parentFolderPathOrId === 'string' && (parentFolderPathOrId === 'root' || !parentFolderPathOrId.includes('/') || parentFolderPathOrId.startsWith('1'))) {
     rootFolderIdsSet.add(parentFolderPathOrId);
-    const resolvedPath = await resolveDriveIdToPath(parentFolderPathOrId, token);
-    rootPath = resolvedPath.path;
+    try {
+      const resolvedPath = await resolveDriveIdToPath(parentFolderPathOrId, token);
+      rootPath = resolvedPath.path;
+    } catch {
+      rootPath = parentFolderPathOrId;
+    }
   } else {
     const pathArray = parsePathInput(parentFolderPathOrId);
     rootPath = pathArray.join('/');
@@ -609,10 +833,19 @@ export async function getNestedDriveTree(
         }
       }
 
-      // 1. Giải mã bằng path chuẩn từ root
-      const check = await resolvePathToDriveId(pathArray, token);
-      if (check.found && check.id) {
-        rootFolderIdsSet.add(check.id);
+      // 0. TẬN DỤNG FOLDER ID ĐÃ LƯU TẠI MÁY ĐỂ ĐỒNG BỘ SIÊU TỐC
+      const cachedRootId = getCachedDriveFolderId(rootPath);
+      if (cachedRootId) {
+        rootFolderIdsSet.add(cachedRootId);
+      }
+
+      // 1. Giải mã bằng path chuẩn từ root nếu chưa có trong bộ nhớ máy
+      if (rootFolderIdsSet.size === 0) {
+        const check = await resolvePathToDriveId(pathArray, token);
+        if (check.found && check.id) {
+          rootFolderIdsSet.add(check.id);
+          setCachedDriveFolderId(rootPath, check.id);
+        }
       }
     }
   }
@@ -646,10 +879,27 @@ export async function getNestedDriveTree(
     if (depth >= maxDepth) return node;
 
     try {
+      // Đảm bảo không quét nếu thư mục cha hoặc gốc đang nằm trong Thùng rác (trashed: true)
+      if (depth === 0) {
+        try {
+          const checkParentRes = await fetch(
+            `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,trashed`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (checkParentRes.ok) {
+            const checkParentData = await checkParentRes.json();
+            if (checkParentData.trashed) {
+              console.warn(`Thư mục gốc ${folderName} (${folderId}) đang ở trong Thùng rác. Bỏ qua không quét.`);
+              return node;
+            }
+          }
+        } catch {}
+      }
+
       const query = `'${folderId}' in parents and trashed = false`;
       const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
         query
-      )}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100`;
+      )}&fields=files(id,name,mimeType,size,modifiedTime,trashed)&pageSize=100`;
 
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -658,30 +908,40 @@ export async function getNestedDriveTree(
       if (!res.ok) return node;
 
       const data = await res.json();
-      const files: any[] = data.files || [];
+      const files: any[] = (data.files || []).filter((f: any) => !f.trashed);
 
-      for (const item of files) {
-        const itemPath = `${currentPath}/${item.name}`;
-        const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
+      const childNodes = await Promise.all(
+        files.map(async (item) => {
+          const itemPath = `${currentPath}/${item.name}`;
+          const isFolder = item.mimeType === 'application/vnd.google-apps.folder';
 
-        if (isFolder) {
-          const childFolderNode = await buildTree(
-            item.id,
-            item.name,
-            itemPath,
-            depth + 1
-          );
-          node.children?.push(childFolderNode);
-        } else {
-          node.children?.push({
-            id: item.id,
-            name: item.name,
-            type: 'file',
-            mimeType: item.mimeType,
-            path: itemPath,
-            size: item.size ? `${(parseInt(item.size) / 1024).toFixed(1)} KB` : undefined,
-            modifiedTime: item.modifiedTime,
-          });
+          if (isFolder) {
+            setCachedDriveFolderId(itemPath, item.id);
+            setCachedDriveFolderId(itemPath.replace(/^myApp\/LopU\//i, ''), item.id);
+            setCachedDriveFolderId(item.name, item.id);
+            return await buildTree(
+              item.id,
+              item.name,
+              itemPath,
+              depth + 1
+            );
+          } else {
+            return {
+              id: item.id,
+              name: item.name,
+              type: 'file' as const,
+              mimeType: item.mimeType,
+              path: itemPath,
+              size: item.size ? `${(parseInt(item.size) / 1024).toFixed(1)} KB` : undefined,
+              modifiedTime: item.modifiedTime,
+            };
+          }
+        })
+      );
+
+      for (const cNode of childNodes) {
+        if (cNode) {
+          node.children?.push(cNode);
         }
       }
     } catch (err) {

@@ -73,6 +73,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           setCurrentUserProfile(finalProfile);
           setCurrentRole(finalProfile.role);
           setDriveEmail(user.email || '');
+          if (user.email) {
+            const cleanEmail = user.email.toLowerCase().trim();
+            localStorage.setItem('lopu_auth_email', cleanEmail);
+            localStorage.setItem('lopu_drive_email', cleanEmail);
+          }
         } catch (err) {
           console.warn('Failed to sync authenticated Google user to Firestore:', err);
         }

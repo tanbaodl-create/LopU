@@ -901,73 +901,25 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
       {/* VIEW MODE 2: TÁCH CÂU (SPLIT VIEW) — SOẠN THẢO TỪNG CÂU & GÁN NHÓM 1-6 & ĐIỂM CHUẨN */}
       {viewMode === 'split' && (
         <div className="space-y-4">
-          {/* Thanh tác vụ thêm câu hỏi ở đầu */}
+          {/* Thanh tiêu đề danh sách câu hỏi */}
           <div className="flex flex-wrap items-center justify-between gap-3 bg-indigo-50/80 border border-indigo-200 p-3 rounded-2xl">
             <span className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-indigo-600" />
               <span>Danh sách câu hỏi bài tập &amp; đánh giá</span>
             </span>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => handleAddQuestion('multiple_choice')}
-                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Trắc nghiệm</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddQuestion('true_false')}
-                className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Đúng/Sai</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleAddQuestion('short_answer')}
-                className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>+ Trả lời ngắn</span>
-              </button>
-            </div>
+            <span className="text-[11px] text-indigo-700 italic">
+              (Sử dụng nút <strong>Soạn bài ▾</strong> trên thanh công cụ Word để chèn Lý thuyết &amp; Câu hỏi)
+            </span>
           </div>
 
-          {/* Dấu + Thêm câu hỏi ở vị trí đầu tiên */}
-          <InsertQuestionBar
-            onInsert={type => handleInsertQuestionAt(0, type)}
-            label="+ Thêm câu hỏi ở vị trí đầu tiên"
-          />
-
-          {/* Hiển thị trạng thái rỗng nếu chưa có câu hỏi nào */}
+          {/* Hiển thị trạng thái rỗng nếu chưa có câu hỏi nào (đã bỏ các nút Thêm câu hỏi theo yêu cầu vì đã có menu Soạn bài trên Word) */}
           {questions.length === 0 && (
-            <div className="py-12 px-4 text-center bg-white border-2 border-dashed border-indigo-200 rounded-2xl my-4 space-y-3 shadow-xs">
-              <FileText className="w-10 h-10 text-indigo-400 mx-auto" />
-              <div className="text-sm font-bold text-indigo-950">Nội dung / Bài tập đang ở trạng thái rỗng</div>
-              <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Nội dung mặc định của phần soạn thảo hiện ở dạng rỗng. Hãy bấm nút dưới đây hoặc dùng thanh công cụ Word để tạo nội dung mới.
+            <div className="py-10 px-4 text-center bg-white border border-dashed border-indigo-200 rounded-2xl my-4 space-y-2.5 shadow-xs">
+              <FileText className="w-8 h-8 text-indigo-400 mx-auto" />
+              <div className="text-xs font-bold text-indigo-950">Chưa có câu hỏi riêng biệt</div>
+              <p className="text-[11px] text-slate-500 max-w-md mx-auto">
+                Dùng nút <strong>Soạn bài ▾</strong> trên thanh công cụ Word để chèn nhanh bài tập mẫu hoặc chuyển sang chế độ <strong>Toàn bộ</strong> để soạn thảo trên trang trắng trực tiếp.
               </p>
-              <div className="pt-2 flex flex-wrap justify-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleAddQuestion('multiple_choice')}
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Thêm câu hỏi trắc nghiệm</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleAddQuestion('true_false')}
-                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>+ Thêm câu hỏi đúng/sai</span>
-                </button>
-              </div>
             </div>
           )}
 

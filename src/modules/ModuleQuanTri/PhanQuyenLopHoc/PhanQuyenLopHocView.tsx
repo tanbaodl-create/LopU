@@ -23,8 +23,8 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [teachers, setTeachers] = useState<UserProfile[]>([]);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
-  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
-  const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>('all');
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('');
+  const [selectedGradeFilter, setSelectedGradeFilter] = useState<string>('');
   const [pinInputs, setPinInputs] = useState<Record<string, string>>({});
   const [notification, setNotification] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -188,7 +188,7 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
           <Key className="w-4 h-4 text-indigo-600" />
           <span className="text-xs font-bold text-slate-800">Danh Sách Lớp & Mã PIN Truy Cập</span>
           <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">
-            {classes.filter(c => (selectedSubjectFilter === 'all' || c.subject === selectedSubjectFilter) && (selectedGradeFilter === 'all' || c.grade === selectedGradeFilter)).length} lớp
+            {classes.filter(c => (!selectedSubjectFilter || selectedSubjectFilter === 'all' || c.subject === selectedSubjectFilter) && (!selectedGradeFilter || selectedGradeFilter === 'all' || c.grade === selectedGradeFilter)).length} lớp
           </span>
         </div>
         <div className="flex items-center gap-2 text-xs">
@@ -199,7 +199,7 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
               onChange={e => setSelectedSubjectFilter(e.target.value)}
               className="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
             >
-              <option value="all">Tất cả môn</option>
+              <option value="">-- (Rỗng / Tất cả) --</option>
               <option value="Toán Học">Toán Học</option>
               <option value="Vật Lý">Vật Lý</option>
               <option value="Hóa Học">Hóa Học</option>
@@ -215,7 +215,7 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
               onChange={e => setSelectedGradeFilter(e.target.value)}
               className="px-2.5 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
             >
-              <option value="all">Tất cả khối</option>
+              <option value="">-- (Rỗng / Tất cả) --</option>
               <option value="Khối 10">Khối 10</option>
               <option value="Khối 11">Khối 11</option>
               <option value="Khối 12">Khối 12</option>
@@ -227,7 +227,7 @@ export const PhanQuyenLopHocView: React.FC<PhanQuyenLopHocViewProps> = ({ curren
       {/* Classes PIN & Teacher Assignment Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {classes
-          .filter(c => (selectedSubjectFilter === 'all' || c.subject === selectedSubjectFilter) && (selectedGradeFilter === 'all' || c.grade === selectedGradeFilter))
+          .filter(c => (!selectedSubjectFilter || selectedSubjectFilter === 'all' || c.subject === selectedSubjectFilter) && (!selectedGradeFilter || selectedGradeFilter === 'all' || c.grade === selectedGradeFilter))
           .map(cls => {
           const isEditing = editingClassId === cls.id;
           const currentPinValue = pinInputs[cls.id] || cls.pinCode;

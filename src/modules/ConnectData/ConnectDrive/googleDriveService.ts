@@ -8,6 +8,8 @@
 import { TeacherDocument } from '../../../services/storageTypes';
 import { isGoogleClientConfigured } from '../../../config/firebase';
 import {
+  formatDocumentTitle,
+  getStoredHierarchy,
   saveStoredHierarchy,
   sanitizeHierarchyStore,
   getDeletedFoldersBlacklist,
@@ -46,11 +48,9 @@ export interface HierarchyDriveResult {
 // Helper function to find a folder by name and parent ID on real Google Drive
 async function findFolderOnDrive(token: string, name: string, parentId?: string): Promise<string | null> {
   try {
-    let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and trashed = false`;
-    if (parentId && parentId !== 'root') {
-      query += ` and '${parentId}' in parents`;
-    }
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents)&pageSize=10`;
+    const cleanParent = parentId && parentId !== 'root' ? parentId : 'root';
+    const query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and '${cleanParent}' in parents and trashed = false`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents,trashed)&pageSize=10`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -65,7 +65,9 @@ async function findFolderOnDrive(token: string, name: string, parentId?: string)
     }
     const data = await res.json();
     if (data.files && data.files.length > 0) {
-      return data.files[0].id;
+      // Tuyệt đối loại bỏ các thư mục đang nằm trong Thùng rác (trashed: true)
+      const activeFolder = data.files.find((f: any) => !f.trashed);
+      return activeFolder ? activeFolder.id : null;
     }
     return null;
   } catch (err: any) {
@@ -206,7 +208,7 @@ async function findFoldersByNameOnDrive(token: string, name: string): Promise<st
 
 // Helper function to find a folder ID by exact hierarchy path
 export async function findFolderPathIdOnDrive(token: string, pathSegments: string[]): Promise<string | null> {
-  let currentParentId: string | undefined = undefined;
+  let currentParentId: string | undefined = 'root';
   for (const segment of pathSegments) {
     const cleanSegment = segment.trim();
     if (!cleanSegment) continue;
@@ -373,10 +375,17 @@ export async function createDriveFolderIfNotExists(
 export const createByPath = createDriveFolderIfNotExists;
 
 /**
- * Quét toàn bộ cây thư mục thực tế từ Google Drive (đường dẫn: myApp / LopU / TaiLieu)
- * để đồng bộ chuẩn xác với ứng dụng, tự động loại bỏ triệt để các thư mục/tài liệu đã bị xóa trên Drive.
+ * GIẢI PHÁP 3: Đồng bộ lai 2 giai đoạn (Hybrid: Quick Root Sync + Background Deep Sync)
+ * - Giai đoạn 1 (Quick Root Sync): Quét ngay danh sách thư mục trực tiếp trong myApp/LopU/TaiLieu
+ *   với 1 truy vấn duy nhất ('${taiLieuId}' in parents and mimeType='application/vnd.google-apps.folder').
+ *   Cập nhật danh sách TÀI LIỆU ngay lập tức cho UI phản hồi tức thì (~0.2s - 0.3s).
+ * - Giai đoạn 2 (Background Deep Sync): Chạy ngầm song song (Promise.all) quét chi tiết
+ *   Chương -> Bài -> Vấn đề -> Chuyên đề và âm thầm cập nhật UI khi hoàn tất mà không chặn tương tác.
  */
-export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
+export async function scanAndSyncDriveHierarchy(
+  onQuickDone?: (store: Record<string, any>, docCount: number) => void,
+  onDeepDone?: (store: Record<string, any>) => void
+): Promise<any | null> {
   const token = await ensureValidDriveToken();
   if (!token) {
     return null;
@@ -389,58 +398,117 @@ export async function scanAndSyncDriveHierarchy(): Promise<any | null> {
       return {};
     }
 
-    const url = `https://www.googleapis.com/drive/v3/files?q='${taiLieuId}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
+    // Đảm bảo chính thư mục TaiLieu không nằm trong Thùng rác (trashed: true)
+    try {
+      const checkTaiLieu = await fetch(`https://www.googleapis.com/drive/v3/files/${taiLieuId}?fields=id,trashed`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (checkTaiLieu.ok) {
+        const tlData = await checkTaiLieu.json();
+        if (tlData.trashed) {
+          console.warn('Thư mục myApp/LopU/TaiLieu nằm trong Thùng rác. Bỏ qua.');
+          return {};
+        }
+      }
+    } catch {}
+
+    // GIAI ĐOẠN 1: Quét trực tiếp thư mục con của TaiLieu (các thư mục Tài liệu)
+    const url = `https://www.googleapis.com/drive/v3/files?q='${taiLieuId}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name,trashed)&pageSize=1000`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
     if (!res.ok) return null;
     const data = await res.json();
-    const docFolders: Array<{ id: string; name: string }> = (data.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
+    const docFolders: Array<{ id: string; name: string }> = (data.files || []).filter((f: any) => f.name && !f.trashed && !deletedList.includes(f.name.trim()));
 
-    const newStore: Record<string, any> = {};
+    // Khởi tạo Quick Store: Kế thừa cache cũ nếu có để người dùng không bị mất cấu trúc hiện tại
+    const cachedStore = getStoredHierarchy();
+    const quickStore: Record<string, any> = {};
     for (const docF of docFolders) {
-      newStore[docF.name] = {};
+      quickStore[docF.name] = cachedStore[docF.name] || {};
+    }
+
+    const sanitizedQuick = sanitizeHierarchyStore(quickStore);
+    saveStoredHierarchy(sanitizedQuick);
+
+    // Báo cho UI ngay lập tức để nạp dropdown TÀI LIỆU sau ~0.2s
+    if (onQuickDone) {
       try {
-        const chuongUrl = `https://www.googleapis.com/drive/v3/files?q='${docF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
-        const chuongRes = await fetch(chuongUrl, { headers: { Authorization: `Bearer ${token}` } });
-        if (chuongRes.ok) {
-          const chuongData = await chuongRes.json();
-          const chuongs = (chuongData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
-          for (const chF of chuongs) {
-            newStore[docF.name][chF.name] = {};
-            const baiUrl = `https://www.googleapis.com/drive/v3/files?q='${chF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
-            const baiRes = await fetch(baiUrl, { headers: { Authorization: `Bearer ${token}` } });
-            if (baiRes.ok) {
-              const baiData = await baiRes.json();
-              const bais = (baiData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
-              for (const bF of bais) {
-                newStore[docF.name][chF.name][bF.name] = {};
-                const vdUrl = `https://www.googleapis.com/drive/v3/files?q='${bF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
-                const vdRes = await fetch(vdUrl, { headers: { Authorization: `Bearer ${token}` } });
-                if (vdRes.ok) {
-                  const vdData = await vdRes.json();
-                  const vds = (vdData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
-                  for (const vdF of vds) {
-                    newStore[docF.name][chF.name][bF.name][vdF.name] = [];
-                    const cdUrl = `https://www.googleapis.com/drive/v3/files?q='${vdF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=100`;
-                    const cdRes = await fetch(cdUrl, { headers: { Authorization: `Bearer ${token}` } });
-                    if (cdRes.ok) {
-                      const cdData = await cdRes.json();
-                      const cds = (cdData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
-                      newStore[docF.name][chF.name][bF.name][vdF.name] = cds.map((c: any) => c.name);
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('Lỗi khi nạp cây con Drive:', err);
+        onQuickDone(sanitizedQuick, docFolders.length);
+      } catch (cbErr) {
+        console.warn('onQuickDone callback error:', cbErr);
       }
     }
 
-    const sanitizedStore = sanitizeHierarchyStore(newStore);
-    saveStoredHierarchy(sanitizedStore);
-    return sanitizedStore;
+    // GIAI ĐOẠN 2: Quét chi tiết Chương -> Bài -> Vấn đề -> Chuyên đề song song (Background Deep Sync)
+    const deepSyncPromise = (async () => {
+      const newStore: Record<string, any> = {};
+
+      await Promise.all(docFolders.map(async (docF) => {
+        newStore[docF.name] = {};
+        try {
+          const chuongUrl = `https://www.googleapis.com/drive/v3/files?q='${docF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=1000`;
+          const chuongRes = await fetch(chuongUrl, { headers: { Authorization: `Bearer ${token}` } });
+          if (!chuongRes.ok) return;
+          const chuongData = await chuongRes.json();
+          const chuongs = (chuongData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
+
+          await Promise.all(chuongs.map(async (chF: any) => {
+            newStore[docF.name][chF.name] = {};
+            try {
+              const baiUrl = `https://www.googleapis.com/drive/v3/files?q='${chF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=1000`;
+              const baiRes = await fetch(baiUrl, { headers: { Authorization: `Bearer ${token}` } });
+              if (!baiRes.ok) return;
+              const baiData = await baiRes.json();
+              const bais = (baiData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
+
+              await Promise.all(bais.map(async (bF: any) => {
+                newStore[docF.name][chF.name][bF.name] = {};
+                try {
+                  const vdUrl = `https://www.googleapis.com/drive/v3/files?q='${bF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=1000`;
+                  const vdRes = await fetch(vdUrl, { headers: { Authorization: `Bearer ${token}` } });
+                  if (!vdRes.ok) return;
+                  const vdData = await vdRes.json();
+                  const vds = (vdData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
+
+                  await Promise.all(vds.map(async (vdF: any) => {
+                    newStore[docF.name][chF.name][bF.name][vdF.name] = [];
+                    try {
+                      const cdUrl = `https://www.googleapis.com/drive/v3/files?q='${vdF.id}'+in+parents+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)&pageSize=1000`;
+                      const cdRes = await fetch(cdUrl, { headers: { Authorization: `Bearer ${token}` } });
+                      if (!cdRes.ok) return;
+                      const cdData = await cdRes.json();
+                      const cds = (cdData.files || []).filter((f: any) => f.name && !deletedList.includes(f.name.trim()));
+                      newStore[docF.name][chF.name][bF.name][vdF.name] = cds.map((c: any) => c.name);
+                    } catch {}
+                  }));
+                } catch {}
+              }));
+            } catch {}
+          }));
+        } catch (err) {
+          console.warn(`Lỗi khi nạp cây con Drive cho [${docF.name}]:`, err);
+        }
+      }));
+
+      const sanitizedDeep = sanitizeHierarchyStore(newStore);
+      saveStoredHierarchy(sanitizedDeep);
+      if (onDeepDone) {
+        try {
+          onDeepDone(sanitizedDeep);
+        } catch (deepErr) {
+          console.warn('onDeepDone callback error:', deepErr);
+        }
+      }
+      return sanitizedDeep;
+    })();
+
+    // Nếu người dùng có đăng ký callback nhận Quick Sync thì trả về ngay Quick Store, để Deep Sync chạy ngầm
+    if (onQuickDone) {
+      return sanitizedQuick;
+    }
+
+    // Nếu không đăng ký callback, chờ Deep Sync hoàn tất (giữ tương thích với code cũ)
+    const result = await deepSyncPromise;
+    return result;
   } catch (err) {
     console.warn('scanAndSyncDriveHierarchy error:', err);
     return null;
@@ -552,19 +620,21 @@ export async function saveTeachingMaterialHierarchyToDrive(
   vanDe: string,
   chuyenDe: string
 ): Promise<HierarchyDriveResult> {
-  const cleanTitle = (docItem.title || 'TaiLieu').trim().replace(/[\s:/\\?*]+/g, '_');
+  // Đảm bảo tên thư mục TÀI LIỆU tuân thủ đúng quy tắc chuẩn: {Môn học} {Số lớp} - {Tên tài liệu}
+  const formattedTitle = formatDocumentTitle(docItem.subject, docItem.grade, docItem.title);
+  const cleanTitle = (formattedTitle || docItem.title || 'TaiLieu').trim().replace(/[\\/:*?"<>|]+/g, ' ').trim();
   const safeChuong = (chuong || docItem.chuong || 'Chương 1: Mở đầu').trim();
   const safeBai = (bai || docItem.bai || 'Bài 1: Kiến thức nền tảng').trim();
   const safeVanDe = (vanDe || docItem.vanDe || 'Vấn đề 1: Lý thuyết trọng tâm').trim();
   const safeChuyenDe = (chuyenDe || docItem.chuyenDe || 'Chuyên đề: Phương pháp giải bài tập').trim();
 
   // Mảng phân đoạn thư mục vật lý để tạo trên Google Drive:
-  // Đường dẫn chuẩn: myApp / LopU / TaiLieu / [Tên tài liệu] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề]
+  // Đường dẫn chuẩn: myApp / LopU / TaiLieu / [Tên tài liệu: {Môn} {Lớp} - {Tên}] / [tên chương] / [tên bài] / [tên vấn đề] / [tên chuyên đề]
   const physicalFolders = [
     'myApp',
     'LopU',
     'TaiLieu',
-    cleanTitle, // [Tên tài liệu]
+    cleanTitle, // [Tên tài liệu chuẩn: {Môn học} {Số lớp} - {Tên tài liệu}]
     safeChuong, // [Tên chương]
     safeBai, // [Tên bài]
     safeVanDe, // [Tên vấn đề]

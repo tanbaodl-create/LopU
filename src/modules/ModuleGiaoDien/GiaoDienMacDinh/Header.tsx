@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   Menu,
   Cloud,
@@ -55,7 +55,35 @@ export const Header: React.FC<HeaderProps> = ({
   onSignOut,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
+  const accountDropdownRef = useRef<HTMLDivElement>(null);
   const meta = getViewMeta(activeView);
+
+  // Đóng menu tài khoản khi click ra ngoài hoặc bấm Escape
+  useEffect(() => {
+    if (!showAccountDropdown) return;
+
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      if (accountDropdownRef.current && !accountDropdownRef.current.contains(event.target as Node)) {
+        setShowAccountDropdown(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowAccountDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showAccountDropdown]);
 
   const isConnected = Boolean(isDriveConnected || firebaseUser);
   const activeConnectedAccount = firebaseUser?.email || currentUserProfile?.email || (isDriveConnected ? driveEmail : '') || 'tanbaodl@gmail.com';
@@ -68,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header
       id="app-main-header"
-      className="sticky top-0 z-30 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs"
+      className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-xs"
     >
       <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Left: Hamburger Button (3 gạch) & Logo & Active View Title */}
@@ -139,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           ) : (
             /* Khi đã kết nối: [tài khoản kết nối] (bỏ chữ Drive:) và dropdown xổ xuống */
-            <div className="relative">
+            <div ref={accountDropdownRef} className="relative">
               <button
                 id="btn-header-account-cluster"
                 onClick={() => setShowAccountDropdown(prev => !prev)}
@@ -157,7 +185,7 @@ export const Header: React.FC<HeaderProps> = ({
               {showAccountDropdown && (
                 <div
                   id="header-account-dropdown-menu"
-                  className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-xl space-y-3 z-50 text-slate-800"
+                  className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl space-y-3 z-[60] text-slate-800 animate-scale-up"
                 >
                   {/* Header tài khoản trong dropdown */}
                   <div className="border-b border-slate-100 pb-2.5">
