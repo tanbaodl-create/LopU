@@ -5,4 +5,6 @@ export { GiaoDienQuanTriLayout } from './GiaoDienQuanTri';
 export { HuongDanWebView } from './HuongDanWeb';
 export { DynamicViewContainer, MENU_GROUPS, getViewMeta } from './Navigation';
 export type { ViewId, MenuGroup, SubMenuItem } from './Navigation';
+export { PptSlideViewer, PptMarkerRail, parseDocumentToSlides } from './modulePPT';
+export type { PptSlideItem, RailMarker, PptRailClickMenuData } from './modulePPT';
 

@@ -38,6 +38,7 @@ import { TeacherDocument, ClassItem, UserRole } from '../../../services/storageT
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
 import { saveTeachingMaterialHierarchyToDrive, getDriveConnectionState } from '../../ConnectData/ConnectDrive/googleDriveService';
 import { HierarchySelector } from '../TaiLieuCaNhan/HierarchySelector';
+import { MenuHamSo } from './MenuHamSo';
 
 export interface SoanThaoViewProps {
   currentRole?: UserRole;
@@ -109,6 +110,26 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
   }, [title, chuyenDe, documents]);
 
   // Các nút công cụ định dạng Word
+  const savedRangeRef = useRef<Range | null>(null);
+  const saveCurrentSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+
+  const insertHtmlToEditor = (html: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const sel = window.getSelection();
+    if (savedRangeRef.current && sel) {
+      sel.removeAllRanges();
+      sel.addRange(savedRangeRef.current);
+    }
+    document.execCommand('insertHTML', false, html);
+    saveCurrentSelection();
+  };
+
   const execCommand = (command: string, value: string = '') => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
@@ -135,13 +156,6 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     }
     tableHtml += '</table><p></p>';
     execCommand('insertHTML', tableHtml);
-  };
-
-  const handleInsertMath = () => {
-    const formula = prompt('Nhập công thức Toán (dạng LaTeX):', '\\lambda = \\frac{v}{f}');
-    if (!formula) return;
-    const mathHtml = `<span style="color: #4f46e5; font-weight: bold; background-color: #f5f3ff; padding: 2px 6px; border-radius: 4px; font-family: monospace;">\\(${formula}\\)</span>&nbsp;`;
-    execCommand('insertHTML', mathHtml);
   };
 
   // Thoát con trỏ ra một dòng mới bên ngoài khối bài giảng
@@ -1049,9 +1063,18 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                 <button onClick={handleInsertTable} className="p-1.5 rounded hover:bg-indigo-100 text-indigo-700 bg-indigo-50/50 transition-colors flex items-center gap-1 text-[11px] font-bold" title="Chèn Bảng">
                   <Table className="w-3.5 h-3.5" /> Chèn Bảng
                 </button>
-                <button onClick={handleInsertMath} className="p-1.5 rounded hover:bg-purple-100 text-purple-700 bg-purple-50/50 transition-colors flex items-center gap-1 text-[11px] font-bold" title="Chèn công thức toán LaTeX">
-                  <span className="font-mono text-[10px] font-black">f(x)</span> Toán LaTeX
-                </button>
+                {/* Module Con Độc Lập: MENU HÀM SỐ (Chèn công thức, Chèn đồ thị TikZ, Chèn bảng biến thiên) */}
+                <MenuHamSo
+                  editorRef={editorRef}
+                  saveCurrentSelection={saveCurrentSelection}
+                  insertHtmlToEditor={insertHtmlToEditor}
+                  currentRole={currentRole}
+                  userFontSize={fontSize}
+                  setNotification={(n) => {
+                    if (n) setNotification({ text: n.text, type: n.type });
+                    else setNotification(null);
+                  }}
+                />
 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 

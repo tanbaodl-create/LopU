@@ -99,9 +99,48 @@ Bây giờ, hãy thực hiện BƯỚC 1!`,
       },
       {
         id: 'math-elearning-ppt',
-        name: 'Tạo Web Side',
-        prompt: `Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
+        name: 'Tạo Web Slide',
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi bị đè mực và toàn bộ bản **Prompt hoàn chỉnh mới nhất** đã được tích hợp bộ chọn màu phong phú cùng thuật toán vẽ chuẩn cho Highlight:
+
+### Giải pháp kỹ thuật xử lý triệt để lỗi mực Highlight:
+
+1. **Thiết lập chế độ hòa trộn (\`mix-blend-mode\` & \`globalCompositeOperation\`):**
+* **CSS trên thẻ canvas:** Gán thuộc tính \`mix-blend-mode: multiply;\` trực tiếp lên \`<canvas>\` để mọi nét vẽ hòa trộn thấu kính vào nền văn bản và công thức Toán bên dưới.
+* **Canvas 2D Context:** Khi kích hoạt Highlight, thiết lập \`ctx.globalCompositeOperation = 'multiply'\` (hoặc sử dụng kỹ thuật đệm canvas phụ *Offscreen Canvas* khi kéo nét chuột) để các điểm trùng lặp trong một nét vẽ **không bị cộng dồn chỉ số Alpha**, giữ cho nét highlight luôn luôn trong suốt và thấy rõ 100% từng nét chữ/công thức Toán phía dưới.
+
+
+2. **Bộ bảng màu (Color Palette):**
+* **Bút viết (Pen):** Đỏ, Xanh dương, Xanh lá, Đen, Vàng cam, Tím (kèm ô chọn màu tự do \`input[type="color"]\`).
+* **Highlight:** Vàng dạ quang, Xanh lá neon, Cam pastel, Hồng neon, Xanh ngọc dạ quang (kèm ô chọn màu tự do).
+
+
+
+---
+
+### BẢN PROMPT TẠO GIÁO ÁN E-LEARNING HOÀN CHỈNH
+
+\`\`\`markdown
+Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Hãy tạo một trang web E-learning bài giảng (chỉ dùng một file HTML duy nhất chứa cả CSS và JS) dựa trên nội dung lý thuyết và hệ thống bài tập tôi cung cấp ở cuối.
+
+YÊU CẦU VỀ NỘI DUNG VÀ CẤU TRÚC SƯ PHẠM (TUYỆT ĐỐI TUÂN THỦ):
+1. Giữ nguyên 100% nội dung gốc: Chỉ lấy đúng nội dung trong mục "NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY", không tự ý thêm các phần lý thuyết hay bài tập không có trong văn bản được cung cấp.
+2. Tuân thủ trật tự sư phạm "Lý thuyết gắn liền Ví dụ minh họa":
+   - Tuyệt đối giữ đúng trình tự xuất hiện của tài liệu gốc: Sau mỗi đơn vị kiến thức/định lí/công thức sẽ là các Ví dụ áp dụng trực tiếp cho phần kiến thức đó (không gom dồn toàn bộ ví dụ về cuối bài).
+   - Chỉ các bài tập thuộc phần Luyện tập/Rèn luyện/Củng cố ở cuối tài liệu mới được xếp vào phần bài tập tổng hợp sau cùng.
+3. Ưu tiên trực quan hóa bằng hình vẽ ở mọi phần lý thuyết:
+   - Tất cả các định nghĩa, định lý, tính chất, hình mẫu hoặc quy tắc trong phần lý thuyết BẮT BUỘC phải ưu tiên dựng hình minh họa đi kèm (chia bố cục 2 cột: 1 bên chữ/công thức, 1 bên hình vẽ trực quan).
+   - Hình vẽ hình học & Sơ đồ minh họa: Sử dụng thuần CSS kết hợp SVG vector nội tuyến (inline SVG) sắc nét, responsive và màu sắc hài hòa.
+   - Đồ thị hàm số & Bảng biến thiên (BBT): Sử dụng TikZ hoặc tikz-tab (nhúng qua TikZJax: https://tikzjax.com/v1/tikzjax.js hoặc render khối SVG tương đương từ mã TikZ chuẩn) để vẽ bảng biến thiên và hệ trục tọa độ, đồ thị hàm số chuẩn xác 100% theo quy chuẩn Toán học THPT Việt Nam (đầy đủ mũi tên biến thiên, các điểm cực trị, tiệm cận, nhãn trục Oxy).
+
+QUY TẮC BẮT BUỘC ĐỂ TRÁNH LỖI "Math input error" (CỰC KỲ QUAN TRỌNG):
+1. Cú pháp bọc công thức đồng nhất:
+   - Tuyệt đối KHÔNG sử dụng \\( và \\) để bọc công thức. Toàn bộ công thức toán nội dòng PHẢI đồng nhất sử dụng cặp dấu đô la $công thức$, công thức riêng dòng dùng $$công thức$$.
+2. Xử lý triệt để bẫy ký tự \\t (Tab character):
+   - Tuyệt đối KHÔNG lạm dụng lệnh \\text{...} bên trong công thức để ghi đơn vị đo hay chữ tiếng Việt (ví dụ: \\text{ cm}, \\text{ m/s}, \\text{ N}). Trình duyệt sẽ hiểu nhầm \\t thành phím Tab (\\text) làm hỏng cú pháp MathJax.
+   - Mọi đơn vị đo lường và từ ngữ tiếng Việt PHẢI đưa ra ngoài dấu $, đặt ở dạng chữ thường HTML (Ví dụ viết: $\\vert\\vec{AB} + \\vec{AD}\\vert = 5$ cm; thay vì viết $\\vert{}\\vec{AB} + \\vec{AD}\\vert{} = 5\\text{ cm}$).
+3. Quy tắc Escape chuỗi 2 tầng trong JavaScript:
+   - Mọi lệnh LaTeX bắt đầu bằng \\ nằm trong chuỗi slideData hoặc template string \`\${...}\` đều phải escape tối thiểu 2 đến 4 dấu gạch chéo ngược (ví dụ: \\\\\\\\vec, \\\\\\\\Delta, \\\\\\\\cos, \\\\\\\\sqrt, \\\\\\\\frac, \\\\\\\\iff, \\\\\\\\Rightarrow, \\\\\\\\mathbb{R}, \\\\\\\\begin{cases}, \\\\\\\\end{cases}, dấu xuống dòng \\\\\\\\\\\\\\\\) để khi trình duyệt gán qua innerHTML không bị nuốt mất ký tự gạch chéo, đảm bảo MathJax nhận đúng mã LaTeX chuẩn.
 
 YÊU CẦU VỀ CẤU TRÚC VÀ GIAO DIỆN (UI/UX):
 1. Chế độ trình chiếu (PPT Mode): 
@@ -110,23 +149,44 @@ YÊU CẦU VỀ CẤU TRÚC VÀ GIAO DIỆN (UI/UX):
    - Xử lý triệt để tràn màn hình và chống cắt lề trái khi zoom: Sử dụng display: flex, vùng chứa (container) áp dụng overflow-x: auto kết hợp min-width: fit-content; slide card có min-width hợp lý (khoảng 800px - 820px). Đảm bảo khi người dùng phóng to (zoom > 200%) trình duyệt hoặc khi công thức dài, thanh cuộn ngang xuất hiện và có thể cuộn trọn vẹn từ mép trái sang mép phải, TUYỆT ĐỐI KHÔNG để mép lề trái bị che khuất hay cắt xén.
    - Bài giảng chia thành nhiều trang (Slide). Chuyển slide bằng nút điều hướng hoặc phím Space / Mũi tên trái (←) / Mũi tên phải (→).
    - Các nội dung trong trang (tiêu đề, định lí, gạch đầu dòng, ví dụ) xuất hiện lần lượt từng bước (fade-in) khi bấm phím Space.
-   - Đối với các phần bài tập dài (Luyện tập, Rèn luyện): Dùng 1 slide chuyển mục riêng để ghi tiêu đề phần (VD: "PHẦN LUYỆN TẬP VÀ RÈN LUYỆN") duy nhất 1 lần, các slide câu hỏi kế tiếp không lặp lại tiêu đề phần này.
+   - Đối với các phần bài tập dài ở cuối bài (Luyện tập, Rèn luyện): Dùng 1 slide chuyển mục riêng để ghi tiêu đề phần (VD: "PHẦN LUYỆN TẬP VÀ RÈN LUYỆN") duy nhất 1 lần, các slide câu hỏi kế tiếp không lặp lại tiêu đề phần này.
 
 2. Chân trang và Tác quyền giáo viên:
    - Dưới chân các slide chỉ hiển thị duy nhất 01 dòng tác quyền in nghiêng căn sát lề phải: "Được tạo bởi Đỗ Tấn Bảo". 
    - Không chèn thêm dòng tên trường hay tên giáo viên ở góc trái chân slide để giao diện tinh giản.
-   - Thông tin giáo viên ("Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia") được đặt gọn gàng ở Slide 1 (Slide bìa) và ở góc dưới của thanh bên (Sidebar).
+   - Thông tin giáo viên ("Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia") được đặt gọn gàng ở Slide 1 (Slide bìa).
 
-3. Định dạng Toán học & Xử lý triệt để lỗi "Math input error":
-   - Tích hợp thư viện MathJax 3 (hỗ trợ cả $inline$ và $$display$$).
-   - ĐẶC BIỆT LƯU Ý KỸ THUẬT: Khi nhúng công thức LaTeX vào chuỗi JavaScript (mảng slideData, chuỗi HTML template string), trình duyệt sẽ nuốt mất ký tự gạch chéo ngược. Do đó, AI PHẢI ESCAPE ĐỦ 4 DẤU GẠCH CHÉO NGƯỢC (\\\\) cho các môi trường như \\\\begin{cases}, \\\\end{cases}, dấu xuống dòng \\\\\\\\, dấu tương đương \\\\iff, suy ra \\\\Rightarrow, tập hợp \\\\mathbb{N}, phân số \\\\frac... để MathJax nhận đúng mã LaTeX và render hoàn hảo 100%, tuyệt đối không xảy ra lỗi Math input error.
+3. BỘ CÔNG CỤ VẼ TRỰC TIẾP TRÊN MÀN HÌNH (CANVAS DRAWING & HIGHLIGHTER):
+   - Tạo một lớp Canvas trong suốt bao phủ toàn màn hình (\`position: fixed; inset: 0; z-index: 9000; pointer-events: none; mix-blend-mode: multiply;\`).
+   - Kỹ thuật xử lý mực Highlight chống đè đậm: Khi vẽ Highlight, thiết lập \`ctx.globalCompositeOperation = 'multiply'\` (hoặc dùng kỹ thuật đệm canvas phụ Offscreen Canvas khi kéo nét chuột) để các điểm trùng lặp trong một nét vẽ KHÔNG BỊ CỘNG DỒN CHỈ SỐ ALPHA, giữ cho nét highlight luôn luôn trong suốt và thấy rõ 100% từng nét chữ/công thức Toán phía dưới.
+   - Bộ bảng màu phong phú (Color Palette):
+     + Nút Bút viết (icon ✏️): Đỏ, Xanh dương, Xanh lá, Đen, Vàng cam, Tím (kèm ô chọn màu tự do \`input[type="color"]\`).
+     + Nút Bút dạ quang Highlight (icon 🖍️): Vàng dạ quang, Xanh lá neon, Cam pastel, Hồng neon, Xanh ngọc dạ quang (kèm ô chọn màu tự do \`input[type="color"]\`).
+   - Bộ điều chỉnh độ dày nét bút: Slider hoặc 3 nấc kích thước nhanh (Mảnh: 2px đối với Pen / 12px đối với Highlight; Vừa: 5px đối với Pen / 20px đối với Highlight; Dày: 9px đối với Pen / 30px đối với Highlight). Tự động áp dụng ngay cho loại bút đang kích hoạt.
+   - Nút Xóa bảng (icon 🗑️ hoặc 🧹): Xóa toàn bộ nét vẽ của slide hiện tại.
+   - Nút Đóng chế độ vẽ (icon ❌): Trả chuột về chế độ thao tác thông thường.
+   - Tự động xóa nét vẽ khi chuyển sang Slide khác.
 
-4. Thanh điều khiển lề phải (Sidebar) & Vòng quay học sinh:
-   - Cố định bên phải màn hình, có nút tròn nổi (Floating Button) chứa biểu tượng (☰ / ✕) để thu gọn hoặc mở ra.
-   - Cụm điều hướng: Bộ đếm slide hiện tại (VD: 1/18), nút Trang trước, nút Tiếp theo.
-   - Nút "Sửa danh sách": Mở Popup nhập/chỉnh sửa danh sách học sinh (lưu vào LocalStorage).
-   - Nút "Gọi ngẫu nhiên": Vòng quay tên học sinh trực tiếp (Inline Roulette) có hiệu ứng chạy chậm dần, khi dừng trúng tên sẽ nổ pháo giấy Confetti và phát âm thanh Tada.
-   - Nút "File HS (PDF)": Mở Popup cho phép in hoặc lưu PDF gửi học sinh. Nội dung gồm Tóm tắt lý thuyết và toàn bộ Đề bài các câu hỏi (tuyệt đối không xuất lời giải chi tiết), có checkbox tùy chọn kèm Bảng đáp án ngắn (A/B/C/D, Đ/S, số) ở cuối trang.
+4. Cụm công cụ Gọi học sinh nổi neo GÓC TRÊN BÊN PHẢI (Top-Right Tools):
+   - ĐỘ ĐỘC LẬP TỈ LỆ (100% SCALE): Toàn bộ cụm nút nổi và thẻ hiển thị cố định ở góc trên bên phải màn hình (position: fixed; top: 20px; right: 20px; z-index: 99999). Thiết lập CSS theo đơn vị pixel cố định để dù màn hình bài giảng bị phóng to hay thu nhỏ (zoom trình duyệt 25% - 500%), toàn bộ cụm nút và ô hiện tên vẫn giữ nguyên tỉ lệ 100% sắc nét.
+   - NÚT BẤM VÀ CÀI ĐẶT:
+     + Nút quay chính mang biểu tượng Vòng quay/Xúc xắc (🎲 hoặc 🔄).
+     + Bộ chọn số lượng học sinh: Mặc định là 1, có nút [-] [+] để điều chỉnh. 
+     + GIỚI HẠN SỐ LƯỢNG QUAY: Số lượng quay tối đa cho phép chọn bằng đúng 4/5 (tức 80%) tổng số học sinh hiện có trong danh sách (tính bằng công thức Math.floor(danhSach.length * 0.8)). Nếu số lượng vượt quá mức này, nút [+] tự động khóa hoặc thông báo cảnh báo.
+     + Nút Bút vẽ (icon ✏️) nằm cạnh cụm công cụ để mở nhanh thanh vẽ/highlight bất kỳ lúc nào.
+     + Kế bên dưới nút quay là nút Cài đặt (icon ⚙ hoặc ⋮). Khi bấm vào, xổ ra 2 nút con phía dưới:
+       * Nút "Sửa danh sách" (icon 📝): Mở popup thêm/sửa danh sách học sinh (lưu LocalStorage). Tự động cập nhật lại giới hạn 4/5 số lượng quay ngay sau khi lưu.
+       * Nút "Xuất file HS" (icon 📄): Mở popup xuất/in PDF gồm Tóm tắt lý thuyết và toàn bộ Đề bài (tuyệt đối không kèm lời giải, có checkbox tùy chọn bảng đáp án ngắn ở cuối).
+   - Ô HIỂN THỊ TÊN VÀ CHU TRÌNH QUAY TUẦN TỰ TỪNG HỌC SINH (SEQUENTIAL ASYNC MULTI-PICK):
+     + KHÔNG MỞ CỬA SỔ/POPUP MỚI: Thẻ danh sách trượt dài ra ngay BÊN TRÁI cụm biểu tượng góc trên bên phải, hiển thị N hàng danh sách tương ứng số lượng cần gọi.
+     + YÊU CẦU KỸ THUẬT BẮT BUỘC ĐỂ TRÁNH ĐỨNG HÌNH:
+       * TUYỆT ĐỐI KHÔNG dùng vòng lặp for/forEach thông thường lồng setInterval để chạy đồng thời.
+       * BẮT BUỘC dùng cơ chế async/await kết hợp Promise để quay tuần tự: Học sinh thứ nhất quay xong, Promise resolve() thì hàm await mới kích hoạt quay học sinh thứ 2, thứ 3...
+       * Mỗi học sinh quay trong đúng 4 GIÂY: Chạy lướt cực nhanh trong 2.5s đầu và giảm tốc rõ rệt trong 1.5s cuối.
+       * Khi chốt tên học sinh thứ i: Hàng thứ i sáng rực ánh neon, phát âm thanh Tada và nổ pháo hoa Confetti hoặc trái tim ĐÚNG VỊ TRÍ hàng i (sử dụng tọa độ getBoundingClientRect()). Đồng thời loại học sinh này khỏi danh sách tạm để không bị chọn trùng.
+       * Sau đó tự động chuyển sang quay hàng thứ i + 1.
+     + Luân phiên ngẫu nhiên 5 mẫu hiệu ứng (3 kiểu pháo hoa rực rỡ và 2 kiểu bung nổ hình trái tim bằng shapes: ['heart']) tại từng hàng tương ứng.
+     + Sau khi chốt đủ toàn bộ danh sách, cả bảng tên hiển thị đầy đủ trong 10 giây (kèm nút x đóng nhanh) trước khi tự động thu gọn.
 
 YÊU CẦU VỀ HỆ THỐNG CÂU HỎI (QUIZ):
 1. Mỗi câu hỏi nằm trên 1 Slide riêng biệt, gồm đủ 3 dạng chuẩn:
@@ -134,8 +194,8 @@ YÊU CẦU VỀ HỆ THỐNG CÂU HỎI (QUIZ):
    - Trắc nghiệm Đúng / Sai (chọn 4 ý a, b, c, d).
    - Trả lời ngắn (ô input nhập số nguyên hoặc số thập phân).
    - Giữ nguyên tuyệt đối tiền tố và cách đánh số từ dữ liệu gốc (VD: "TNLC 1.", "TNDS 1.", "TLN 1.", "Ví dụ 1"...).
-2. Bộ đếm thời gian & Tự kích hoạt vòng quay:
-   - Mỗi câu có nút bắt đầu đếm ngược (45s, 60s, 90s...). Khi hết giờ, tự động đổi màu hiển thị "HẾT GIỜ!", tự động mở thanh Sidebar ra (nếu đang ẩn) và tự động kích hoạt tính năng "Gọi ngẫu nhiên" học sinh.
+2. Bộ đếm thời gian & Tự kích hoạt gọi học sinh:
+   - Mỗi câu có nút bắt đầu đếm ngược (45s, 60s, 90s...). Khi hết giờ, tự động đổi màu hiển thị "HẾT GIỜ!" và tự động kích hoạt tính năng quay gọi học sinh tuần tự theo số lượng đang thiết lập hiện tại.
 3. Nút "Kiểm tra đáp án":
    - ĐÚNG: Nháy viền xanh, nổ Confetti, phát âm thanh Success.
    - SAI: Nháy viền đỏ, rung lắc (shake animation), phát âm thanh Error.
@@ -147,15 +207,21 @@ DỮ LIỆU CDN CẦN DÙNG:
 - Tada Audio: https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3
 - Confetti: https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js
 - MathJax 3: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+- TikZJax (hỗ trợ tikz & tikz-tab): https://tikzjax.com/v1/tikzjax.js
 
-QUY TRÌNH THỰC HIỆN:
-- Bước 1: Khi tôi gửi nội dung, hãy tóm tắt lý thuyết trọng tâm và đề xuất danh sách câu hỏi trắc nghiệm/tự luận đúng cấu trúc để tôi duyệt.
-- Bước 2: Sau khi tôi duyệt, hãy XUẤT TRỰC TIẾP TOÀN BỘ MÃ NGUỒN VÀO TRÌNH BIÊN DỊCH MÃ (code block markdown) để tôi chỉ cần bấm nút Copy là xong (tuyệt đối không xuất dưới dạng file đính kèm).
+QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
+- BƯỚC 1: TIẾP NHẬN, ĐỀ XUẤT VÀ CHỜ DUYỆT (TUYỆT ĐỐI CHƯA ĐƯỢC XUẤT CODE HTML Ở BƯỚC NÀY):
+   + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ/đồ thị/BBT dự kiến đi kèm -> Các ví dụ minh họa đi kèm mục đó -> Phần bài tập rèn luyện cuối bài.
+   + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
+   + DỪNG LẠI và hỏi ý kiến tôi xem cần chỉnh sửa, thêm bớt hay điều chỉnh gì về tiến trình này không.
+- BƯỚC 2: XUẤT MÃ NGUỒN HOÀN CHỈNH:
+   + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận với tiến trình dạy học ở Bước 1, bạn mới bắt đầu tạo và XUẤT TRỰC TIẾP TOÀN BỘ MÃ NGUỒN VÀO TRÌNH BIÊN DỊCH MÃ (code block markdown) trong một file duy nhất để tôi chỉ cần bấm nút Copy (tuyệt đối không xuất dưới dạng file đính kèm).
 
 ---------------------------------------------------
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
-[Dán nội dung lý thuyết, ví dụ và bài tập của bài học mới vào đây]`,
-        description: 'Prompt tối ưu hóa thiết lập giáo án trình chiếu slide bài giảng Toán học (PPT Mode) với tính năng chống tràn màn hình, escape dấu gạch chéo ngược LaTeX, tự động mở Sidebar khi hết giờ và Roulette quay thưởng.'
+[Dán nội dung lý thuyết, ví dụ và bài tập của bài học mới vào đây]
+\`\`\``,
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo Web Slide E-learning Toán THPT (1 file HTML): Giải pháp hòa trộn mix-blend-mode & multiply chống đè mực highlight, bộ chọn màu đa dạng (Pen & Highlight), trực quan TikZ/tikz-tab, chuẩn MathJax chống lỗi, quay gọi học sinh tuần tự async/await và câu hỏi tương tác Quiz.'
       }
     ]
   }

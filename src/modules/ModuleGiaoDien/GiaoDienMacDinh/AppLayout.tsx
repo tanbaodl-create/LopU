@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './Header';
 import { SidebarDrawer } from './SidebarDrawer';
+import { Footer } from './Footer';
 import { DynamicViewContainer, ViewId } from '../Navigation';
 import { UserRole, UserProfile } from '../../../services/storageTypes';
 import { auth, isFirebaseConfigured } from '../../../config/firebase';
@@ -297,25 +298,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         />
       </main>
 
-      {/* 4. Footer: Danh ngôn giáo dục mang ý nghĩa cố gắng, kiên trì sẽ thành công chạy từ phải sang trái, mỗi buổi của ngày là 1 câu */}
-      <footer id="app-footer" className="bg-white border-t border-slate-200 py-2.5 overflow-hidden select-none">
-        <div className="w-full overflow-hidden whitespace-nowrap relative">
-          <div className="animate-marquee inline-block text-xs font-medium text-slate-700 tracking-wide">
-            {(() => {
-              const hour = new Date().getHours();
-              if (hour >= 5 && hour < 12) {
-                return '🌅 Buổi Sáng: «Học tập không phải là đích đến mà là hành trình của lòng kiên trì. Mỗi nỗ lực hôm nay là nền móng vững chắc cho thành công rực rỡ ngày mai. Hãy kiên tâm vững bước!»';
-              } else if (hour >= 12 && hour < 14) {
-                return '☀️ Buổi Trưa: «Nghị lực và sự bền bỉ chiến thắng tất cả mọi trở ngại. Người kiên trì tích lũy kiến thức từng chút một chính là người chạm đến đỉnh vinh quang.»';
-              } else if (hour >= 14 && hour < 18) {
-                return '🌇 Buổi Chiều: «Đường dài vạn dặm bắt đầu từ từng bước chân kiên định. Chỉ cần không dừng lại, sự kiên trì vượt khó trong học tập chắc chắn sẽ mở rộng cánh cửa tương lai.»';
-              } else {
-                return '🌙 Buổi Tối: «Cần cù bù thông minh, kiên trì ắt thành công. Những giờ phút miệt mài gieo hạt giống tri thức hôm nay sẽ biến mọi ước mơ của bạn thành hiện thực rạng ngời.»';
-              }
-            })()}
-          </div>
-        </div>
-      </footer>
+      {/* 4. Footer: Danh ngôn giáo dục cấu hình tại file Footer.tsx riêng biệt */}
+      <Footer />
 
       {/* 5. Google Drive Integration Modal & File Manager */}
       {showDriveModal && (

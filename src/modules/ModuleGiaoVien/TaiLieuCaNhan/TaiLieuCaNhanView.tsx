@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Plus,
   Cloud,
@@ -33,6 +34,7 @@ import {
   AlertCircle,
   Trash2,
   EyeOff,
+  Table,
 } from 'lucide-react';
 import { TeacherDocument, ClassItem, UserRole, UserProfile, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
 import { getClasses, getTeacherDocuments, saveTeacherDocument, deleteTeacherDocument, getUsers } from '../../ConnectData/ConnectFirestore';
@@ -63,6 +65,7 @@ import {
   getGradeNumber,
 } from './hierarchyData';
 import { HierarchySelector } from './HierarchySelector';
+import { TrangKienThucChuyenDe } from './TrangKienThucChuyenDe';
 import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 import { MathTypeEditorModal } from './MathTypeEditorModal';
 import { MathFormulaRenderer } from './MathFormulaRenderer';
@@ -126,40 +129,78 @@ export function formatDocumentTitleWithSubjectGrade(rawTitle: string, subjectNam
  * Tự động phân tích tên trục hoành, trục tung và biến từ công thức hàm số (Ví dụ: N=t^3+3t -> xLabel='t', yLabel='N')
  */
 export function inferAxesLabels(formula: string): { xLabel: string; yLabel: string; varName: string; rhs: string } {
+  const clean = (formula || '').trim();
   let lhs = 'y';
-  let rhs = formula.trim();
-  if (formula.includes('=')) {
-    const parts = formula.split('=');
-    lhs = parts[0].trim() || 'y';
-    rhs = parts.slice(1).join('=').trim();
-  }
-
-  let yLabel = lhs;
+  let rhs = clean;
+  let yLabel = 'y';
   let xLabel = 'x';
   let varName = 'x';
 
-  if (lhs.includes('(') && lhs.includes(')')) {
-    const inner = lhs.match(/\(([^)]+)\)/);
-    if (inner && inner[1].trim()) {
-      xLabel = inner[1].trim();
-      varName = inner[1].trim();
-    }
-  }
+  if (!clean) return { xLabel, yLabel, varName, rhs };
 
-  if (xLabel === 'x') {
-    if (/(?:^|[^a-zA-Z])t(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bt\b/.test(rhs) || /\d+t/.test(rhs)) {
-      xLabel = 't';
-      varName = 't';
-    } else if (/(?:^|[^a-zA-Z])u(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bu\b/.test(rhs) || /\d+u/.test(rhs)) {
-      xLabel = 'u';
-      varName = 'u';
-    } else if (/(?:^|[^a-zA-Z])z(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bz\b/.test(rhs)) {
-      xLabel = 'z';
-      varName = 'z';
-    } else if (/(?:^|[^a-zA-Z])x(?:$|[^a-zA-Z0-9])/.test(rhs) || /\bx\b/.test(rhs) || /\d+x/.test(rhs)) {
-      xLabel = 'x';
-      varName = 'x';
+  if (clean.includes('=')) {
+    const parts = clean.split('=');
+    lhs = parts[0].trim() || 'y';
+    rhs = parts.slice(1).join('=').trim();
+
+    // 1. Tên hàm (trước dấu =)
+    const parenMatch = lhs.match(/^([a-zA-Z_]\w*)\s*\(\s*([a-zA-Z_]\w*)\s*\)$/);
+    if (parenMatch) {
+      yLabel = parenMatch[1];
+      xLabel = parenMatch[2] || 'x';
+      varName = xLabel;
+    } else if (/^[a-zA-Z_]\w*$/.test(lhs)) {
+      yLabel = lhs;
     }
+
+    // 2. Tên biến (sau dấu =)
+    if (!parenMatch) {
+      const mathKeywords = new Set([
+        'sin', 'cos', 'tan', 'cot', 'ln', 'log', 'exp', 'sqrt', 'pi', 'abs', 'frac', 'cdot', 'times'
+      ]);
+      const tokens = rhs.match(/[a-zA-Z]+/g) || [];
+      const nonKeywordVars: string[] = [];
+      tokens.forEach(tok => {
+        if (!mathKeywords.has(tok.toLowerCase())) {
+          for (const char of tok) {
+            if (!nonKeywordVars.includes(char)) {
+              nonKeywordVars.push(char);
+            }
+          }
+        }
+      });
+
+      if (nonKeywordVars.length === 1) {
+        varName = nonKeywordVars[0];
+      } else if (nonKeywordVars.length > 1) {
+        if (nonKeywordVars.includes('x')) varName = 'x';
+        else if (nonKeywordVars.includes('t')) varName = 't';
+        else if (yLabel !== 'y' && nonKeywordVars.includes('y')) varName = 'y';
+        else varName = nonKeywordVars[0];
+      } else {
+        varName = 'x';
+      }
+      xLabel = varName;
+    }
+  } else {
+    const mathKeywords = new Set(['sin', 'cos', 'tan', 'cot', 'ln', 'log', 'exp', 'sqrt', 'pi', 'abs', 'frac']);
+    const tokens = clean.match(/[a-zA-Z]+/g) || [];
+    const nonKeywordVars: string[] = [];
+    tokens.forEach(tok => {
+      if (!mathKeywords.has(tok.toLowerCase())) {
+        for (const char of tok) {
+          if (!nonKeywordVars.includes(char)) {
+            nonKeywordVars.push(char);
+          }
+        }
+      }
+    });
+    if (nonKeywordVars.length === 1) varName = nonKeywordVars[0];
+    else if (nonKeywordVars.includes('x')) varName = 'x';
+    else if (nonKeywordVars.includes('t')) varName = 't';
+    else if (nonKeywordVars.length > 0) varName = nonKeywordVars[0];
+    xLabel = varName;
+    yLabel = 'y';
   }
 
   return { xLabel, yLabel, varName, rhs };
@@ -242,6 +283,19 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [notification, setNotification] = useState<string | null>(null);
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
 
+  // Trạng thái hiển thị trang 1. Kiến thức của Chuyên đề (KienThuc.html & HinhAnh, AmThanh, Video)
+  const [selectedChuyenDeForKienThuc, setSelectedChuyenDeForKienThuc] = useState<{
+    subject: string;
+    grade: string;
+    title: string;
+    chuong: string;
+    bai: string;
+    vanDe: string;
+    chuyenDe: string;
+  } | null>(null);
+  const [activeChuyenDeTienTrinh, setActiveChuyenDeTienTrinh] = useState<'kienThuc' | 'luyenTap' | 'kiemTra' | 'caiThien'>('kienThuc');
+  const [showKienThucView, setShowKienThucView] = useState<boolean>(true);
+
   // New Doc Form modal state with 4-level hierarchy: Chương -> Bài -> Vấn đề -> Chuyên đề
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [newTitle, setNewTitle] = useState<string>('');
@@ -271,6 +325,12 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [showMathTypeModal, setShowMathTypeModal] = useState<boolean>(false);
   const [mathModalInitialFormula, setMathModalInitialFormula] = useState<string>('');
 
+  // Chèn Bảng vào tài liệu (nhập số dòng, số cột, có tiêu đề hay không)
+  const [showTableModal, setShowTableModal] = useState<boolean>(false);
+  const [tableRows, setTableRows] = useState<number>(3);
+  const [tableCols, setTableCols] = useState<number>(3);
+  const [tableHasHeader, setTableHasHeader] = useState<boolean>(true);
+
   // Đính kèm / Chèn file (bổ sung chèn được file .html)
   const [attachedFiles, setAttachedFiles] = useState<Array<{ name: string; size: string; ext: string; isHtml: boolean }>>([]);
   const fileUploadRef = useRef<HTMLInputElement>(null);
@@ -278,6 +338,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const bbtUploadRef = useRef<HTMLInputElement>(null);
   const imageUploadRef = useRef<HTMLInputElement>(null);
   const [openInsertMenuModal, setOpenInsertMenuModal] = useState<boolean>(false);
+  const [openFunctionMenuModal, setOpenFunctionMenuModal] = useState<boolean>(false);
   const [expandedGraphMenu, setExpandedGraphMenu] = useState<boolean>(false);
   const [expandedBbtMenu, setExpandedBbtMenu] = useState<boolean>(false);
 
@@ -291,6 +352,8 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [graphXMax, setGraphXMax] = useState<string>('2');
   const [graphYMin, setGraphYMin] = useState<string>('-2');
   const [graphYMax, setGraphYMax] = useState<string>('4');
+  const [graphUnitX, setGraphUnitX] = useState<string>('1');
+  const [graphUnitY, setGraphUnitY] = useState<string>('1');
   const [graphOldTikz, setGraphOldTikz] = useState<string>('');
 
   const [showBBTModal, setShowBBTModal] = useState<boolean>(false);
@@ -494,7 +557,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 
   const handleAutoAlignSketch = () => {
     if (drawSketchType === 'graph') {
-      setSketchRecognizedShape('Đã nắn chỉnh: Đồ thị hàm số liên tục & Trục tọa độ chuẩn');
+      setSketchRecognizedShape('Đồ thị hàm số liên tục & Trục tọa độ chuẩn');
       setSketchGeneratedTikZ(`\\begin{tikzpicture}[scale=0.85, >=stealth]
   \\draw[->,thick] (-3.5,0) -- (3.5,0) node[right] {$x$};
   \\draw[->,thick] (0,-2.5) -- (0,4.5) node[above] {$y$};
@@ -502,7 +565,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   \\node at (0,0) [below left] {$O$};
 \\end{tikzpicture}`);
     } else {
-      setSketchRecognizedShape('Đã nắn chỉnh: Bảng biến thiên 3 hàng 4 cột với mũi tên tăng/giảm');
+      setSketchRecognizedShape('Bảng biến thiên 3 hàng 4 cột với mũi tên tăng/giảm');
       setSketchGeneratedTikZ(`\\begin{tikzpicture}
   \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
   \\tkzTabLine{, +, 0, -, 0, +, }
@@ -518,7 +581,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
         detail: {
           code: sketchGeneratedTikZ,
           type: 'sketch',
-          title: drawSketchType === 'graph' ? 'Đồ thị TikZ (Tự vẽ)' : 'Bảng biến thiên tikz-tab (Tự vẽ)'
+          title: drawSketchType === 'graph' ? 'Đồ thị TikZ' : 'Bảng biến thiên tikz-tab'
         }
       }));
       setNotification(`Đã chèn ${drawSketchType === 'graph' ? 'đồ thị' : 'bảng biến thiên'} tự vẽ tay thành công!`);
@@ -603,6 +666,32 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
       }
     }
 
+    // Nếu người dùng nhập tọa độ điểm cụ thể trong yêu cầu
+    const pointMatches = graphRequirement.matchAll(/(?:điểm\s+)?(?:[A-Z]\s*)?\(\s*(-?\d+(?:\.\d+)?)\s*[,;]\s*(-?\d+(?:\.\d+)?)\s*\)/gi);
+    for (const match of pointMatches) {
+      const px = parseFloat(match[1]);
+      const py = parseFloat(match[2]);
+      if (!isNaN(px) && !isNaN(py)) {
+        if (!extremaList.some(e => Math.abs(e.x - px) < 0.1 && Math.abs(e.y - py) < 0.1)) {
+          extremaList.push({ x: px, y: py });
+        }
+      }
+    }
+
+    const reqLower = (graphRequirement || '').toLowerCase();
+    const hasGiong = reqLower.includes('gióng') || reqLower.includes('giong') || reqLower.includes('tọa độ') || reqLower.includes('đường gióng');
+    const isReqRed = reqLower.includes('đỏ') || reqLower.includes('red');
+    const isReqDashed = reqLower.includes('nét đứt') || reqLower.includes('đứt') || reqLower.includes('dashed');
+
+    // Phân biệt kiểu dáng đường gióng vs đồ thị:
+    const isGuidelineRed = hasGiong && isReqRed;
+    const guidelineColorTikz = isGuidelineRed ? 'red' : 'gray';
+
+    const isCurveExplicitRed = /đồ thị.*(?:màu\s+)?đỏ|đường cong.*(?:màu\s+)?đỏ|hàm số.*(?:màu\s+)?đỏ/i.test(reqLower) || (isReqRed && !hasGiong);
+    const isCurveExplicitDashed = /đồ thị.*(?:nét\s+)?đứt|đường cong.*(?:nét\s+)?đứt|hàm số.*(?:nét\s+)?đứt/i.test(reqLower) || (isReqDashed && !hasGiong);
+    const curveColorTikz = isCurveExplicitRed ? 'red' : 'blue';
+    const curveDashTikz = isCurveExplicitDashed ? ',dashed' : '';
+
     // Sinh mã gióng cực trị: vị trí nhãn tránh đè lên trục, đường gióng và đồ thị
     const extremaTikzLines = extremaList.map(e => {
       const xFmt = formatCoordinateMath(e.x);
@@ -614,11 +703,11 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
       // Nếu x >= 0 đường gióng đi sang phải -> đặt nhãn y ở left; nếu x < 0 đường gióng đi sang trái -> đặt nhãn y ở right
       const yPos = e.x >= 0 ? 'left' : 'right';
 
-      return `  % Gióng tọa độ điểm cực trị (${xFmt.raw}, ${yFmt.raw})
-  \\draw[dashed, thin, gray] (${xStr},0) -- (${xStr},${yStr}) -- (0,${yStr});
-  \\fill (${xStr},${yStr}) circle (1.8pt);
-  ${Math.abs(e.x) > 0.1 ? `\\node at (${xStr},0) [${xPos}, font=\\footnotesize] {$${xFmt.tex}$};` : ''}
-  ${Math.abs(e.y) > 0.1 ? `\\node at (0,${yStr}) [${yPos}, font=\\footnotesize] {$${yFmt.tex}$};` : ''}`;
+      return `  % Gióng tọa độ điểm (${xFmt.raw}, ${yFmt.raw})
+  \\draw[dashed, thin, ${guidelineColorTikz}] (${xStr},0) -- (${xStr},${yStr}) -- (0,${yStr});
+  \\fill[${guidelineColorTikz === 'red' ? 'red' : 'black'}] (${xStr},${yStr}) circle (1.8pt);
+  ${Math.abs(e.x) > 0.1 ? `\\node at (${xStr},0) [${xPos}, font=\\footnotesize${isGuidelineRed ? ', text=red' : ''}] {$${xFmt.tex}$};` : ''}
+  ${Math.abs(e.y) > 0.1 ? `\\node at (0,${yStr}) [${yPos}, font=\\footnotesize${isGuidelineRed ? ', text=red' : ''}] {$${yFmt.tex}$};` : ''}`;
     }).join('\n');
 
     const reqComment = graphRequirement ? `\n  % Yêu cầu: ${graphRequirement}` : '';
@@ -634,7 +723,7 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
 ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị nằm gọn trong hình chữ nhật (x_min, y_min) -- (x_max, y_max)
   \\begin{scope}
     \\clip (${xMinNum}, ${yMinNum}) rectangle (${xMaxNum}, ${yMaxNum});
-    \\draw[domain=${xMinNum}:${xMaxNum},smooth,variable=\\${varName},blue,ultra thick] plot ({\\${varName}},{${cleanFormulaForTikz || `\\${varName}*\\${varName} - 1`}});
+    \\draw[domain=${xMinNum}:${xMaxNum},smooth,variable=\\${varName},${curveColorTikz}${curveDashTikz},ultra thick] plot ({\\${varName}},{${cleanFormulaForTikz || `\\${varName}*\\${varName} - 1`}});
   \\end{scope}
 \\end{tikzpicture}`;
 
@@ -701,6 +790,39 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setNotification(`Đã chèn bảng biến thiên tikz-tab từ hình ảnh ${file.name}!`);
     setTimeout(() => setNotification(null), 4000);
     e.target.value = '';
+  };
+
+  // Xử lý chèn bảng vào nội dung tài liệu (số dòng, số cột, tùy chọn có tiêu đề)
+  const handleConfirmInsertTable = () => {
+    const r = Math.max(1, Math.min(tableRows || 3, 50));
+    const c = Math.max(1, Math.min(tableCols || 3, 20));
+
+    let tableText = '';
+    if (tableHasHeader) {
+      const headers = Array.from({ length: c }, (_, j) => `Tiêu đề ${j + 1}`);
+      const dividers = Array.from({ length: c }, () => `---`);
+      tableText += `| ${headers.join(' | ')} |\n`;
+      tableText += `| ${dividers.join(' | ')} |\n`;
+    }
+    for (let i = 0; i < r; i++) {
+      const cells = Array.from({ length: c }, (_, j) => `Ô ${i + 1}.${j + 1}`);
+      tableText += `| ${cells.join(' | ')} |\n`;
+    }
+
+    setNewSnippet(prev => (prev ? prev.trim() + '\n\n' + tableText.trim() : tableText.trim()));
+
+    // Đồng thời phát sự kiện cho cửa sổ soạn thảo Word / câu hỏi
+    window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
+      detail: {
+        code: tableText,
+        type: 'table',
+        title: `Bảng ${r} dòng x ${c} cột`
+      }
+    }));
+
+    setShowTableModal(false);
+    setNotification(`Đã chèn bảng (${r} dòng x ${c} cột${tableHasHeader ? ', có tiêu đề' : ''}) thành công để giáo viên nhập!`);
+    setTimeout(() => setNotification(null), 3500);
   };
 
   const handleInsertImageFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2014,58 +2136,123 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // 1. Đồng bộ cấp Tài liệu: Khi Môn học + Khối lớp khác rỗng:
   // - Dropdown hiển thị ngay dữ liệu đã có trong bộ nhớ cục bộ.
-  // - Đồng thời thực hiện đồng bộ Drive từ thư mục gốc myApp/LopU/TaiLieu để tìm các tài liệu khớp tiền tố "{Môn} {Số lớp} - ", kết quả cập nhật ngay vào dữ liệu cục bộ.
+  // - Đồng thời thực hiện đồng bộ Drive từ thư mục gốc myApp/LopU/TaiLieu để tìm các tài liệu khớp tiền tố "{Môn} {Số lớp} - " hoặc format môn/lớp, duy trì thông báo "Đang đồng bộ" cho đến khi tài liệu đã vào dropdown.
   useEffect(() => {
     if (filterSubject && filterGrade) {
+      let isMounted = true;
       setSyncingLevel('title');
       setIsDriveSyncing(true);
       setNotification(`Đang đồng bộ Drive cho ${filterSubject} - ${filterGrade}...`);
 
-      const cleanGradeNum = filterGrade.replace(/\D/g, '');
-      const targetPrefix = `${filterSubject.trim()} ${cleanGradeNum} - `.toLowerCase();
+      const doSync = async () => {
+        try {
+          // Đảm bảo thư mục myApp/LopU/TaiLieu sẵn sàng trên Drive
+          await createByPath(['myApp', 'LopU', 'TaiLieu']);
 
-      getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']).then(res => {
-        if (res.success && res.tree && res.tree.children) {
+          // Quét đồng bộ nhanh với độ sâu maxDepth: 2, đồng thời tải Firestore docs
+          const [firestoreDocs, driveRes] = await Promise.all([
+            getTeacherDocuments().catch(() => []),
+            getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { maxDepth: 2 }).catch(err => ({
+              success: false,
+              tree: null,
+              message: String(err),
+            }))
+          ]);
+
+          if (!isMounted) return;
+
+          if (firestoreDocs && firestoreDocs.length > 0) {
+            setDocuments(firestoreDocs);
+          }
+
+          const cleanGradeNum = filterGrade.replace(/\D/g, '');
+          const targetPrefix = `${filterSubject.trim()} ${cleanGradeNum} - `.toLowerCase();
+          const blacklist = getDeletedFoldersBlacklist();
+          let matchedCount = 0;
+
           setHierarchyStore(prev => {
             const newHierarchy: HierarchyStore = { ...prev };
-            const blacklist = getDeletedFoldersBlacklist();
             const folderIds = { ...docFolderIdsRef.current };
 
-            for (const docNode of res.tree!.children!) {
-              if (docNode.type === 'folder' && !blacklist.includes(docNode.name)) {
-                if (docNode.id) folderIds[docNode.name] = docNode.id;
-                
-                const nameLower = docNode.name.toLowerCase().trim();
-                const isMatched = nameLower.startsWith(targetPrefix) || matchesSubjectAndGrade(docNode.name, filterSubject, filterGrade);
+            // 1. Cập nhật các thư mục tìm thấy từ Google Drive
+            if (driveRes && driveRes.success && driveRes.tree && driveRes.tree.children) {
+              for (const docNode of driveRes.tree.children) {
+                if (docNode.type === 'folder' && !blacklist.includes(docNode.name)) {
+                  if (docNode.id) folderIds[docNode.name] = docNode.id;
+                  
+                  const nameLower = docNode.name.toLowerCase().trim();
+                  const isMatched = nameLower.startsWith(targetPrefix) || matchesSubjectAndGrade(docNode.name, filterSubject, filterGrade);
 
-                if (isMatched) {
-                  if (!newHierarchy[docNode.name]) newHierarchy[docNode.name] = {};
-                  if (docNode.children) {
-                    for (const chNode of docNode.children) {
-                      if (chNode.type === 'folder' && !blacklist.includes(chNode.name)) {
-                        if (chNode.id) folderIds[`${docNode.name}/${chNode.name}`] = chNode.id;
-                        if (!newHierarchy[docNode.name][chNode.name]) newHierarchy[docNode.name][chNode.name] = {};
+                  if (isMatched) {
+                    matchedCount++;
+                    if (!newHierarchy[docNode.name]) newHierarchy[docNode.name] = {};
+                    if (docNode.children) {
+                      for (const chNode of docNode.children) {
+                        if (chNode.type === 'folder' && !blacklist.includes(chNode.name)) {
+                          if (chNode.id) folderIds[`${docNode.name}/${chNode.name}`] = chNode.id;
+                          if (!newHierarchy[docNode.name][chNode.name]) newHierarchy[docNode.name][chNode.name] = {};
+                        }
                       }
                     }
                   }
                 }
               }
             }
+
+            // 2. Bổ sung các tài liệu từ Firestore
+            if (firestoreDocs && firestoreDocs.length > 0) {
+              for (const d of firestoreDocs) {
+                if (d.title && !blacklist.includes(d.title)) {
+                  if (matchesSubjectAndGrade(d.title, filterSubject, filterGrade)) {
+                    if (!newHierarchy[d.title]) {
+                      newHierarchy[d.title] = {};
+                      matchedCount++;
+                    }
+                    if (d.chuong && !blacklist.includes(d.chuong)) {
+                      if (!newHierarchy[d.title][d.chuong]) newHierarchy[d.title][d.chuong] = {};
+                    }
+                  }
+                }
+              }
+            }
+
             docFolderIdsRef.current = folderIds;
             localStorage.setItem('lopu_drive_folder_ids_cache_v1', JSON.stringify(folderIds));
             saveStoredHierarchy(newHierarchy);
             return newHierarchy;
           });
+
+          // Chỉ tắt thông báo đồng bộ sau khi danh mục tài liệu đã hoàn tất nạp vào dropdown
+          if (isMounted) {
+            setIsDriveSyncing(false);
+            setSyncingLevel(null);
+            if (matchedCount > 0) {
+              setNotification(`Đã đồng bộ xong! Tìm thấy ${matchedCount} tài liệu cho ${filterSubject} - ${filterGrade}`);
+            } else {
+              setNotification(`Đã hoàn tất đồng bộ Drive cho ${filterSubject} - ${filterGrade} (Chưa có tài liệu nào)`);
+            }
+            setTimeout(() => {
+              if (isMounted) setNotification(null);
+            }, 3500);
+          }
+        } catch (err: any) {
+          console.warn('Lỗi khi đồng bộ môn học/khối lớp từ Drive:', err);
+          if (isMounted) {
+            setIsDriveSyncing(false);
+            setSyncingLevel(null);
+            setNotification(`Lỗi đồng bộ Drive: ${err?.message || 'Vui lòng kiểm tra lại kết nối'}`);
+            setTimeout(() => {
+              if (isMounted) setNotification(null);
+            }, 5000);
+          }
         }
-      }).catch(err => {
-        console.warn('Lỗi khi đồng bộ môn học/khối lớp từ Drive:', err);
-      }).finally(() => {
-        setTimeout(() => {
-          setIsDriveSyncing(false);
-          setSyncingLevel(null);
-          setNotification(null);
-        }, 500);
-      });
+      };
+
+      doSync();
+
+      return () => {
+        isMounted = false;
+      };
     }
   }, [filterSubject, filterGrade]);
 
@@ -2167,7 +2354,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       console.warn('Lỗi khi đồng bộ thư mục con từ Drive:', err);
     } finally {
       setIsDriveSyncing(false);
-      setSyncingLevel(null);
+      setSyncingLevel(prev => (prev === level ? null : prev));
       setNotification(null);
     }
   };
@@ -2277,7 +2464,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         setSyncingLevel('chuong');
         syncDirectChildrenByFolderId('chuong', ['myApp', 'LopU', 'TaiLieu', filterTitle]);
       } else {
-        setSyncingLevel(null);
+        // Giữ nguyên syncingLevel nếu đang ở cấp 'title' (đang đồng bộ tài liệu từ Drive)
+        setSyncingLevel(prev => (prev === 'title' ? 'title' : null));
       }
 
       if (chuongFilterOptions.length === 1) {
@@ -2458,8 +2646,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[10px]">
             <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-1">
               <strong className="text-indigo-900 block font-bold">📖 Cấu trúc tệp trong Chuyên đề:</strong>
-              <div>• <strong>Kiến thức:</strong> file <code className="text-indigo-600 font-mono font-bold">KienThuc.html</code> (nếu e-learning iSpring/Storyline có file index.html thì tự động đổi thành KienThuc.html khi tải lên/chèn file HTML).</div>
-              <div>• <strong>Luyện tập:</strong> file <code className="text-indigo-600 font-mono font-bold">LuyenTap [tên bài luyện tập].json</code> (thứ tự câu hỏi không đổi, chỉ đổi 4 phương án lựa chọn A, B, C, D; đề hiện trước, học sinh làm bài hiện lời giải ngay sau mỗi câu). Có thể có nhiều luyện tập.</div>
+              <div>• <strong>1. Kiến thức:</strong> file <code className="text-indigo-600 font-mono font-bold">KienThuc.html</code> được lưu ở thư mục chuyên đề trong Drive của Giáo viên. File này có lưu ảnh tại <code className="text-indigo-600 font-mono font-bold">[Chuyên đề]/HinhAnh</code>; lưu âm thanh ở <code className="text-purple-600 font-mono font-bold">[Chuyên đề]/AmThanh</code>; lưu video ở <code className="text-rose-600 font-mono font-bold">[Chuyên đề]/Video</code>.</div>
+              <div>• <strong>Bài giảng E-Learning:</strong> Nếu đưa lên là bài giảng e-learning do các phần mềm đưa lên thì để nguyên đường dẫn tương đối (upload tất cả các file trong thư mục vào thư mục chuyên đề và tự động đổi tên file index.html thành KienThuc.html).</div>
+              <div>• <strong>2. Luyện tập:</strong> file <code className="text-indigo-600 font-mono font-bold">LuyenTap [tên bài luyện tập].json</code>.</div>
             </div>
 
             <div className="bg-white p-2 rounded-lg border border-slate-200 space-y-1">
@@ -2603,11 +2792,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
               <span>Chọn Tên tài liệu ({titleFilterOptions.length} thư mục phù hợp)</span>
               {syncingLevel === 'title' && (
-                <span className="text-red-600 font-bold ml-1 animate-pulse">Đang đồng bộ</span>
+                <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-[10px] font-bold ml-1 animate-pulse">
+                  ⏳ Đang đồng bộ...
+                </span>
               )}
             </label>
             <select
               value={filterTitle}
+              disabled={syncingLevel === 'title'}
               onChange={e => {
                 setFilterTitle(e.target.value);
                 setFilterChuong('');
@@ -2615,9 +2807,15 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 setFilterVanDe('');
                 setFilterChuyenDe('');
               }}
-              className="w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold focus:outline-indigo-600 bg-white text-indigo-950 shadow-xs cursor-pointer"
+              className={`w-full px-3 py-2 rounded-lg border border-indigo-200 text-xs font-bold focus:outline-indigo-600 bg-white text-indigo-950 shadow-xs cursor-pointer ${
+                syncingLevel === 'title' ? 'opacity-70 bg-indigo-50/50 cursor-wait' : ''
+              }`}
             >
-              <option value="">-- Chọn Tài liệu --</option>
+              <option value="">
+                {syncingLevel === 'title'
+                  ? '⏳ Đang đồng bộ danh sách tài liệu từ Drive...'
+                  : '-- Chọn Tài liệu --'}
+              </option>
               {titleFilterOptions.map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -2771,6 +2969,57 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           </div>
         )}
       </div>
+
+      {/* 3.1. TRANG 1. KIẾN THỨC CỦA CHUYÊN ĐỀ (Lấy từ file KienThuc.html trên Drive & Media HinhAnh, AmThanh, Video) */}
+      {(filterChuyenDe || selectedChuyenDeForKienThuc) && showKienThucView && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>Tiến trình Chuyên đề: <strong className="text-indigo-900">{selectedChuyenDeForKienThuc?.chuyenDe || filterChuyenDe}</strong></span>
+            </span>
+            <button
+              onClick={() => {
+                setSelectedChuyenDeForKienThuc(null);
+                setShowKienThucView(false);
+              }}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-700 hover:bg-slate-200/60 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+            >
+              ✕ Đóng trang kiến thức
+            </button>
+          </div>
+
+          <TrangKienThucChuyenDe
+            subject={selectedChuyenDeForKienThuc?.subject || filterSubject || 'Toán Học'}
+            grade={selectedChuyenDeForKienThuc?.grade || filterGrade || 'Khối 10'}
+            title={selectedChuyenDeForKienThuc?.title || filterTitle || 'Toán 10 - Đại Số'}
+            chuong={selectedChuyenDeForKienThuc?.chuong || filterChuong || 'Chương 1'}
+            bai={selectedChuyenDeForKienThuc?.bai || filterBai || 'Bài 1'}
+            vanDe={selectedChuyenDeForKienThuc?.vanDe || filterVanDe || 'Vấn đề 1'}
+            chuyenDe={selectedChuyenDeForKienThuc?.chuyenDe || filterChuyenDe || 'Chuyên đề 1'}
+            onOpenWordEditor={() => {
+              window.dispatchEvent(new CustomEvent('app-open-word-document', {
+                detail: {
+                  title: selectedChuyenDeForKienThuc?.title || filterTitle || 'Toán 10 - Đại Số',
+                  chuong: selectedChuyenDeForKienThuc?.chuong || filterChuong,
+                  bai: selectedChuyenDeForKienThuc?.bai || filterBai,
+                  vanDe: selectedChuyenDeForKienThuc?.vanDe || filterVanDe,
+                  chuyenDe: selectedChuyenDeForKienThuc?.chuyenDe || filterChuyenDe,
+                }
+              }));
+              setNotification('Đang mở bài giảng trong Soạn thảo Word...');
+              setTimeout(() => setNotification(null), 3000);
+            }}
+            onSelectTienTrinh={(step) => {
+              setActiveChuyenDeTienTrinh(step);
+              if (step !== 'kienThuc') {
+                setNotification(`Tiến trình: ${step === 'luyenTap' ? '2. Luyện tập (.json)' : step === 'kiemTra' ? '3. Kiểm tra (.json)' : '4. Cải thiện (.json)'}`);
+                setTimeout(() => setNotification(null), 3000);
+              }
+            }}
+          />
+        </div>
+      )}
 
       {/* Card Mẫu Sơ Đồ Lớp Tích Hợp IconNam & IconNu */}
       {(categoryFilter === 'all' || categoryFilter === 'seating_chart') && (
@@ -2929,6 +3178,27 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               </span>
 
               <div className="flex items-center gap-2">
+                <button
+                  id={`btn-open-kienthuc-${docItem.id}`}
+                  onClick={() => {
+                    setSelectedChuyenDeForKienThuc({
+                      subject: docItem.subject || filterSubject || 'Toán Học',
+                      grade: docItem.grade || filterGrade || 'Khối 10',
+                      title: docItem.title,
+                      chuong: docItem.chuong || 'Chương 1',
+                      bai: docItem.bai || 'Bài 1',
+                      vanDe: docItem.vanDe || 'Vấn đề 1',
+                      chuyenDe: docItem.chuyenDe || 'Chuyên đề 1',
+                    });
+                    setShowKienThucView(true);
+                    window.scrollTo({ top: 380, behavior: 'smooth' });
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold bg-amber-50 text-amber-800 hover:bg-amber-100 transition-colors cursor-pointer border border-amber-200/60"
+                  title="Xem trang 1. Kiến thức (KienThuc.html & HinhAnh, AmThanh, Video) của chuyên đề"
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-amber-600" />
+                  <span>1. Kiến thức</span>
+                </button>
                 <button
                   id={`btn-open-word-${docItem.id}`}
                   onClick={() => {
@@ -3391,197 +3661,255 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="font-bold text-slate-700 uppercase text-xs">Tóm tắt nội dung bài soạn</label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setOpenInsertMenuModal(!openInsertMenuModal)}
-                      className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Chèn...</span>
-                      <ChevronDown className="w-3 h-3 text-indigo-500" />
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    {/* NÚT CHÈN */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenInsertMenuModal(!openInsertMenuModal);
+                          setOpenFunctionMenuModal(false);
+                        }}
+                        className="text-[11px] font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>Chèn...</span>
+                        <ChevronDown className="w-3 h-3 text-indigo-500" />
+                      </button>
 
-                    {openInsertMenuModal && (
-                      <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-72 py-1.5 divide-y divide-slate-100 animate-fade-in text-xs font-medium">
-                        {/* 1. Chèn công thức */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMathModalInitialFormula('');
-                            setShowMathTypeModal(true);
-                            setOpenInsertMenuModal(false);
-                          }}
-                          className="w-full px-3 py-2 flex items-center gap-2 hover:bg-purple-50 text-purple-900 text-left cursor-pointer"
-                        >
-                          <span className="font-serif font-black text-xs text-purple-800 shrink-0">∑√</span>
-                          <div>
-                            <div className="font-bold">Chèn công thức</div>
-                            <div className="text-[10px] text-slate-400 font-normal">Soạn công thức toán học MathType</div>
-                          </div>
-                        </button>
-
-                        {/* 2. Chèn đồ thị (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
-                        <div className="py-1">
+                      {openInsertMenuModal && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-60 py-1.5 divide-y divide-slate-100 animate-fade-in text-xs font-medium">
+                          {/* Chèn bảng */}
                           <button
                             type="button"
-                            onClick={() => setExpandedGraphMenu(!expandedGraphMenu)}
-                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-sky-50 text-sky-900 text-left cursor-pointer"
+                            onClick={() => {
+                              setShowTableModal(true);
+                              setOpenInsertMenuModal(false);
+                            }}
+                            className="w-full px-3 py-2 flex items-center gap-2 hover:bg-indigo-50 text-indigo-900 text-left cursor-pointer"
                           >
-                            <div className="flex items-center gap-2">
-                              <TrendingUp className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                              <div>
-                                <div className="font-bold">Chèn đồ thị (TikZ)</div>
-                                <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
-                              </div>
+                            <Table className="w-4 h-4 text-indigo-600 shrink-0" />
+                            <div>
+                              <div className="font-bold">Chèn Bảng</div>
+                              <div className="text-[10px] text-slate-400 font-normal">Nhập số dòng, số cột, dòng tiêu đề</div>
                             </div>
-                            <ChevronDown className={`w-3.5 h-3.5 text-sky-500 transition-transform ${expandedGraphMenu ? 'rotate-180' : ''}`} />
                           </button>
 
-                          {expandedGraphMenu && (
-                            <div className="ml-5 pl-2.5 border-l-2 border-sky-200 py-1 space-y-1 bg-sky-50/40 rounded-r-lg mr-1.5 my-1">
-                              {/* 2.1 Từ máy tính */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  graphUploadRef.current?.click();
-                                  setOpenInsertMenuModal(false);
-                                }}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                              >
-                                <Laptop className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                                <div>
-                                  <div className="font-bold text-[11px] text-sky-950">1. Từ máy tính</div>
-                                  <div className="text-[9px] text-slate-500 font-normal">Chọn hình ảnh đồ thị hệ thống dùng TikZ vẽ lại</div>
-                                </div>
-                              </button>
-
-                              {/* 2.2 Nhập hàm */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShowGraphModal(true);
-                                  setOpenInsertMenuModal(false);
-                                }}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                              >
-                                <Calculator className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                                <div>
-                                  <div className="font-bold text-[11px] text-sky-950">2. Nhập hàm</div>
-                                  <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số hệ thống dùng TikZ vẽ lại</div>
-                                </div>
-                              </button>
-
-                              {/* 2.3 Tự vẽ */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDrawSketchType('graph');
-                                  setShowDrawSketchModal(true);
-                                  setOpenInsertMenuModal(false);
-                                  setTimeout(() => initCanvas(), 50);
-                                }}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                              >
-                                <PenTool className="w-3.5 h-3.5 text-sky-600 shrink-0" />
-                                <div>
-                                  <div className="font-bold text-[11px] text-sky-950">3. Tự vẽ</div>
-                                  <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo, hệ thống nắn chỉnh chuẩn TikZ</div>
-                                </div>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* 3. Chèn bảng biến thiên (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
-                        <div className="py-1">
+                          {/* Chèn hình ảnh */}
                           <button
                             type="button"
-                            onClick={() => setExpandedBbtMenu(!expandedBbtMenu)}
-                            className="w-full px-3 py-2 flex items-center justify-between hover:bg-emerald-50 text-emerald-900 text-left cursor-pointer"
+                            onClick={() => {
+                              imageUploadRef.current?.click();
+                              setOpenInsertMenuModal(false);
+                            }}
+                            className="w-full px-3 py-2 flex items-center gap-2 hover:bg-amber-50 text-amber-900 text-left cursor-pointer"
                           >
-                            <div className="flex items-center gap-2">
-                              <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                              <div>
-                                <div className="font-bold">Chèn bảng biến thiên (tikz-tab)</div>
-                                <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
-                              </div>
+                            <ImageIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <div>
+                              <div className="font-bold">Chèn Hình ảnh</div>
+                              <div className="text-[10px] text-slate-400 font-normal">Tải ảnh minh họa từ máy tính</div>
                             </div>
-                            <ChevronDown className={`w-3.5 h-3.5 text-emerald-500 transition-transform ${expandedBbtMenu ? 'rotate-180' : ''}`} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* NÚT HÀM SỐ */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenFunctionMenuModal(!openFunctionMenuModal);
+                          setOpenInsertMenuModal(false);
+                        }}
+                        className="text-[11px] font-bold text-purple-700 hover:text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+                      >
+                        <TrendingUp className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Hàm số...</span>
+                        <ChevronDown className="w-3 h-3 text-purple-500" />
+                      </button>
+
+                      {openFunctionMenuModal && (
+                        <div className="absolute right-0 top-full mt-1 z-50 bg-white border border-slate-200 rounded-xl shadow-xl w-72 py-1.5 divide-y divide-slate-100 animate-fade-in text-xs font-medium">
+                          {/* 1. Chèn công thức */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMathModalInitialFormula('');
+                              setShowMathTypeModal(true);
+                              setOpenFunctionMenuModal(false);
+                            }}
+                            className="w-full px-3 py-2 flex items-center gap-2 hover:bg-purple-50 text-purple-900 text-left cursor-pointer"
+                          >
+                            <span className="font-serif font-black text-xs text-purple-800 shrink-0">∑√</span>
+                            <div>
+                              <div className="font-bold">Chèn công thức</div>
+                              <div className="text-[10px] text-slate-400 font-normal">Soạn công thức toán học MathType</div>
+                            </div>
                           </button>
 
-                          {expandedBbtMenu && (
-                            <div className="ml-5 pl-2.5 border-l-2 border-emerald-200 py-1 space-y-1 bg-emerald-50/40 rounded-r-lg mr-1.5 my-1">
-                              {/* 3.1 Từ máy tính */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  bbtUploadRef.current?.click();
-                                  setOpenInsertMenuModal(false);
-                                }}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                              >
-                                <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          {/* 2. Chèn đồ thị (3 menu con: Từ máy tính, Nhập hàm, Tự vẽ) */}
+                          <div className="py-1">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedGraphMenu(!expandedGraphMenu)}
+                              className="w-full px-3 py-2 flex items-center justify-between hover:bg-sky-50 text-sky-900 text-left cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <TrendingUp className="w-3.5 h-3.5 text-sky-600 shrink-0" />
                                 <div>
-                                  <div className="font-bold text-[11px] text-emerald-950">1. Từ máy tính</div>
-                                  <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên hệ thống dùng tikz-tab vẽ lại</div>
+                                  <div className="font-bold">Chèn đồ thị</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập hàm, Tự vẽ</div>
                                 </div>
-                              </button>
+                              </div>
+                              <ChevronDown className={`w-3.5 h-3.5 text-sky-500 transition-transform ${expandedGraphMenu ? 'rotate-180' : ''}`} />
+                            </button>
 
-                              {/* 3.2 Nhập hàm */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setShowBBTModal(true);
-                                  setOpenInsertMenuModal(false);
-                                }}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                              >
-                                <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <div>
-                                  <div className="font-bold text-[11px] text-emerald-950">2. Nhập hàm</div>
-                                  <div className="text-[9px] text-slate-500 font-normal">Nhập điểm & dấu y', hệ thống dùng tikz-tab vẽ lại</div>
-                                </div>
-                              </button>
+                            {expandedGraphMenu && (
+                              <div className="ml-5 pl-2.5 border-l-2 border-sky-200 py-1 space-y-1 bg-sky-50/40 rounded-r-lg mr-1.5 my-1">
+                                {/* 2.1 Từ máy tính */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    graphUploadRef.current?.click();
+                                    setOpenFunctionMenuModal(false);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <Laptop className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-sky-950">1. Từ máy tính</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Chọn hình ảnh đồ thị hệ thống dùng TikZ vẽ lại</div>
+                                  </div>
+                                </button>
 
-                              {/* 3.3 Tự vẽ */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setDrawSketchType('bbt');
-                                  setShowDrawSketchModal(true);
-                                  setOpenInsertMenuModal(false);
-                                  setTimeout(() => initCanvas(), 50);
-                                }}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                              >
-                                <PenTool className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                <div>
-                                  <div className="font-bold text-[11px] text-emerald-950">3. Tự vẽ</div>
-                                  <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo BBT, hệ thống nắn chỉnh chuẩn tikz-tab</div>
-                                </div>
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                                {/* 2.2 Nhập hàm */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowGraphModal(true);
+                                    setOpenFunctionMenuModal(false);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <Calculator className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-sky-950">2. Nhập hàm</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số hệ thống dùng TikZ vẽ lại</div>
+                                  </div>
+                                </button>
 
-                        {/* 4. Chèn hình ảnh */}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            imageUploadRef.current?.click();
-                            setOpenInsertMenuModal(false);
-                          }}
-                          className="w-full px-3 py-2 flex items-center gap-2 hover:bg-amber-50 text-amber-900 text-left cursor-pointer"
-                        >
-                          <ImageIcon className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                          <div>
-                            <div className="font-bold">Chèn Hình ảnh</div>
-                            <div className="text-[10px] text-slate-400 font-normal">Tải ảnh minh họa từ máy tính</div>
+                                {/* 2.3 Tự vẽ */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDrawSketchType('graph');
+                                    setShowDrawSketchModal(true);
+                                    setOpenFunctionMenuModal(false);
+                                    setTimeout(() => initCanvas(), 50);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-sky-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <PenTool className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-sky-950">3. Tự vẽ</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo, hệ thống nắn chỉnh chuẩn TikZ</div>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
                           </div>
-                        </button>
-                      </div>
-                    )}
+
+                          {/* 3. Chèn bảng biến thiên (4 menu con: Từ máy tính, Nhập điểm cực trị, Nhập hàm, Tự vẽ) */}
+                          <div className="py-1">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedBbtMenu(!expandedBbtMenu)}
+                              className="w-full px-3 py-2 flex items-center justify-between hover:bg-emerald-50 text-emerald-900 text-left cursor-pointer"
+                            >
+                              <div className="flex items-center gap-2">
+                                <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <div>
+                                  <div className="font-bold">Chèn bảng biến thiên (tikz-tab)</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Điểm cực trị, Nhập hàm, Tự vẽ</div>
+                                </div>
+                              </div>
+                              <ChevronDown className={`w-3.5 h-3.5 text-emerald-500 transition-transform ${expandedBbtMenu ? 'rotate-180' : ''}`} />
+                            </button>
+
+                            {expandedBbtMenu && (
+                              <div className="ml-5 pl-2.5 border-l-2 border-emerald-200 py-1 space-y-1 bg-emerald-50/40 rounded-r-lg mr-1.5 my-1">
+                                {/* 3.1 Từ máy tính */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    bbtUploadRef.current?.click();
+                                    setOpenFunctionMenuModal(false);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-emerald-950">1. Từ máy tính</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên hệ thống dùng tikz-tab vẽ lại</div>
+                                  </div>
+                                </button>
+
+                                {/* 3.2 Nhập điểm cực trị (đổi tên từ Nhập hàm) */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowBBTModal(true);
+                                    setOpenFunctionMenuModal(false);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-emerald-950">2. Nhập điểm cực trị</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Nhập điểm mốc x, cực trị, dấu y' & giá trị y</div>
+                                  </div>
+                                </button>
+
+                                {/* 3.3 Nhập hàm (Bổ sung mới) */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setShowBBTModal(true);
+                                    setOpenFunctionMenuModal(false);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-emerald-950">3. Nhập hàm</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số, tự động giải & dựng BBT</div>
+                                  </div>
+                                </button>
+
+                                {/* 3.4 Tự vẽ */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDrawSketchType('bbt');
+                                    setShowDrawSketchModal(true);
+                                    setOpenFunctionMenuModal(false);
+                                    setTimeout(() => initCanvas(), 50);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <PenTool className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-emerald-950">4. Tự vẽ</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo BBT, hệ thống nắn chỉnh chuẩn tikz-tab</div>
+                                  </div>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="text-[10px] text-slate-500 mb-1 flex items-center justify-between">
@@ -3945,287 +4273,326 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         }}
       />
 
-      {/* Modal Chèn đồ thị (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
-      {showGraphModal && (
+      {/* Modal Chèn Bảng tùy chỉnh số dòng, số cột, có tiêu đề hay không */}
+      {showTableModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[92vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <h4 className="font-bold text-sm text-sky-900 flex items-center gap-1.5">
-                <TrendingUp className="w-5 h-5 text-sky-600" />
-                <span>Nhập hàm số vẽ Đồ thị TikZ</span>
-              </h4>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl border border-indigo-100">
+                  <Table className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">Chèn Bảng Vào Tài Liệu</h4>
+                  <p className="text-[11px] text-slate-500">Cấu hình số dòng, số cột và hàng tiêu đề để giáo viên nhập</p>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={() => setShowGraphModal(false)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-base cursor-pointer"
+                onClick={() => setShowTableModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="p-3.5 bg-sky-50/70 rounded-2xl border border-sky-100 space-y-3">
-                <span className="block font-bold text-sky-900 text-xs uppercase tracking-wider">Cách 1: Nhập công thức hàm số & Thiết lập</span>
-                
-                <div className="space-y-3">
-                  {/* Ô nhập công thức hàm số (cho phép nhập cả tên hàm: y = x^3 - 3x, N = t^3 + 3t, f(x) = t^3 + 2, y = x^2 - 1, s(t) = t^2 + 5t...) */}
-                  <div>
-                    <label className="text-[11px] font-bold text-slate-800 block mb-1">
-                      Công thức hàm số (Ví dụ: y = x² - 1, N = t³ + 3t, y = x³ - 3x, s = 5t²):
-                    </label>
-                    <input
-                      type="text"
-                      value={graphFormula}
-                      onChange={e => {
-                        const newFormula = e.target.value;
-                        setGraphFormula(newFormula);
-                        const inferred = inferAxesLabels(newFormula);
-                        setGraphXLabel(inferred.xLabel);
-                        setGraphYLabel(inferred.yLabel);
-                        const sug = getSuggestedYDomain(newFormula, graphXMin, graphXMax, inferred.varName);
-                        setGraphYMin(sug.suggestedYMin);
-                        setGraphYMax(sug.suggestedYMax);
-                      }}
-                      placeholder="Ví dụ: y = x^3 - 3x hoặc N = t^3 + 3t hoặc f(x) = t^3 + 2"
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
-                    />
-                  </div>
-
-                  {/* Tên trục hoành & Tên trục tung */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
-                        Tên trục hoành (Mặc định: x):
-                      </label>
-                      <input
-                        type="text"
-                        value={graphXLabel}
-                        onChange={e => setGraphXLabel(e.target.value)}
-                        placeholder="x, t, u..."
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-700 block mb-1">
-                        Tên trục tung (Mặc định: y):
-                      </label>
-                      <input
-                        type="text"
-                        value={graphYLabel}
-                        onChange={e => setGraphYLabel(e.target.value)}
-                        placeholder="y, N, f(t)..."
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white shadow-2xs"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Nút gợi ý chèn mã LaTeX / Ký hiệu */}
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-amber-500" />
-                      <span>Gợi ý chèn nhanh ký hiệu LaTeX:</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {[
-                        { label: '+∞', val: '+\\infty' },
-                        { label: '-∞', val: '-\\infty' },
-                        { label: '∞', val: '\\infty' },
-                        { label: '| (gạch đơn)', val: '|' },
-                        { label: '|| (không XĐ)', val: '||' },
-                        { label: 'x²', val: 'x^2' },
-                        { label: 'x³', val: 'x^3' },
-                        { label: '√x', val: '\\sqrt{x}' },
-                        { label: 'x/y', val: '\\frac{a}{b}' },
-                        { label: 'π', val: '\\pi' },
-                        { label: 'sin(x)', val: 'sin(x)' },
-                        { label: 'cos(x)', val: 'cos(x)' },
-                      ].map((s, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            const newFormula = graphFormula + s.val;
-                            setGraphFormula(newFormula);
-                            const sug = getSuggestedYDomain(newFormula, graphXMin, graphXMax);
-                            setGraphYMin(sug.suggestedYMin);
-                            setGraphYMax(sug.suggestedYMax);
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-white hover:bg-sky-100 border border-slate-200 text-[10px] font-mono text-sky-800 transition-colors cursor-pointer shadow-2xs"
-                        >
-                          {s.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Miền x & Miền y đề xuất tự động */}
-                  <div className="grid grid-cols-2 gap-2 pt-1 border-t border-sky-100">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmin (Cận trái x):</label>
-                      <input
-                        type="text"
-                        value={graphXMin}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setGraphXMin(val);
-                          const sug = getSuggestedYDomain(graphFormula, val, graphXMax);
-                          setGraphYMin(sug.suggestedYMin);
-                          setGraphYMax(sug.suggestedYMax);
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-600 block mb-1">xmax (Cận phải x):</label>
-                      <input
-                        type="text"
-                        value={graphXMax}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setGraphXMax(val);
-                          const sug = getSuggestedYDomain(graphFormula, graphXMin, val);
-                          setGraphYMin(sug.suggestedYMin);
-                          setGraphYMax(sug.suggestedYMax);
-                        }}
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Miền y (tự động đề xuất: GTNN - 1 và GTLN + 1) */}
-                  <div className="p-2.5 rounded-xl bg-white border border-sky-200 space-y-1.5 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-sky-800">
-                        ⚡ Miền y (Đề xuất tự động: GTNN - 1 và GTLN + 1):
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const sug = getSuggestedYDomain(graphFormula, graphXMin, graphXMax);
-                          setGraphYMin(sug.suggestedYMin);
-                          setGraphYMax(sug.suggestedYMax);
-                        }}
-                        className="text-[9px] font-bold text-sky-600 hover:text-sky-800 underline cursor-pointer"
-                      >
-                        Tính lại đề xuất
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="text-[9px] font-medium text-slate-500 block">ymin (Cận dưới y):</label>
-                        <input
-                          type="text"
-                          value={graphYMin}
-                          onChange={e => setGraphYMin(e.target.value)}
-                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-medium text-slate-500 block">ymax (Cận trên y):</label>
-                        <input
-                          type="text"
-                          value={graphYMax}
-                          onChange={e => setGraphYMax(e.target.value)}
-                          className="w-full px-2 py-1 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-sky-600 bg-slate-50"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Ô nhập yêu cầu thêm với đồ thị (Nằm DƯỚI Miền x, trục y và TRÊN nút Hủy, Xác nhận & chèn đồ thị) */}
-                  <div className="p-2.5 rounded-xl bg-indigo-50/60 border border-indigo-100 space-y-1.5">
-                    <label className="text-[10px] font-bold text-indigo-900 block flex items-center gap-1">
-                      <span>✨ Yêu cầu thêm với đồ thị (Gióng trục cực trị, gióng điểm, tiếp tuyến, giới hạn...):</span>
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={graphRequirement}
-                      onChange={e => setGraphRequirement(e.target.value)}
-                      placeholder="Ví dụ: Gióng trục điểm cực trị; Gióng điểm A(1, 2); Tiếp tuyến tại x=1; Tô miền diện tích phẳng..."
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-indigo-200 text-xs font-semibold focus:outline-indigo-600 bg-white"
-                    />
-                    <div className="flex flex-wrap gap-1">
-                      {[
-                        'Gióng trục điểm cực trị',
-                        'Gióng điểm giao trục Ox, Oy',
-                        'Gióng điểm A(1, 2)',
-                        'Vẽ tiệm cận đứng & ngang',
-                        'Tiếp tuyến tại x=1',
-                        'Tô miền phẳng',
-                      ].map((req, rIdx) => (
-                        <button
-                          key={rIdx}
-                          type="button"
-                          onClick={() => {
-                            setGraphRequirement(prev => (prev ? `${prev}; ${req}` : req));
-                          }}
-                          className="text-[9px] px-1.5 py-0.5 rounded bg-white hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer shadow-2xs font-medium"
-                        >
-                          + {req}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Hàng nút Hủy & Xác nhận & chèn đồ thị (Nằm liền ngay dưới trường yêu cầu) */}
-                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-sky-200">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setGraphOldTikz('');
-                        setShowGraphModal(false);
-                      }}
-                      className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleGenerateGraphTikZ}
-                      className="py-2 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                    >
-                      <TrendingUp className="w-4 h-4" />
-                      <span>{graphOldTikz ? 'Xác nhận & Cập nhật đồ thị' : 'Xác nhận & Chèn đồ thị'}</span>
-                    </button>
-                  </div>
+            <div className="space-y-3.5 py-1">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Số dòng (Hàng):
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={tableRows}
+                    onChange={e => setTableRows(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50 text-slate-900"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Tối thiểu: 1, tối đa: 50</span>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Số cột:
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={tableCols}
+                    onChange={e => setTableCols(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50 text-slate-900"
+                  />
+                  <span className="text-[10px] text-slate-400 mt-0.5 block">Tối thiểu: 1, tối đa: 20</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2 text-center">
-                <span className="block font-bold text-slate-700 text-[11px] uppercase tracking-wider text-left">Cách 2: Chọn hình ảnh đồ thị có sẵn</span>
-                <p className="text-[11px] text-slate-400 text-left">Hệ thống sẽ tự động quét và phân tích đồ thị để sinh ra code TikZ cực kỳ chuẩn xác.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    graphUploadRef.current?.click();
-                    setShowGraphModal(false);
-                  }}
-                  className="w-full py-2 px-4 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <ImageIcon className="w-4 h-4 text-slate-500" />
-                  <span>Chọn ảnh từ máy...</span>
-                </button>
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={tableHasHeader}
+                    onChange={e => setTableHasHeader(e.target.checked)}
+                    className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-slate-800 block">Có hàng tiêu đề (Header row)</span>
+                    <span className="text-[10px] text-slate-500 block">Hàng đầu tiên được in đậm và phân cách rõ ràng để giáo viên nhập</span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Tóm tắt cấu hình bảng */}
+              <div className="p-2.5 bg-indigo-50/50 rounded-xl border border-indigo-100 text-center">
+                <span className="text-xs font-semibold text-indigo-900">
+                  Bảng chuẩn bị chèn: <strong>{tableRows}</strong> dòng × <strong>{tableCols}</strong> cột {tableHasHeader ? '(kèm dòng tiêu đề)' : '(không có tiêu đề)'}
+                </span>
               </div>
             </div>
 
-            <div className="flex items-center justify-end pt-1 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setShowGraphModal(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                onClick={() => setShowTableModal(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
-                Đóng
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmInsertTable}
+                className="px-5 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Xác nhận & Chèn bảng</span>
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Modal Chèn đồ thị (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
+      {showGraphModal && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-4 flex items-center justify-center">
+          <div className="bg-white rounded-2xl max-w-xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto max-h-[90vh] animate-scale-up">
+            <div className="shrink-0 px-5 py-3 border-b border-slate-100 bg-white flex items-center justify-between sticky top-0 z-10">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-sky-50 text-sky-600 rounded-lg border border-sky-100">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <h4 className="font-bold text-sm text-slate-900">
+                  {graphOldTikz ? 'Chỉnh sửa đồ thị' : 'Chèn đồ thị hàm số'}
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGraphModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5 space-y-3 overflow-y-auto flex-1 min-h-0 text-xs">
+              {/* HÀNG 1: [Công thức] [xmin] [xmax] [đơn vị Ox] [tên Ox] */}
+              <div className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-12 sm:col-span-4">
+                  <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                    Công thức:
+                  </label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={graphFormula}
+                    onChange={e => {
+                      const newFormula = e.target.value;
+                      setGraphFormula(newFormula);
+                      const inferred = inferAxesLabels(newFormula);
+                      setGraphXLabel(inferred.xLabel);
+                      setGraphYLabel(inferred.yLabel);
+                      const sug = getSuggestedYDomain(newFormula, graphXMin, graphXMax, inferred.varName);
+                      setGraphYMin(sug.suggestedYMin);
+                      setGraphYMax(sug.suggestedYMax);
+                    }}
+                    placeholder="y = x^3 - 3x"
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-sky-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">xmin</label>
+                  <input
+                    type="text"
+                    value={graphXMin}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setGraphXMin(val);
+                      const sug = getSuggestedYDomain(graphFormula, val, graphXMax);
+                      setGraphYMin(sug.suggestedYMin);
+                      setGraphYMax(sug.suggestedYMax);
+                    }}
+                    placeholder="-3"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">xmax</label>
+                  <input
+                    type="text"
+                    value={graphXMax}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setGraphXMax(val);
+                      const sug = getSuggestedYDomain(graphFormula, graphXMin, val);
+                      setGraphYMin(sug.suggestedYMin);
+                      setGraphYMax(sug.suggestedYMax);
+                    }}
+                    placeholder="3"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">Đơn vị Ox</label>
+                  <input
+                    type="text"
+                    value={graphUnitX}
+                    onChange={e => setGraphUnitX(e.target.value)}
+                    placeholder="1"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">Tên Ox</label>
+                  <input
+                    type="text"
+                    value={graphXLabel}
+                    onChange={e => setGraphXLabel(e.target.value)}
+                    placeholder="x"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center italic font-serif"
+                  />
+                </div>
+              </div>
+
+              {/* HÀNG 2: [+yêu cầu] [ymin] [ymax] [đơn vị Oy] [tên Oy] */}
+              <div className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-12 sm:col-span-4">
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-700 block">
+                      +yêu cầu:
+                    </label>
+                    {graphRequirement && (
+                      <button
+                        type="button"
+                        onClick={() => setGraphRequirement('')}
+                        className="text-[10px] text-slate-400 hover:text-rose-500 cursor-pointer"
+                      >
+                        Xóa
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={graphRequirement}
+                    onChange={e => setGraphRequirement(e.target.value)}
+                    placeholder="+yêu cầu: gióng cực trị, nét đứt đỏ..."
+                    className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white shadow-2xs"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">ymin</label>
+                  <input
+                    type="text"
+                    value={graphYMin}
+                    onChange={e => setGraphYMin(e.target.value)}
+                    placeholder="-4"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">ymax</label>
+                  <input
+                    type="text"
+                    value={graphYMax}
+                    onChange={e => setGraphYMax(e.target.value)}
+                    placeholder="4"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">Đơn vị Oy</label>
+                  <input
+                    type="text"
+                    value={graphUnitY}
+                    onChange={e => setGraphUnitY(e.target.value)}
+                    placeholder="1"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center"
+                  />
+                </div>
+                <div className="col-span-3 sm:col-span-2">
+                  <label className="text-[10px] font-semibold text-slate-600 block mb-1">Tên Oy</label>
+                  <input
+                    type="text"
+                    value={graphYLabel}
+                    onChange={e => setGraphYLabel(e.target.value)}
+                    placeholder="y"
+                    className="w-full px-2 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-sky-600 bg-white text-center italic font-serif"
+                  />
+                </div>
+              </div>
+
+              {/* Quick chips gợi ý yêu cầu */}
+              <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                <span className="text-[10px] font-bold text-indigo-700 mr-1">+yêu cầu:</span>
+                {[
+                  'Gióng tọa độ điểm cực trị',
+                  'Vẽ đồ thị nét đứt màu đỏ',
+                  'Vẽ tiệm cận đứng & ngang',
+                  'Tiếp tuyến tại x=1',
+                ].map((req, rIdx) => (
+                  <button
+                    key={rIdx}
+                    type="button"
+                    onClick={() => {
+                      setGraphRequirement(prev => (prev ? `${prev}; ${req}` : req));
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer font-medium transition-colors"
+                  >
+                    + {req}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer Actions */}
+            <div className="shrink-0 px-5 py-2.5 border-t border-slate-100 bg-slate-50/90 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setGraphOldTikz('');
+                  setShowGraphModal(false);
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateGraphTikZ}
+                className="py-2 px-4 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>{graphOldTikz ? 'Xác nhận & Cập nhật đồ thị' : 'Xác nhận & Chèn đồ thị'}</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Modal Chèn bảng biến thiên (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
-      {showBBTModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[92vh] overflow-y-auto">
+      {showBBTModal && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-4 flex items-center justify-center">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h4 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5">
                 <Activity className="w-5 h-5 text-emerald-600" />
@@ -4414,13 +4781,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal Tự vẽ đồ thị / Bảng biến thiên (Canvas vẽ tay & Nắn chỉnh nét vẽ thông minh) */}
-      {showDrawSketchModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up max-h-[95vh] overflow-y-auto">
+      {showDrawSketchModal && createPortal(
+        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-4 flex items-center justify-center">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
                 <div className={`p-2 rounded-xl ${drawSketchType === 'graph' ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'}`}>
@@ -4554,7 +4922,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -406,13 +406,13 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     📄 KienThuc.html
                   </span>
                   <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-emerald-700 font-semibold">
-                    📁 Media/HinhAnh
+                    📁 HinhAnh
                   </span>
                   <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-purple-700 font-semibold">
-                    📁 Media/AmThanh
+                    📁 AmThanh
                   </span>
                   <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-rose-700 font-semibold">
-                    📁 Media/Video
+                    📁 Video
                   </span>
                 </div>
               </div>

@@ -1,15 +1,43 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+@keyframes marquee-ltr {
+  0% { transform: translateX(-50%); }
+  100% { transform: translateX(0%); }
+}
+
+@keyframes marquee-rtl {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee-ltr {
+  display: flex;
+  width: max-content;
+  animation: marquee-ltr 180s linear infinite;
+}
+
+.animate-marquee-rtl {
+  display: flex;
+  width: max-content;
+  animation: marquee-rtl 180s linear infinite;
+}
+
+.animate-marquee-ltr:hover,
+.animate-marquee-rtl:hover {
+  animation-play-state: paused;
+}
+
+/* Fallback legacy marquee */
 @keyframes marquee {
-  0% { transform: translateX(100%); }
-  100% { transform: translateX(-100%); }
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
 }
 
 .animate-marquee {
-  display: inline-block;
-  white-space: nowrap;
-  animation: marquee 28s linear infinite;
+  display: flex;
+  width: max-content;
+  animation: marquee-ltr 70s linear infinite;
 }
 
 .animate-marquee:hover {

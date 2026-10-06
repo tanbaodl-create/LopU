@@ -662,7 +662,8 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
       )}
 
       {/* VIEW MODE 1: PPT SLIDESHOW (XEM PPT - HIỆN LẦN LƯỢT ĐỀ VÀ LỜI GIẢI TỪNG CÂU) */}
-      {viewMode === 'ppt' && currentSlide && (
+      {viewMode === 'ppt' && (
+        currentSlide ? (
         <div
           className={`space-y-4 ${
             isFullScreenPpt
@@ -896,6 +897,25 @@ export const QuestionEditorWord: React.FC<QuestionEditorWordProps> = ({
             </button>
           </div>
         </div>
+        ) : (
+          <div className="bg-slate-900 text-white p-8 sm:p-12 rounded-2xl shadow-xl border border-slate-800 text-center space-y-4">
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
+              <Tv className="w-7 h-7" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-100">Chưa có câu hỏi nào để trình chiếu PPT</h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto">
+              Chuyên đề này hiện chưa có câu hỏi riêng biệt. Bạn có thể bấm nút bên dưới để thêm câu hỏi mới hoặc chuyển sang chế độ Toàn bộ để soạn thảo lý thuyết.
+            </p>
+            <button
+              type="button"
+              onClick={() => handleAddQuestion('multiple_choice')}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs cursor-pointer shadow-xs inline-flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              <span>+ Thêm câu hỏi đầu tiên</span>
+            </button>
+          </div>
+        )
       )}
 
       {/* VIEW MODE 2: TÁCH CÂU (SPLIT VIEW) — SOẠN THẢO TỪNG CÂU & GÁN NHÓM 1-6 & ĐIỂM CHUẨN */}

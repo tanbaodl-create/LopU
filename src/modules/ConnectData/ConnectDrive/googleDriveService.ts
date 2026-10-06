@@ -665,10 +665,10 @@ export async function saveTeachingMaterialHierarchyToDrive(
       // 1. Tìm hoặc tạo cấu trúc thư mục vật lý sâu 7 cấp độ (Chuyên đề)
       const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
 
-      // 1.1 Tự động khởi tạo cấu trúc thư mục Media/HinhAnh, Media/AmThanh, Media/Video ngay trong thư mục Chuyên đề
-      await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'Media', 'HinhAnh']);
-      await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'Media', 'AmThanh']);
-      await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'Media', 'Video']);
+      // 1.1 Tự động khởi tạo cấu trúc thư mục HinhAnh, AmThanh, Video ngay trong thư mục Chuyên đề
+      await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'HinhAnh']);
+      await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'AmThanh']);
+      await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'Video']);
 
       // 2. Upload file vào đúng thư mục đích vừa tạo/tìm được
       const metadata = {
@@ -704,14 +704,14 @@ export async function saveTeachingMaterialHierarchyToDrive(
 
 /**
  * Cấu trúc thư mục Media chuẩn cho Chuyên đề:
- * Media\HinhAnh
- * Media\AmThanh
- * Media\Video
+ * [Thư mục của chuyên đề]/HinhAnh
+ * [Thư mục của chuyên đề]/AmThanh
+ * [Thư mục của chuyên đề]/Video
  */
 export const CHUYEN_DE_MEDIA_SUBFOLDERS = {
-  image: 'Media/HinhAnh',
-  audio: 'Media/AmThanh',
-  video: 'Media/Video',
+  image: 'HinhAnh',
+  audio: 'AmThanh',
+  video: 'Video',
 } as const;
 
 export interface MediaFileItem {
@@ -725,7 +725,7 @@ export interface MediaFileItem {
 
 /**
  * Lưu các tệp đa phương tiện (hình ảnh, âm thanh, video) vào đúng thư mục:
- * Media\HinhAnh, Media\AmThanh, Media\Video ngay bên trong thư mục chứa file KienThuc.html
+ * [Thư mục của chuyên đề]/HinhAnh, [Thư mục của chuyên đề]/AmThanh, [Thư mục của chuyên đề]/Video ngay bên trong thư mục chứa file KienThuc.html
  */
 export async function saveMediaFilesToChuyenDeDrive(
   physicalFolders: string[],
@@ -736,8 +736,8 @@ export async function saveMediaFilesToChuyenDeDrive(
 
   for (const media of mediaFiles) {
     const subFolder = media.type === 'image' ? 'HinhAnh' : media.type === 'audio' ? 'AmThanh' : 'Video';
-    const mediaFolderPath = [...physicalFolders, 'Media', subFolder];
-    const relativePath = `Media/${subFolder}/${media.name}`;
+    const mediaFolderPath = [...physicalFolders, subFolder];
+    const relativePath = `${subFolder}/${media.name}`;
     const fullDrivePath = mediaFolderPath.join(' / ');
 
     if (token && isGoogleClientConfigured) {
@@ -774,6 +774,143 @@ export async function saveMediaFilesToChuyenDeDrive(
   }
 
   return { success: true, savedMedia: results };
+}
+
+/**
+ * Lưu file KienThuc.html vào thư mục Chuyên đề trên Google Drive của Giáo viên:
+ * myApp / LopU / TaiLieu / [Tài liệu] / [Chương] / [Bài] / [Vấn đề] / [Chuyên đề] / KienThuc.html
+ * Cùng các thư mục con HinhAnh, AmThanh, Video
+ */
+export async function saveKienThucHtmlToDrive(
+  physicalFolders: string[],
+  htmlContent: string,
+  mediaFiles?: MediaFileItem[],
+  customFileName: string = 'KienThuc.html'
+): Promise<{ success: boolean; fileId?: string; error?: string }> {
+  const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+  const cacheKey = `lopu_kienthuc_${physicalFolders.join('_')}`;
+
+  // Lưu cache cục bộ trước để luôn có dữ liệu tức thì
+  try {
+    localStorage.setItem(cacheKey, htmlContent);
+  } catch {}
+
+  if (!token || !isRealGoogleOAuthToken(token)) {
+    return {
+      success: true,
+      error: 'Đã lưu cục bộ. Để đồng bộ lên Google Drive, vui lòng kết nối tài khoản Google Drive của giáo viên.',
+    };
+  }
+
+  try {
+    const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+
+    // Đảm bảo có sẵn 3 thư mục HinhAnh, AmThanh, Video trong thư mục chuyên đề
+    await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'HinhAnh']);
+    await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'AmThanh']);
+    await getOrCreateFolderPathOnDrive(token, [...physicalFolders, 'Video']);
+
+    // Lưu file KienThuc.html
+    const fileName = customFileName || 'KienThuc.html';
+    const metadata = {
+      name: fileName,
+      mimeType: 'text/html',
+      parents: [parentFolderId],
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([htmlContent], { type: 'text/html;charset=utf-8' }));
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Drive Upload Error: ${res.status} - ${errText}`);
+    }
+
+    const data = await res.json();
+
+    // Lưu các file media nếu có
+    if (mediaFiles && mediaFiles.length > 0) {
+      await saveMediaFilesToChuyenDeDrive(physicalFolders, mediaFiles);
+    }
+
+    return { success: true, fileId: data.id };
+  } catch (err: any) {
+    console.error('Lỗi khi lưu KienThuc.html lên Drive:', err);
+    return { success: false, error: err.message || 'Lỗi khi lưu KienThuc.html lên Google Drive' };
+  }
+}
+
+/**
+ * Tải nội dung file KienThuc.html từ Google Drive của Giáo viên trong thư mục Chuyên đề
+ */
+export async function fetchKienThucHtmlFromDrive(
+  physicalFolders: string[]
+): Promise<{ success: boolean; content?: string; error?: string }> {
+  const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+  const cacheKey = `lopu_kienthuc_${physicalFolders.join('_')}`;
+
+  // Kiểm tra cache trước
+  const cachedContent = localStorage.getItem(cacheKey);
+
+  if (!token || !isRealGoogleOAuthToken(token)) {
+    if (cachedContent) {
+      return { success: true, content: cachedContent };
+    }
+    return { success: false, error: 'Chưa kết nối Google Drive' };
+  }
+
+  try {
+    const parentFolderId = await findFolderPathIdOnDrive(token, physicalFolders);
+    if (!parentFolderId) {
+      if (cachedContent) return { success: true, content: cachedContent };
+      return { success: false, error: 'Chưa tìm thấy thư mục chuyên đề trên Google Drive' };
+    }
+
+    // Tìm file KienThuc.html trong thư mục này
+    const query = `'${parentFolderId}' in parents and (name = 'KienThuc.html' or name = 'index.html') and trashed = false`;
+    const searchRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,size,mimeType)`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (!searchRes.ok) {
+      if (cachedContent) return { success: true, content: cachedContent };
+      return { success: false, error: 'Không thể truy vấn Google Drive' };
+    }
+
+    const data = await searchRes.json();
+    const targetFile = data.files && data.files.length > 0 ? data.files[0] : null;
+
+    if (!targetFile) {
+      if (cachedContent) return { success: true, content: cachedContent };
+      return { success: false, error: 'Chưa có file KienThuc.html trong thư mục chuyên đề trên Drive' };
+    }
+
+    // Tải nội dung file HTML
+    const contentRes = await fetch(`https://www.googleapis.com/drive/v3/files/${targetFile.id}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (!contentRes.ok) {
+      if (cachedContent) return { success: true, content: cachedContent };
+      return { success: false, error: 'Lỗi tải nội dung file từ Google Drive' };
+    }
+
+    const htmlText = await contentRes.text();
+    localStorage.setItem(cacheKey, htmlText);
+    return { success: true, content: htmlText };
+  } catch (err: any) {
+    if (cachedContent) return { success: true, content: cachedContent };
+    return { success: false, error: err.message || 'Lỗi kết nối Google Drive' };
+  }
 }
 
 /**

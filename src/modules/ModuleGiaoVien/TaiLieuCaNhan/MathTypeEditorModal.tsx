@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Check,
@@ -168,33 +169,37 @@ export const MathTypeEditorModal: React.FC<MathTypeEditorModalProps> = ({
   const handleApplyInsert = () => {
     if (!latexCode.trim()) return;
 
-    // Định dạng công thức toán học chuẩn xác dưới dạng $ mã công thức $
-    const formulaText = `$ ${latexCode.trim()} $`;
-    const renderedHtml = `<span class="math-tex font-serif text-indigo-950 font-medium px-1 bg-indigo-50/60 rounded border border-indigo-100">${formulaText}</span>`;
+    const trimmed = latexCode.trim();
+    let renderedKaTeX = '';
+    try {
+      renderedKaTeX = katex.renderToString(trimmed, {
+        displayMode: false,
+        throwOnError: false,
+      });
+    } catch {
+      renderedKaTeX = trimmed;
+    }
 
-    onInsert(latexCode.trim(), renderedHtml);
+    // Render công thức toán học trực quan (Visual Math) đã được render thay vì hiển thị mã thô, bắt buộc dùng $ mã latex $
+    const renderedHtml = `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="$ ${trimmed} $" contenteditable="false" title="Công thức toán: $ ${trimmed} $ (Kích để sửa)">${renderedKaTeX}</span>&nbsp;`;
+
+    onInsert(trimmed, renderedHtml);
     onClose();
   };
 
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-scale-up">
-        {/* Header giống cửa sổ MathType */}
-        <div className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 px-4 py-3 text-white flex items-center justify-between shadow-md select-none">
+  return createPortal(
+    <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-4 flex items-center justify-center">
+      <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col my-auto max-h-[90vh] animate-scale-up">
+        {/* Header - Cố định ở đầu */}
+        <div className="shrink-0 bg-gradient-to-r from-indigo-900 via-indigo-800 to-slate-900 px-4 py-3 text-white flex items-center justify-between shadow-md select-none">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-indigo-500/30 border border-indigo-400/40 flex items-center justify-center font-serif text-amber-300 font-black text-sm">
               ∑√
             </div>
             <div>
-              <h3 className="font-bold text-sm leading-tight flex items-center gap-1.5">
-                <span>Khung Soạn Thảo Công Thức Toán</span>
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30">
-                  MathType Style
-                </span>
+              <h3 className="font-bold text-sm leading-tight">
+                Khung Soạn Thảo Công Thức Toán
               </h3>
-              <p className="text-[10px] text-indigo-200">
-                Soạn thảo công thức khoa học, phân số, căn thức, tích phân và chèn vào tài liệu
-              </p>
             </div>
           </div>
           <button
@@ -206,85 +211,42 @@ export const MathTypeEditorModal: React.FC<MathTypeEditorModalProps> = ({
           </button>
         </div>
 
-        {/* Math Palette / Toolbar kiểu MathType */}
-        <div className="bg-slate-100 border-b border-slate-200 p-2 space-y-2 select-none">
-          {/* Tabs nhóm ký hiệu */}
-          <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
-            {Object.entries(symbolGroups).map(([key, group]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setActiveTab(key)}
-                className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
-                  activeTab === key
-                    ? 'bg-indigo-600 text-white shadow-2xs'
-                    : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
-                }`}
-              >
-                {group.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Lưới các nút ký hiệu toán học */}
-          <div className="bg-white p-2.5 rounded-xl border border-slate-200 grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-36 overflow-y-auto">
-            {symbolGroups[activeTab]?.items.map((sym, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => insertSymbol(sym.latex)}
-                title={sym.tooltip || sym.latex}
-                className="p-1.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/70 text-slate-800 flex flex-col items-center justify-center transition-all cursor-pointer group"
-              >
-                <span className="font-serif text-sm font-semibold text-indigo-900 group-hover:scale-110 transition-transform">
-                  {sym.preview}
-                </span>
-                <span className="text-[9px] text-slate-400 font-sans truncate w-full text-center">
-                  {sym.label}
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Khu vực soạn thảo & Xem trước */}
-        <div className="p-4 space-y-3 overflow-y-auto flex-1">
-          {/* Ô nhập mã công thức */}
-          <div className="space-y-1">
+        {/* Nội dung cửa sổ có thanh cuộn riêng */}
+        <div className="p-4 space-y-3.5 overflow-y-auto flex-1 min-h-0">
+          {/* 1. Ô nhập công thức Toán (Đã đổi lên vị trí trước theo yêu cầu) */}
+          <div className="space-y-1 bg-indigo-50/50 p-3 rounded-xl border border-indigo-200/80">
             <div className="flex items-center justify-between">
-              <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1 uppercase">
-                <span>Soạn biểu thức toán (LaTeX / MathType code):</span>
+              <label className="text-xs font-bold text-indigo-950 flex items-center gap-1.5 uppercase">
+                <span>✍️ Ô nhập công thức Toán:</span>
               </label>
               <button
                 type="button"
                 onClick={() => setLatexCode('')}
-                className="text-[10px] font-semibold text-slate-400 hover:text-rose-600 flex items-center gap-1 cursor-pointer"
+                className="text-[10px] font-semibold text-slate-500 hover:text-rose-600 flex items-center gap-1 cursor-pointer bg-white px-2 py-0.5 rounded border border-slate-200 transition-colors"
               >
                 <RotateCcw className="w-3 h-3" /> Làm trống
               </button>
             </div>
             <textarea
+              autoFocus
               rows={3}
               value={latexCode}
               onChange={e => setLatexCode(e.target.value)}
-              placeholder="Gõ hoặc nhấn chọn ký hiệu toán học bên trên..."
-              className="w-full p-2.5 font-mono text-xs text-indigo-950 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed"
+              placeholder="Gõ trực tiếp công thức (ví dụ: \frac{a}{b}, x^2 + 2x, \sqrt{x}...) hoặc chọn ký hiệu bên dưới..."
+              className="w-full p-2.5 font-mono text-xs text-indigo-950 bg-white border border-indigo-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none leading-relaxed shadow-2xs font-semibold"
             />
           </div>
 
-          {/* Vùng xem trước công thức trực quan (Live Visual Math Preview) */}
+          {/* 2. Vùng xem trước công thức trực quan (Đã đổi xuống vị trí sau ô nhập) */}
           <div className="p-3 bg-gradient-to-br from-indigo-50/60 to-purple-50/40 rounded-xl border border-indigo-200/80 space-y-1.5">
             <div className="flex items-center justify-between text-[11px] font-bold text-indigo-900">
               <span className="flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Hiển thị trước công thức:</span>
-              </span>
-              <span className="text-[10px] font-mono text-indigo-600 font-semibold bg-white px-2 py-0.5 rounded border border-indigo-100">
-                Visual Math Preview
+                <span>Hiển thị trước công thức trực quan:</span>
               </span>
             </div>
 
-            <div className="bg-white p-4 rounded-lg border border-indigo-100 min-h-[56px] flex items-center justify-center text-center shadow-2xs overflow-x-auto">
+            <div className="bg-white p-3.5 rounded-lg border border-indigo-100 min-h-[52px] flex items-center justify-center text-center shadow-2xs overflow-x-auto">
               {latexCode.trim() ? (
                 (() => {
                   try {
@@ -308,40 +270,78 @@ export const MathTypeEditorModal: React.FC<MathTypeEditorModalProps> = ({
                 })()
               ) : (
                 <span className="text-xs text-slate-400 italic">
-                  Chưa có công thức. Hãy nhập hoặc bấm chọn biểu tượng toán ở trên.
+                  Chưa có công thức. Hãy gõ vào ô nhập hoặc bấm chọn biểu tượng toán ở bên dưới.
                 </span>
               )}
             </div>
           </div>
+
+          {/* Bảng ký hiệu toán học */}
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-2.5 space-y-2 select-none">
+            <div className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+              <span>Bảng ký hiệu toán học nhanh:</span>
+            </div>
+            {/* Tabs nhóm ký hiệu */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-xs">
+              {Object.entries(symbolGroups).map(([key, group]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setActiveTab(key)}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-[11px] whitespace-nowrap transition-colors cursor-pointer ${
+                    activeTab === key
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                  }`}
+                >
+                  {group.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Lưới các nút ký hiệu toán học */}
+            <div className="bg-white p-2 rounded-lg border border-slate-200 grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-32 overflow-y-auto">
+              {symbolGroups[activeTab]?.items.map((sym, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => insertSymbol(sym.latex)}
+                  title={sym.tooltip || sym.latex}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/70 text-slate-800 flex flex-col items-center justify-center transition-all cursor-pointer group"
+                >
+                  <span className="font-serif text-sm font-semibold text-indigo-900 group-hover:scale-110 transition-transform">
+                    {sym.preview}
+                  </span>
+                  <span className="text-[9px] text-slate-400 font-sans truncate w-full text-center">
+                    {sym.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
-          <div className="text-[11px] text-slate-500 hidden sm:flex items-center gap-1.5">
-            <HelpCircle className="w-3.5 h-3.5 text-slate-400" />
-            <span>Hỗ trợ chèn trực tiếp vào văn bản giáo án & tài liệu</span>
-          </div>
-
-          <div className="flex items-center gap-2 ml-auto">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
-            >
-              Đóng
-            </button>
-            <button
-              type="button"
-              onClick={handleApplyInsert}
-              disabled={!latexCode.trim()}
-              className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <Check className="w-4 h-4" />
-              <span>{initialValue ? 'Cập nhật công thức' : 'Chèn công thức vào tài liệu'}</span>
-            </button>
-          </div>
+        {/* Footer Actions - Cố định ở chân */}
+        <div className="shrink-0 p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer"
+          >
+            Đóng
+          </button>
+          <button
+            type="button"
+            onClick={handleApplyInsert}
+            disabled={!latexCode.trim()}
+            className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Check className="w-4 h-4" />
+            <span>{initialValue ? 'Cập nhật công thức' : 'Chèn công thức vào tài liệu'}</span>
+          </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
