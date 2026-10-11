@@ -665,10 +665,11 @@ export const calcAutoBbtWidth = (
  */
 export const parseNumericValue = (str: string): number => {
   if (!str) return NaN;
-  const s = str.trim().replace(/^\$|\$$/g, '');
-  if (s.includes('+\\infty') || s.includes('+infty') || s === '\\infty' || s === 'infty') return Infinity;
-  if (s.includes('-\\infty') || s.includes('-infty')) return -Infinity;
+  const s = str.trim().replace(/^\$|\$$/g, '').replace(/\s+/g, '');
+  if (s.includes('+\\infty') || s.includes('+infty') || s === '\\infty' || s === 'infty' || s === '+inf' || s === 'inf') return Infinity;
+  if (s.includes('-\\infty') || s.includes('-infty') || s === '-inf') return -Infinity;
 
+  // Xử lý phân số LaTeX: \frac{a}{b} hoặc \dfrac{a}{b}
   if (s.startsWith('\\dfrac{') || s.startsWith('\\frac{')) {
     const startIdx = s.indexOf('{');
     let depth = 1;
@@ -692,6 +693,15 @@ export const parseNumericValue = (str: string): number => {
     }
   }
 
+  // Xử lý phân số thông thường dạng a/b (ví dụ: -1/2, 3/4)
+  const fracSimple = s.match(/^([+-]?\d+(?:\.\d+)?)\/([+-]?\d+(?:\.\d+)?)$/);
+  if (fracSimple) {
+    const num = parseFloat(fracSimple[1]);
+    const den = parseFloat(fracSimple[2]);
+    if (!isNaN(num) && !isNaN(den) && den !== 0) return num / den;
+  }
+
+  // Xử lý căn bậc hai LaTeX: [c]\sqrt{k}
   const sqrtM = s.match(/^([+-]?\d*(?:\.\d+)?)?\\sqrt\{(\d+)\}$/);
   if (sqrtM) {
     const cStr = sqrtM[1];
@@ -700,6 +710,7 @@ export const parseNumericValue = (str: string): number => {
     return coef * Math.sqrt(k);
   }
 
+  // Xử lý biểu thức u +- c\sqrt{k}
   const exprM = s.match(/^([+-]?\d+(?:\.\d+)?)\s*([+-])\s*(\d*)?\\sqrt\{(\d+)\}$/);
   if (exprM) {
     const u = parseFloat(exprM[1]);
@@ -711,6 +722,284 @@ export const parseNumericValue = (str: string): number => {
 
   const p = parseFloat(s);
   return isNaN(p) ? NaN : p;
+};
+
+
+/**
+ * Hàm phân tích và tính toán heightRatio và hướng đi chính xác cho từng điểm y và mũi tên
+ * Tự động nhận diện chuỗi tăng/giảm liên tục (đặt các điểm và mũi tên nằm trên 1 đường thẳng liên tục)
+ */
+export const computeBbtPointsAndIntervals = (
+  safeXPoints: string[],
+  pointSigns: string[],
+  intervalSigns: string[],
+  rawYParts: string[]
+): { colData: BbtColData[]; intervals: BbtInterval[] } => {
+  const N = safeXPoints.length;
+  const colData: BbtColData[] = [];
+
+  // 1. Phân tích bước đầu: nhận diện double bars và explicit prefixes (+/, -/, C/)
+  for (let i = 0; i < N; i++) {
+    const raw = (rawYParts[i] || '').trim();
+    const isDbl = (pointSigns[i] === '||') || raw.includes('||') || raw.includes('D');
+    if (isDbl) {
+      let leftDir: '+' | '-' = '+', leftVal = '+\\infty', rightDir: '+' | '-' = '-', rightVal = '-\\infty';
+      let leftHeightRatio = 1.0;
+      let rightHeightRatio = 0.0;
+
+      if (raw.includes('||')) {
+        const sides = raw.split('||');
+        const leftRaw = sides[0].trim();
+        const rightRaw = sides[1].trim();
+
+        // 1. Phân tích giá trị bên trái của ||
+        if (/^[+\-Cc]\s*\//.test(leftRaw)) {
+          const pfx = leftRaw[0].toUpperCase();
+          leftDir = (pfx === '-' ? '-' : '+');
+          leftVal = leftRaw.substring(leftRaw.indexOf('/') + 1).trim();
+          leftHeightRatio = leftDir === '+' ? 1.0 : 0.0;
+        } else {
+          leftVal = leftRaw || (intervalSigns[i - 1] === '-' ? '-\\infty' : '+\\infty');
+          // So sánh với điểm liền trước i - 1
+          const prevRaw = rawYParts[i - 1] ? (rawYParts[i - 1].includes('||') ? rawYParts[i - 1].split('||')[1] : rawYParts[i - 1]) : '';
+          const numPrev = parseNumericValue(prevRaw);
+          const numLeft = parseNumericValue(leftVal);
+
+          if (!isNaN(numPrev) && !isNaN(numLeft) && numPrev !== numLeft) {
+            leftDir = numPrev < numLeft ? '+' : '-';
+          } else if (intervalSigns[i - 1] === '+' || intervalSigns[i - 1] === '+/') {
+            leftDir = '+';
+          } else if (intervalSigns[i - 1] === '-' || intervalSigns[i - 1] === '-/') {
+            leftDir = '-';
+          } else {
+            leftDir = '+';
+          }
+          leftHeightRatio = leftDir === '+' ? 1.0 : 0.0;
+        }
+
+        // 2. Phân tích giá trị bên phải của ||
+        if (/^[+\-Cc]\s*\//.test(rightRaw)) {
+          const pfx = rightRaw[0].toUpperCase();
+          rightDir = (pfx === '+' ? '+' : '-');
+          rightVal = rightRaw.substring(rightRaw.indexOf('/') + 1).trim();
+          rightHeightRatio = rightDir === '+' ? 1.0 : 0.0;
+        } else {
+          rightVal = rightRaw || (intervalSigns[i] === '+' ? '-\\infty' : '+\\infty');
+          // So sánh với điểm liền sau i + 1
+          const nextRaw = rawYParts[i + 1] ? (rawYParts[i + 1].includes('||') ? rawYParts[i + 1].split('||')[0] : rawYParts[i + 1]) : '';
+          const numNext = parseNumericValue(nextRaw);
+          const numRight = parseNumericValue(rightVal);
+
+          if (!isNaN(numRight) && !isNaN(numNext) && numRight !== numNext) {
+            rightDir = numRight < numNext ? '-' : '+';
+          } else if (intervalSigns[i] === '+' || intervalSigns[i] === '+/') {
+            rightDir = '-';
+          } else if (intervalSigns[i] === '-' || intervalSigns[i] === '-/') {
+            rightDir = '+';
+          } else {
+            rightDir = '-';
+          }
+          rightHeightRatio = rightDir === '+' ? 1.0 : 0.0;
+        }
+      } else if (raw.includes('D')) {
+        const m = raw.match(/^([+-])D([+-])\s*\/\s*([^/]+)\s*\/\s*(.+)$/);
+        if (m) {
+          leftDir = m[1] as '+' | '-';
+          rightDir = m[2] as '+' | '-';
+          leftVal = m[3].trim();
+          rightVal = m[4].trim();
+          leftHeightRatio = leftDir === '+' ? 1.0 : 0.0;
+          rightHeightRatio = rightDir === '+' ? 1.0 : 0.0;
+        }
+      }
+
+      colData.push({ isDouble: true, leftDir, leftVal, leftHeightRatio, rightDir, rightVal, rightHeightRatio });
+    } else {
+      let dir: '+' | '-' | 'C' | undefined = undefined;
+      let val = raw;
+      let heightRatio: number | undefined = undefined;
+
+      if (/^[+\-Cc]\s*\//.test(raw)) {
+        const pfx = raw[0].toUpperCase();
+        dir = (pfx === '+' ? '+' : pfx === 'C' ? 'C' : '-');
+        val = raw.substring(raw.indexOf('/') + 1).trim();
+        heightRatio = (dir === '+' ? 1.0 : dir === '-' ? 0.0 : 0.5);
+      } else {
+        val = raw || (safeXPoints[i] === '-\\infty' ? '-\\infty' : safeXPoints[i] === '+\\infty' ? '+\\infty' : '0');
+      }
+
+      colData.push({ isDouble: false, dir, val, heightRatio });
+    }
+  }
+
+  // 2. Xác định hướng biến thiên (stepDir) giữa từng cặp điểm kề nhau (k và k+1)
+  // +1: tăng dần (UP), -1: giảm dần (DOWN), 0: không đổi
+  const stepDirs: number[] = [];
+  for (let i = 0; i < N - 1; i++) {
+    const leftCol = colData[i];
+    const rightCol = colData[i + 1];
+    const sVal = leftCol.isDouble ? (leftCol.rightVal || '') : (leftCol.val || '');
+    const eVal = rightCol.isDouble ? (rightCol.leftVal || '') : (rightCol.val || '');
+    const numS = parseNumericValue(sVal);
+    const numE = parseNumericValue(eVal);
+
+    if (!isNaN(numS) && !isNaN(numE) && numS !== numE) {
+      stepDirs.push(numS < numE ? 1 : -1);
+    } else if (intervalSigns[i] === '+' || intervalSigns[i] === '+/') {
+      stepDirs.push(1);
+    } else if (intervalSigns[i] === '-' || intervalSigns[i] === '-/') {
+      stepDirs.push(-1);
+    } else {
+      stepDirs.push(i % 2 === 0 ? 1 : -1);
+    }
+  }
+
+  // 3. Phân chia thành các chuỗi đơn điệu liên tục (monotonic chains) để tính heightRatio
+  let curr = 0;
+  while (curr < N) {
+    if (colData[curr].isDouble) {
+      curr++;
+      continue;
+    }
+
+    let end = curr;
+    while (end < N - 1) {
+      if (colData[end + 1].isDouble) {
+        end++;
+        break;
+      }
+      if (end > curr && stepDirs[end] !== stepDirs[curr]) {
+        break;
+      }
+      end++;
+    }
+
+    // Chuỗi từ curr đến end
+    const chainDir = stepDirs[curr] !== undefined ? stepDirs[curr] : 1;
+    const len = end - curr;
+
+    for (let k = curr; k <= end; k++) {
+      if (!colData[k].isDouble && colData[k].heightRatio === undefined) {
+        if (len === 0) {
+          colData[k].heightRatio = 0.5;
+          colData[k].dir = 'C';
+        } else if (chainDir === 1) {
+          // Tăng dần: điểm đầu ở đáy (0.0), điểm cuối ở đỉnh (1.0), điểm giữa chia đều trên đường thẳng
+          const ratio = (k - curr) / len;
+          colData[k].heightRatio = ratio;
+          colData[k].dir = ratio > 0.85 ? '+' : ratio < 0.15 ? '-' : 'C';
+        } else {
+          // Giảm dần: điểm đầu ở đỉnh (1.0), điểm cuối ở đáy (0.0), điểm giữa chia đều trên đường thẳng
+          const ratio = 1.0 - (k - curr) / len;
+          colData[k].heightRatio = ratio;
+          colData[k].dir = ratio > 0.85 ? '+' : ratio < 0.15 ? '-' : 'C';
+        }
+      }
+    }
+
+    curr = end > curr ? end : curr + 1;
+  }
+
+  // 4. Xây dựng danh sách intervals với tọa độ bắt đầu và kết thúc chuẩn
+  const intervals: BbtInterval[] = [];
+  for (let i = 0; i < N - 1; i++) {
+    const leftCol = colData[i];
+    const rightCol = colData[i + 1];
+    const startVal = (leftCol.isDouble ? leftCol.rightVal : leftCol.val) || '0';
+    const endVal = (rightCol.isDouble ? rightCol.leftVal : rightCol.val) || '0';
+
+    const startHeightRatio = leftCol.isDouble ? (leftCol.rightHeightRatio ?? 0) : (leftCol.heightRatio ?? 0);
+    const endHeightRatio = rightCol.isDouble ? (rightCol.leftHeightRatio ?? 1) : (rightCol.heightRatio ?? 1);
+    const isGoingUp = startHeightRatio <= endHeightRatio;
+
+    intervals.push({
+      startDir: startHeightRatio > 0.5 ? '+' : '-',
+      startVal,
+      startHeightRatio,
+      endDir: endHeightRatio > 0.5 ? '+' : '-',
+      endVal,
+      endHeightRatio,
+      isGoingUp,
+      hasLeftLimit: !!leftCol.isDouble,
+      hasRightLimit: !!rightCol.isDouble
+    });
+  }
+
+  return { colData, intervals };
+};
+
+/**
+ * Chuyển đổi danh sách giá trị y (kể cả khi người dùng chỉ nhập giá trị thuần như -\infty, 2, 5, +\infty hoặc -2, 4)
+ * thành chuỗi cú pháp TikZ-Tab chuẩn: -/ -\infty, C/ 2, C/ 5, +/ +\infty
+ * Tự động xác định: giá trị nào lớn hơn ở trên (+/), nhỏ hơn ở dưới (-/), trung gian ở giữa (C/)
+ */
+export const buildCanonicalTkzTabVar = (
+  xPointsStr: string,
+  yPrimeSignsStr: string,
+  yValuesStr: string
+): string => {
+  const xPoints = (xPointsStr || '').split(',').map(s => s.trim()).filter(Boolean);
+  const safeXPoints = xPoints.length > 0 ? xPoints : ['-\\infty', '-1', '1', '+\\infty'];
+  const N = safeXPoints.length;
+
+  const rawSigns = (yPrimeSignsStr || '').split(',').map(s => s.trim());
+  const intervalSigns: string[] = [];
+  const pointSigns: string[] = [];
+  const nonEmpties = rawSigns.filter(s => s !== '');
+
+  if (nonEmpties.length === 2 * N - 3) {
+    for (let i = 0; i < N; i++) {
+      if (i === 0 || i === N - 1) {
+        pointSigns.push('');
+      } else {
+        pointSigns.push(nonEmpties[2 * i - 1] || '0');
+      }
+    }
+    for (let i = 0; i < N - 1; i++) {
+      intervalSigns.push(nonEmpties[2 * i] || '+');
+    }
+  } else if (nonEmpties.length === N - 1) {
+    for (let i = 0; i < N; i++) {
+      pointSigns.push(i === 0 || i === N - 1 ? '' : '0');
+    }
+    for (let i = 0; i < N - 1; i++) {
+      intervalSigns.push(nonEmpties[i] || '+');
+    }
+  } else if (rawSigns.length >= 2 * N - 1) {
+    for (let i = 0; i < N; i++) {
+      if (i === 0 || i === N - 1) {
+        pointSigns.push('');
+      } else {
+        pointSigns.push(rawSigns[2 * i] || '0');
+      }
+    }
+    for (let i = 0; i < N - 1; i++) {
+      intervalSigns.push(rawSigns[2 * i + 1] || '+');
+    }
+  } else {
+    for (let i = 0; i < N; i++) {
+      pointSigns.push(i === 0 || i === N - 1 ? '' : '0');
+    }
+    for (let i = 0; i < N - 1; i++) {
+      intervalSigns.push(i % 2 === 0 ? '+' : '-');
+    }
+  }
+
+  const rawYParts = (yValuesStr || '').split(',').map(s => s.trim()).filter(Boolean);
+  const { colData } = computeBbtPointsAndIntervals(safeXPoints, pointSigns, intervalSigns, rawYParts);
+
+  const resultParts: string[] = [];
+  for (let i = 0; i < N; i++) {
+    const cData = colData[i];
+    if (cData.isDouble) {
+      resultParts.push(`${cData.leftDir}D${cData.rightDir} / ${cData.leftVal} / ${cData.rightVal}`);
+    } else {
+      const pfx = cData.dir === '+' ? '+/' : cData.dir === 'C' ? 'C/' : '-/';
+      resultParts.push(`${pfx} ${cData.val || '0'}`);
+    }
+  }
+
+  return resultParts.join(', ');
 };
 
 /**
@@ -809,84 +1098,9 @@ export const generateWordBbtHtml = (
     }
   }
 
-  // 3. Phân tích yValues: hỗ trợ cả đa thức và phân thức chứa || hoặc +D-/
+  // 3. Phân tích yValues và suy luận toàn diện chuỗi biến thiên (các mốc và mũi tên thẳng hàng)
   const rawYParts = yValuesStr.split(',').map(s => s.trim()).filter(Boolean);
-  const colData: BbtColData[] = [];
-
-  for (let i = 0; i < N; i++) {
-    const raw = rawYParts[i] || '';
-    const isDbl = (pointSigns[i] === '||') || raw.includes('||') || raw.includes('D');
-    if (isDbl) {
-      let leftDir: '+' | '-' = '+', leftVal = '+\\infty', rightDir: '+' | '-' = '-', rightVal = '-\\infty';
-      if (raw.includes('||')) {
-        const sides = raw.split('||');
-        const sL = sides[0].trim().split('/');
-        const sR = sides[1].trim().split('/');
-        leftDir = (sL[0].trim() === '-' ? '-' : '+');
-        leftVal = sL.slice(1).join('/').trim() || '+\\infty';
-        rightDir = (sR[0].trim() === '+' ? '+' : '-');
-        rightVal = sR.slice(1).join('/').trim() || '-\\infty';
-      } else if (raw.includes('D')) {
-        const m = raw.match(/^([+-])D([+-])\s*\/\s*([^/]+)\s*\/\s*(.+)$/);
-        if (m) {
-          leftDir = m[1] as '+' | '-';
-          rightDir = m[2] as '+' | '-';
-          leftVal = m[3].trim();
-          rightVal = m[4].trim();
-        }
-      }
-      colData.push({ isDouble: true, leftDir, leftVal, rightDir, rightVal });
-    } else {
-      const segs = raw.split('/');
-      let dir: '+' | '-' = (segs[0].trim() === '+' ? '+' : '-');
-      let val = segs.length >= 2 ? segs.slice(1).join('/').trim() : raw;
-      if (!val) {
-        const isHigh = i % 2 === 1;
-        dir = isHigh ? '+' : '-';
-        val = safeXPoints[i] === '-\\infty' ? '-\\infty' : safeXPoints[i] === '+\\infty' ? '+\\infty' : '0';
-      }
-      colData.push({ isDouble: false, dir, val });
-    }
-  }
-
-  const intervals: BbtInterval[] = [];
-  for (let i = 0; i < N - 1; i++) {
-    const leftCol = colData[i] || { isDouble: false, dir: '-', val: '0' };
-    const rightCol = colData[i + 1] || { isDouble: false, dir: '+', val: '0' };
-
-    const startVal = (leftCol.isDouble ? leftCol.rightVal : leftCol.val) || '0';
-    const endVal = (rightCol.isDouble ? rightCol.leftVal : rightCol.val) || '0';
-
-    const sign = (intervalSigns[i] || '').trim();
-    const numStart = parseNumericValue(startVal);
-    const numEnd = parseNumericValue(endVal);
-    const hasNumericCompare = !isNaN(numStart) && !isNaN(numEnd) && numStart !== numEnd;
-
-    let isGoingUp: boolean;
-    if (sign === '+' || sign === '+/') {
-      isGoingUp = true;
-    } else if (sign === '-' || sign === '-/') {
-      isGoingUp = false;
-    } else if (hasNumericCompare) {
-      isGoingUp = numStart < numEnd;
-    } else if ((leftCol.isDouble ? leftCol.rightDir : leftCol.dir) === '-' && (rightCol.isDouble ? rightCol.leftDir : rightCol.dir) === '+') {
-      isGoingUp = true;
-    } else if ((leftCol.isDouble ? leftCol.rightDir : leftCol.dir) === '+' && (rightCol.isDouble ? rightCol.leftDir : rightCol.dir) === '-') {
-      isGoingUp = false;
-    } else {
-      isGoingUp = (i % 2 === 0);
-    }
-
-    intervals.push({
-      startDir: isGoingUp ? '-' : '+',
-      startVal,
-      endDir: isGoingUp ? '+' : '-',
-      endVal,
-      isGoingUp,
-      hasLeftLimit: !!leftCol.isDouble,
-      hasRightLimit: !!rightCol.isDouble
-    });
-  }
+  const { colData, intervals } = computeBbtPointsAndIntervals(safeXPoints, pointSigns, intervalSigns, rawYParts);
 
   // Tính toán độ rộng đủ cho bảng biến thiên để không bao giờ bị tràn và không xuất hiện thanh trượt ngang
   const autoWidth = calcAutoBbtWidth(safeXPoints, colData, intervals);
@@ -917,26 +1131,25 @@ export const generateWordBbtHtml = (
 
     yPrimeCellsHtml += `<td style="padding: 6px 8px; text-align: center; border-bottom: 1.5px solid #1e293b; color: #0f172a; font-weight: bold; min-width: 44px; white-space: nowrap;">${pSignHtml}</td>`;
 
-    // Row 3: y point cell
+    // Row 3: y point cell (hỗ trợ vị trí trên cùng, ở giữa trên đường mũi tên thẳng hàng, hoặc dưới cùng)
     if (cData.isDouble) {
       yCellsHtml += `<td style="padding: 0 4px; text-align: center; vertical-align: middle; color: #0f172a; font-weight: 600; min-width: 24px; height: 75px; box-sizing: border-box; white-space: nowrap;"><div style="display: inline-block; border-left: 1.5px solid #1e293b; border-right: 1.5px solid #1e293b; width: 4px; height: 75px; vertical-align: middle;"></div></td>`;
     } else {
-      let isTop = cData.dir === '+';
-      if (i === 0 && intervals[0]) {
-        isTop = !intervals[0].isGoingUp;
-      } else if (i === N - 1 && intervals[N - 2]) {
-        isTop = intervals[N - 2].isGoingUp;
-      } else if (intervals[i - 1] && intervals[i]) {
-        if (intervals[i - 1].isGoingUp && !intervals[i].isGoingUp) {
-          isTop = true;
-        } else if (!intervals[i - 1].isGoingUp && intervals[i].isGoingUp) {
-          isTop = false;
-        } else {
-          isTop = intervals[i - 1].isGoingUp;
-        }
+      const hr = cData.heightRatio ?? (cData.dir === '+' ? 1.0 : cData.dir === '-' ? 0.0 : 0.5);
+      let vAlignCss = '';
+      let innerContent = renderKatex(cData.val || '');
+
+      if (hr > 0.85) {
+        vAlignCss = 'vertical-align: top; padding-top: 8px; padding-bottom: 4px;';
+      } else if (hr < 0.15) {
+        vAlignCss = 'vertical-align: bottom; padding-bottom: 8px; padding-top: 4px;';
+      } else {
+        vAlignCss = 'vertical-align: middle; padding: 4px 8px;';
+        const offsetY = Math.round((0.5 - hr) * 36);
+        innerContent = `<div style="position: relative; top: ${offsetY}px; display: inline-block;">${innerContent}</div>`;
       }
 
-      yCellsHtml += `<td style="padding: 4px 8px; text-align: center; ${isTop ? 'vertical-align: top; padding-top: 8px;' : 'vertical-align: bottom; padding-bottom: 8px;'}; color: #0f172a; font-weight: 600; min-width: 44px; height: 75px; box-sizing: border-box; white-space: nowrap;">${renderKatex(cData.val || '')}</td>`;
+      yCellsHtml += `<td style="padding: 4px 8px; text-align: center; ${vAlignCss} color: #0f172a; font-weight: 600; min-width: 44px; height: 75px; box-sizing: border-box; white-space: nowrap;">${innerContent}</td>`;
     }
 
     // Khoảng giữa 2 mốc
@@ -949,6 +1162,13 @@ export const generateWordBbtHtml = (
       yPrimeCellsHtml += `<td style="padding: 6px 8px; text-align: center; border-bottom: 1.5px solid #1e293b; font-weight: bold; min-width: 60px;"><span style="color: ${col}; font-size: 16px; font-weight: bold;">${sym}</span></td>`;
 
       const inter = intervals[i] || { isGoingUp: true, hasLeftLimit: false, hasRightLimit: false, startDir: '-', startVal: '', endDir: '+', endVal: '' };
+
+      const startH = inter.startHeightRatio ?? (inter.isGoingUp ? 0 : 1);
+      const endH = inter.endHeightRatio ?? (inter.isGoingUp ? 1 : 0);
+      const y1 = 56 - startH * 44;
+      const y2 = 56 - endH * 44;
+      const x1 = inter.hasLeftLimit ? 28 : 4;
+      const x2 = inter.hasRightLimit ? 72 : 94;
 
       yCellsHtml += `
         <td style="padding: 0 4px; text-align: center; vertical-align: middle; min-width: 75px; height: 75px; box-sizing: border-box; position: relative;">
@@ -968,11 +1188,7 @@ export const generateWordBbtHtml = (
                 <polygon points="0 0, 6 3, 0 6" fill="#0f172a" />
               </marker>
             </defs>
-            ${inter.isGoingUp ? `
-              <line x1="${inter.hasLeftLimit ? 28 : 4}" y1="56" x2="${inter.hasRightLimit ? 72 : 94}" y2="12" stroke="#0f172a" stroke-width="1.8" marker-end="url(#${bbtId}-arr-${i})" />
-            ` : `
-              <line x1="${inter.hasLeftLimit ? 28 : 4}" y1="12" x2="${inter.hasRightLimit ? 72 : 94}" y2="56" stroke="#0f172a" stroke-width="1.8" marker-end="url(#${bbtId}-arr-${i})" />
-            `}
+            <line x1="${x1}" y1="${y1.toFixed(1)}" x2="${x2}" y2="${y2.toFixed(1)}" stroke="#0f172a" stroke-width="1.8" marker-end="url(#${bbtId}-arr-${i})" />
           </svg>
         </td>
       `;

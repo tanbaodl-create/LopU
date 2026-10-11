@@ -19,6 +19,10 @@ import {
   deleteByPath,
   getNestedDriveTree,
   MenuHamSo,
+  MenuChen,
+  DongBoDriveButton,
+  saveDocumentToDriveAndDatabase,
+  formatSafeSlug,
 } from '../../ModuleGiaoVien';
 import {
   BaoCaoGiamSatView,
@@ -84,6 +88,7 @@ import {
   Maximize2,
   Minimize2,
   CornerDownLeft,
+  Edit3,
 } from 'lucide-react';
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
 import {
@@ -99,11 +104,12 @@ import {
   PptMarkerRail,
   parseDocumentToSlides,
   RailMarker,
+  RailLineItem,
   PptSlideItem,
   PptRailClickMenuData,
 } from '../modulePPT';
 
-export type { RailMarker, PptSlideItem, PptRailClickMenuData };
+export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData };
 
 /**
  * Component Trình Soạn Thảo Văn Bản Word Chuyên Nghiệp (Phân hệ Tài liệu trong Navigation)
@@ -150,6 +156,126 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
   const [wordViewMode, setWordViewMode] = useState<QuestionViewMode>('full');
   const [currentAlignment, setCurrentAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
   const [tienTrinhChuyenDe, setTienTrinhChuyenDe] = useState<string>('Kiến thức');
+  const [selectedExerciseName, setSelectedExerciseName] = useState<string>('');
+  const [selectedKienThucName, setSelectedKienThucName] = useState<string>('Lý thuyết trọng tâm');
+  const [customKienThucList, setCustomKienThucList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lopu_custom_kienthuc_list');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['Lý thuyết trọng tâm', 'Tóm tắt công thức'];
+  });
+  const [customLuyenTapList, setCustomLuyenTapList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lopu_custom_luyentap_list');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['Bài luyện tập 1', 'Bài luyện tập 2', 'Bài luyện tập nâng cao'];
+  });
+  const [customKtdgList, setCustomKtdgList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lopu_custom_ktdg_list');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['Đề kiểm tra 15 phút', 'Đề kiểm tra 1 tiết', 'Đề đánh giá năng lực'];
+  });
+
+  // Modal sửa tên / xóa bài cho Kiến thức (KienThuc_*.html), Luyện tập (luyentap_*.json), KTĐG (KTDG_*.json)
+  const [itemActionModal, setItemActionModal] = useState<{
+    type: 'rename' | 'delete';
+    category: 'kienThuc' | 'luyenTap' | 'ktdg';
+    item: string;
+    newName: string;
+  } | null>(null);
+
+  const handleConfirmItemAction = () => {
+    if (!itemActionModal) return;
+    const { type, category, item, newName } = itemActionModal;
+    const cleanName = newName.trim();
+
+    if (type === 'delete') {
+      if (category === 'kienThuc') {
+        const updated = customKienThucList.filter(x => x !== item);
+        const finalUpdated = updated.length > 0 ? updated : ['Lý thuyết trọng tâm'];
+        setCustomKienThucList(finalUpdated);
+        localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(finalUpdated));
+        setSelectedKienThucName(finalUpdated[0]);
+        setNotification({ text: `Đã xóa bài kiến thức "${item}" thành công!`, type: 'info' });
+      } else if (category === 'luyenTap') {
+        const updated = customLuyenTapList.filter(x => x !== item);
+        const finalUpdated = updated.length > 0 ? updated : ['Bài luyện tập 1'];
+        setCustomLuyenTapList(finalUpdated);
+        localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(finalUpdated));
+        setSelectedExerciseName(finalUpdated[0]);
+        setNotification({ text: `Đã xóa bài luyện tập "${item}" thành công!`, type: 'info' });
+      } else if (category === 'ktdg') {
+        const updated = customKtdgList.filter(x => x !== item);
+        const finalUpdated = updated.length > 0 ? updated : ['Đề kiểm tra 15 phút'];
+        setCustomKtdgList(finalUpdated);
+        localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(finalUpdated));
+        setSelectedExerciseName(finalUpdated[0]);
+        setNotification({ text: `Đã xóa đề kiểm tra "${item}" thành công!`, type: 'info' });
+      }
+      setItemActionModal(null);
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    if (!cleanName) {
+      setNotification({ text: 'Vui lòng nhập tên hợp lệ!', type: 'error' });
+      return;
+    }
+
+    if (category === 'kienThuc') {
+      let updated: string[];
+      if (item) {
+        updated = customKienThucList.map(x => (x === item ? cleanName : x));
+      } else {
+        updated = Array.from(new Set([...customKienThucList, cleanName]));
+      }
+      setCustomKienThucList(updated);
+      localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(updated));
+      setSelectedKienThucName(cleanName);
+      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+      setNotification({
+        text: `Đã ${item ? 'đổi tên thành' : 'thêm bài kiến thức'} "${cleanName}" (Tệp Drive: KienThuc_${fileSlug}.html)`,
+        type: 'success',
+      });
+    } else if (category === 'luyenTap') {
+      let updated: string[];
+      if (item) {
+        updated = customLuyenTapList.map(x => (x === item ? cleanName : x));
+      } else {
+        updated = Array.from(new Set([...customLuyenTapList, cleanName]));
+      }
+      setCustomLuyenTapList(updated);
+      localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(updated));
+      setSelectedExerciseName(cleanName);
+      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+      setNotification({
+        text: `Đã ${item ? 'đổi tên thành' : 'thêm bài luyện tập'} "${cleanName}" (Tệp Drive: luyentap_${fileSlug}.json)`,
+        type: 'success',
+      });
+    } else if (category === 'ktdg') {
+      let updated: string[];
+      if (item) {
+        updated = customKtdgList.map(x => (x === item ? cleanName : x));
+      } else {
+        updated = Array.from(new Set([...customKtdgList, cleanName]));
+      }
+      setCustomKtdgList(updated);
+      localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(updated));
+      setSelectedExerciseName(cleanName);
+      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+      setNotification({
+        text: `Đã ${item ? 'đổi tên thành' : 'thêm đề KTĐG'} "${cleanName}" (Tệp Drive: KTDG_${fileSlug}.json)`,
+        type: 'success',
+      });
+    }
+
+    setItemActionModal(null);
+    setTimeout(() => setNotification(null), 3000);
+  };
   const [insertPositionMode, setInsertPositionMode] = useState<'cursor' | 'bottom'>('bottom');
   const [openSoanBaiMenu, setOpenSoanBaiMenu] = useState<boolean>(false);
   const [isHierarchyExpanded, setIsHierarchyExpanded] = useState<boolean>(false);
@@ -161,6 +287,7 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
   const [revealAllSteps, setRevealAllSteps] = useState<boolean>(false);
   const [isPptFullScreen, setIsPptFullScreen] = useState<boolean>(false);
   const [railMarkers, setRailMarkers] = useState<RailMarker[]>([]);
+  const [railLineItems, setRailLineItems] = useState<RailLineItem[]>([]);
   const [selectedPinMenu, setSelectedPinMenu] = useState<{ marker: RailMarker; x: number; y: number } | null>(null);
   const [pptRailClickMenu, setPptRailClickMenu] = useState<{
     elementIndex: number;
@@ -3632,6 +3759,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     if (!editorRef.current) return;
     const children = Array.from(editorRef.current.children) as HTMLElement[];
     const markers: RailMarker[] = [];
+    const lineItems: RailLineItem[] = [];
     let slideCounter = 1;
     let stepCounter = 1;
 
@@ -3647,19 +3775,22 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         (child.getAttribute('data-effect-break') === 'true' ||
           child.classList.contains('effect-break-point'));
 
+      let currentMarker: RailMarker | undefined = undefined;
+
       if (isSlide) {
-        markers.push({
+        currentMarker = {
           id: `pin-slide-${idx}-${Date.now()}`,
           type: 'slide',
           elementIndex: idx,
           topOffset: child.offsetTop || 0,
           slideNumber: slideCounter,
           snippet: child.textContent?.trim().slice(0, 30) || `Slide ${slideCounter}`,
-        });
+        };
+        markers.push(currentMarker);
         slideCounter++;
         stepCounter = 1;
       } else if (isEffect) {
-        markers.push({
+        currentMarker = {
           id: `pin-effect-${idx}-${Date.now()}`,
           type: 'effect',
           elementIndex: idx,
@@ -3667,12 +3798,23 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           slideNumber: Math.max(1, slideCounter - 1),
           stepNumber: stepCounter,
           snippet: child.textContent?.trim().slice(0, 30) || `Bước ${stepCounter}`,
-        });
+        };
+        markers.push(currentMarker);
         stepCounter++;
       }
+
+      lineItems.push({
+        elementIndex: idx,
+        topOffset: child.offsetTop || 0,
+        snippet: child.textContent?.trim().slice(0, 30) || `Dòng ${idx + 1}`,
+        hasSlideMarker: isSlide,
+        hasEffectMarker: isEffect,
+        marker: currentMarker,
+      });
     });
 
     setRailMarkers(markers);
+    setRailLineItems(lineItems);
   };
 
   // Tự động làm mới thước lề trái khi nội dung thay đổi hoặc mở tài liệu
@@ -3852,13 +3994,13 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         idx === 0 ||
         tag === 'H1' ||
         tag === 'H2' ||
+        tag === 'H3' ||
         child.classList.contains('lesson-template-box') ||
-        child.classList.contains('word-bbt-wrapper') ||
-        /^(?:Chương|Bài|Vấn đề|Chuyên đề|Câu|Ví dụ|Dạng toán|I\.|II\.|III\.|IV\.|V\.)\s*[\d\.:]/i.test(text);
+        /^(?:Chương|Bài|Vấn đề|Chuyên đề|Câu|Ví dụ|VD|Dạng|Dạng toán|Khái niệm|Định lý|Định nghĩa|Tính chất|Hệ quả|Phương pháp|I\.|II\.|III\.|IV\.|V\.)\s*[\d\.\:\[]/i.test(text);
 
       const isEffect =
         !isSlide &&
-        (/^(?:Lời giải|Hướng dẫn|Nhận xét|Bước \d|Phương pháp|Đáp án|Chú ý|Kết luận|Ta có|Suy ra|•|-)\s*[:\.]?/i.test(text) ||
+        (/^(?:Lời giải|Hướng dẫn|Hướng dẫn giải|Giải|Đáp án|Nhận xét|Bước \d|Chú ý|Kết luận|Ta có|Suy ra|•|-)\s*[:\.]?/i.test(text) ||
           child.classList.contains('word-graph-wrapper') ||
           tag === 'TABLE');
 
@@ -4336,7 +4478,17 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       (async () => {
         try {
-          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']);
+          // 1. Kiểm tra / Tự động kết nối Google Drive nếu token chưa có hoặc hết hạn
+          let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+          if (!isRealGoogleOAuthToken(token)) {
+            const connRes = await connectGoogleDrive();
+            if (connRes.success) {
+              token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+            }
+          }
+
+          // 2. Quét cây thư mục từ Google Drive
+          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { overrideToken: token || undefined });
           if (res.success && res.tree && res.tree.children) {
             const driveTitles: string[] = [];
             for (const docNode of res.tree.children) {
@@ -4716,19 +4868,25 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
 
     setIsAddingFolder(true);
+    setSyncingLevel(addingLevel as any);
     setModalAddError(null);
 
     const driveRes = await createByPath(pathSegments);
 
     if (!driveRes.success) {
       setIsAddingFolder(false);
+      setSyncingLevel(null);
       const errMsg = driveRes.message || 'Tạo chưa thành công trên Google Drive';
       setModalAddError(errMsg);
       return;
     }
 
+    const currentStore = getStoredHierarchy();
+
     if (addingLevel === 'title') {
-      setTitleList(prev => [...prev, val]);
+      setTitleList(prev => Array.from(new Set([...prev, val])));
+      if (!currentStore[val]) currentStore[val] = {};
+      saveStoredHierarchy(currentStore);
       setTitle(val);
       if (addModalType === 'danhGia') {
         setChuong('');
@@ -4737,7 +4895,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         setChuyenDe('');
       }
     } else if (addingLevel === 'chuong') {
-      setChuongList(prev => [...prev, val]);
+      setChuongList(prev => Array.from(new Set([...prev, val])));
+      if (title) {
+        if (!currentStore[title]) currentStore[title] = {};
+        if (!currentStore[title][val]) currentStore[title][val] = {};
+        saveStoredHierarchy(currentStore);
+      }
       setChuong(val);
       if (addModalType === 'danhGia') {
         setBai('');
@@ -4745,26 +4908,54 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         setChuyenDe('');
       }
     } else if (addingLevel === 'bai') {
-      setBaiList(prev => [...prev, val]);
+      setBaiList(prev => Array.from(new Set([...prev, val])));
+      if (title && chuong) {
+        if (!currentStore[title]) currentStore[title] = {};
+        if (!currentStore[title][chuong]) currentStore[title][chuong] = {};
+        if (!currentStore[title][chuong][val]) currentStore[title][chuong][val] = {};
+        saveStoredHierarchy(currentStore);
+      }
       setBai(val);
       if (addModalType === 'danhGia') {
         setVanDe('');
         setChuyenDe('');
       }
     } else if (addingLevel === 'vanDe') {
-      setVanDeList(prev => [...prev, val]);
+      setVanDeList(prev => Array.from(new Set([...prev, val])));
+      if (title && chuong && bai) {
+        if (!currentStore[title]) currentStore[title] = {};
+        if (!currentStore[title][chuong]) currentStore[title][chuong] = {};
+        if (!currentStore[title][chuong][bai]) currentStore[title][chuong][bai] = {};
+        if (!currentStore[title][chuong][bai][val]) currentStore[title][chuong][bai][val] = [];
+        saveStoredHierarchy(currentStore);
+      }
       setVanDe(val);
       if (addModalType === 'danhGia') {
         setChuyenDe('');
       }
     } else if (addingLevel === 'chuyenDe') {
-      setChuyenDeList(prev => [...prev, val]);
+      setChuyenDeList(prev => Array.from(new Set([...prev, val])));
+      if (title && chuong && bai && vanDe) {
+        if (!currentStore[title]) currentStore[title] = {};
+        if (!currentStore[title][chuong]) currentStore[title][chuong] = {};
+        if (!currentStore[title][chuong][bai]) currentStore[title][chuong][bai] = {};
+        if (!currentStore[title][chuong][bai][vanDe]) currentStore[title][chuong][bai][vanDe] = [];
+        if (!currentStore[title][chuong][bai][vanDe].includes(val)) {
+          currentStore[title][chuong][bai][vanDe].push(val);
+        }
+        saveStoredHierarchy(currentStore);
+      }
       setChuyenDe(val);
     }
 
     setIsAddingFolder(false);
     setModalAddError(null);
     setShowAddModal(false);
+
+    // Giữ chữ Đang đồng bộ màu đỏ đến khi danh sách xổ xuống cập nhật hoàn tất
+    setTimeout(() => {
+      setSyncingLevel(null);
+    }, 400);
 
     const isExisted = driveRes.status === 'existed';
     setNotification({
@@ -4990,50 +5181,32 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setIsSaving(true);
     try {
       const contentHtml = editorRef.current?.innerHTML || '';
-      const formattedDocTitle = formatDocumentTitle(subject, grade, title);
-      const docItem: TeacherDocument = {
-        id: `doc_${Date.now()}`,
-        title: formattedDocTitle,
+      const res = await saveDocumentToDriveAndDatabase({
+        title: title.trim(),
         subject,
         grade,
         chuong: chuong.trim(),
         bai: bai.trim(),
         vanDe: vanDe.trim(),
         chuyenDe: chuyenDe.trim(),
-        category: 'lesson_plan',
-        contentSnippet: contentHtml.replace(/<[^>]*>/g, '').slice(0, 150) + '...',
-        fileType: 'gdoc',
-        fileSize: '15 KB',
-        authorId: 'teacher_current',
-        authorEmail: 'giaovien@school.edu.vn',
-        isPublished: targetClasses.length > 0,
-        publishedToClasses: targetClasses,
+        tienTrinh: tienTrinhChuyenDe,
+        kienThucName: selectedKienThucName,
+        contentHtml,
+        textContent: contentHtml.replace(/<[^>]*>/g, ''),
+        selectedClasses: targetClasses,
         isForSale,
-        priceDiamonds: isForSale ? priceDiamonds : 0,
-        driveSynced: true,
-        createdAt: new Date().toLocaleDateString('vi-VN'),
-        updatedAt: new Date().toLocaleString('vi-VN'),
-      };
+        priceDiamonds,
+      });
 
-      await saveTeacherDocument(docItem);
-      const res = await saveTeachingMaterialHierarchyToDrive(
-        docItem,
-        chuong.trim() || 'Chương 1',
-        bai.trim() || 'Bài 1',
-        vanDe.trim() || 'Vấn đề 1',
-        chuyenDe.trim() || 'Chuyên đề trọng tâm'
-      );
-
-      const conn = getDriveConnectionState();
-      if (conn.isConnected) {
+      if (res.success) {
         setNotification({
-          text: `Đã lưu thành công lên Google Drive! Đường dẫn: ${res.drivePath}`,
+          text: res.message || `Đã lưu Drive thành công! Đường dẫn: ${res.drivePath}`,
           type: 'success',
         });
       } else {
         setNotification({
-          text: `Đã lưu thành công tài liệu vào hệ thống!`,
-          type: 'success',
+          text: res.error || 'Có lỗi xảy ra khi lưu tài liệu. Vui lòng thử lại!',
+          type: 'error',
         });
       }
       setTimeout(() => setNotification(null), 5000);
@@ -5209,19 +5382,331 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         <div className="space-y-4 animate-fade-in">
           {/* Thanh Phân cấp Thu Gọn Dành trọn vẹn màn hình cho Word */}
           <div className="bg-white p-3.5 rounded-2xl border border-indigo-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-              <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+            <div className="flex items-center gap-2.5 flex-1 min-w-[280px] flex-wrap">
+              <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
                 <FolderLock className="w-4 h-4" />
               </span>
-              <div className="text-xs truncate flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold text-slate-600 text-xs">Chuyên đề:</span>
-                <span className="font-extrabold text-indigo-900 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 text-xs shadow-2xs">
-                  {chuyenDe}
-                </span>
+
+              {/* Bỏ chữ 'Chuyên đề:' ở đầu dòng, đưa luôn dropdown Tiến trình lên thay thế */}
+              <div className="flex items-center gap-1 shrink-0">
+                <select
+                  id="select-tien-trinh-chuyen-de-word"
+                  value={tienTrinhChuyenDe}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTienTrinhChuyenDe(val);
+                    if (val) {
+                      setNotification({
+                        text: `Tiến trình: ${val}`,
+                        type: 'info',
+                      });
+                      setTimeout(() => setNotification(null), 3000);
+                    }
+                  }}
+                  className="text-xs font-black bg-white border border-indigo-300 rounded-lg px-2.5 py-1 text-indigo-900 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/70 transition-colors"
+                  title="Chọn tiến trình (1. Kiến thức, 2. Luyện tập, 3. KTDG, 4. Cải thiện)"
+                >
+                  <option value="Kiến thức">📚 1. Kiến thức</option>
+                  <option value="Luyện tập">✍️ 2. Luyện tập</option>
+                  <option value="KTDG">🎯 3. KTDG</option>
+                  <option value="Cải thiện">🚀 4. Cải thiện</option>
+                </select>
               </div>
+
+              {/* Tên Chuyên đề */}
+              <span className="font-extrabold text-indigo-950 bg-indigo-50/90 px-3 py-1 rounded-lg border border-indigo-200 text-xs shadow-2xs shrink-0 max-w-xs truncate" title={chuyenDe}>
+                {chuyenDe}
+              </span>
+
+              {/* Dropdown chọn tên bài luyện tập / KTDG tương ứng với tùy chọn bên dropdown tiến trình */}
+              {(() => {
+                const hierarchyStore = getStoredHierarchy();
+                const currentDocObj = (title && hierarchyStore[title]) ? hierarchyStore[title] : {};
+                const currentChuongObj = (chuong && currentDocObj[chuong]) ? currentDocObj[chuong] : {};
+                const currentBaiObj = (bai && currentChuongObj[bai]) ? currentChuongObj[bai] : {};
+                const currentVanDeList = (vanDe && currentBaiObj[vanDe]) ? currentBaiObj[vanDe] : [];
+                const activeChuyenDeList: string[] = (chuong && bai && vanDe)
+                  ? Array.from(new Set([
+                      ...(Array.isArray(currentVanDeList) ? currentVanDeList : []),
+                      ...chuyenDeList,
+                      ...documents.filter(d => d.title === title && d.chuong === chuong && d.bai === bai && d.vanDe === vanDe).map(d => d.chuyenDe).filter((x): x is string => Boolean(x))
+                    ]))
+                  : [];
+
+                // Lọc danh sách bài tương ứng theo tiến trình
+                const luyenTapExercises = activeChuyenDeList.filter(item => isDanhGia(item) || /luyentap|luyện tập/i.test(item));
+                const ktdgExercises = activeChuyenDeList.filter(item => /ktdg|kiểm tra|danhgia|đánh giá/i.test(item));
+
+                if (tienTrinhChuyenDe === 'Kiến thức') {
+                  const list = customKienThucList.length > 0 ? customKienThucList : ['Lý thuyết trọng tâm'];
+                  const curVal = selectedKienThucName && list.includes(selectedKienThucName) ? selectedKienThucName : list[0];
+                  return (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">Bài:</span>
+                      <select
+                        id="select-exercise-kienthuc"
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedKienThucName(val);
+                          setNotification({
+                            text: `Đã chọn: ${val} (Lưu thành KienThuc_${formatSafeSlug(val)}.html)`,
+                            type: 'info',
+                          });
+                          setTimeout(() => setNotification(null), 2500);
+                        }}
+                        className="text-xs font-bold bg-white border border-indigo-200 rounded-lg px-2.5 py-1 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors max-w-xs truncate"
+                        title="Chọn bài kiến thức"
+                      >
+                        {list.map((kt, idx) => (
+                          <option key={`${kt}-${idx}`} value={kt}>
+                            📚 {kt}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Nút Thêm mới */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const defaultNew = `Kiến thức ${list.length + 1}`;
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'kienThuc',
+                            item: '',
+                            newName: defaultNew,
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
+                        title="Thêm file kiến thức mới"
+                      >
+                        + Thêm bài
+                      </button>
+
+                      {/* Nút Sửa tên */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'kienThuc',
+                            item: curVal,
+                            newName: curVal,
+                          });
+                        }}
+                        className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                        title="Đổi tên bài kiến thức đang chọn"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Nút Xóa */}
+                      {list.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'delete',
+                              category: 'kienThuc',
+                              item: curVal,
+                              newName: '',
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Xóa bài kiến thức này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (tienTrinhChuyenDe === 'Luyện tập') {
+                  const combined = Array.from(new Set([...customLuyenTapList, ...luyenTapExercises])).filter(Boolean);
+                  const list = combined.length > 0 ? combined : ['Bài luyện tập 1'];
+                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : list[0];
+                  return (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">Bài:</span>
+                      <select
+                        id="select-exercise-luyentap"
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedExerciseName(val);
+                          setNotification({
+                            text: `Đã chọn: ${val} (Lưu thành luyentap_${formatSafeSlug(val)}.json)`,
+                            type: 'info',
+                          });
+                          setTimeout(() => setNotification(null), 2500);
+                        }}
+                        className="text-xs font-bold bg-white border border-indigo-200 rounded-lg px-2.5 py-1 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors max-w-xs truncate"
+                        title="Chọn bài luyện tập"
+                      >
+                        {list.map((ex, idx) => (
+                          <option key={`${ex}-${idx}`} value={ex}>
+                            ✍️ {ex}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Nút Thêm mới */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newName = `Luyện tập ${list.length + 1}`;
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'luyenTap',
+                            item: '',
+                            newName,
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
+                        title="Thêm bài luyện tập mới"
+                      >
+                        + Thêm bài
+                      </button>
+
+                      {/* Nút Sửa tên */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'luyenTap',
+                            item: curVal,
+                            newName: curVal,
+                          });
+                        }}
+                        className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                        title="Đổi tên bài luyện tập này"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Nút Xóa */}
+                      {list.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'delete',
+                              category: 'luyenTap',
+                              item: curVal,
+                              newName: '',
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Xóa bài luyện tập này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (tienTrinhChuyenDe === 'KTDG') {
+                  const combined = Array.from(new Set([...customKtdgList, ...ktdgExercises])).filter(Boolean);
+                  const list = combined.length > 0 ? combined : ['Đề kiểm tra 15 phút'];
+                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : list[0];
+                  return (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">Đề:</span>
+                      <select
+                        id="select-exercise-ktdg"
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedExerciseName(val);
+                          setNotification({
+                            text: `Đã chọn bài KTDG: ${val} (Lưu thành KTDG_${formatSafeSlug(val)}.json)`,
+                            type: 'info',
+                          });
+                          setTimeout(() => setNotification(null), 2500);
+                        }}
+                        className="text-xs font-bold bg-white border border-rose-200 rounded-lg px-2.5 py-1 text-rose-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-rose-500 hover:bg-rose-50/60 transition-colors max-w-xs truncate"
+                        title="Chọn bài kiểm tra đánh giá"
+                      >
+                        {list.map((ex, idx) => (
+                          <option key={`${ex}-${idx}`} value={ex}>
+                            🎯 {ex}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Nút Thêm mới */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newName = `KTDG ${list.length + 1}`;
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'ktdg',
+                            item: '',
+                            newName,
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-2xs"
+                        title="Thêm bài kiểm tra đánh giá mới"
+                      >
+                        + Thêm đề
+                      </button>
+
+                      {/* Nút Sửa tên */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'ktdg',
+                            item: curVal,
+                            newName: curVal,
+                          });
+                        }}
+                        className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                        title="Đổi tên bài KTDG này"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Nút Xóa */}
+                      {list.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'delete',
+                              category: 'ktdg',
+                              item: curVal,
+                              newName: '',
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Xóa bài KTDG này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (tienTrinhChuyenDe === 'Cải thiện') {
+                  return (
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0 shadow-2xs">
+                      <span>🚀 Hồ sơ cải thiện học sinh (CaiThien.json)</span>
+                    </div>
+                  );
+                }
+
+                return null;
+              })()}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsHierarchyExpanded(!isHierarchyExpanded)}
@@ -5229,7 +5714,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 title="Mở rộng / Thu gọn chi tiết Cây phân cấp bài dạy"
               >
                 {isHierarchyExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                <span>{isHierarchyExpanded ? 'Đóng phân cấp' : 'Đổi phân cấp / Chuyên đề'}</span>
+                <span>{isHierarchyExpanded ? 'Đóng lại' : 'Đổi chuyên đề'}</span>
               </button>
             </div>
           </div>
@@ -5292,34 +5777,6 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               className="sticky top-16 z-40 bg-white/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-lg flex flex-wrap items-center gap-1.5 transition-all"
               style={{ top: '64px', position: 'sticky' }}
             >
-              {/* 0. DROPDOWN TIẾN TRÌNH CHUYÊN ĐỀ (ĐỨNG TRƯỚC BIỂU TƯỢNG IN ĐẬM): Gồm 4 phần: Kiến thức, Luyện tập, Kiểm tra, Cải thiện */}
-              <div className="flex items-center gap-1 mr-1">
-                <select
-                  id="select-tien-trinh-chuyen-de-word"
-                  value={tienTrinhChuyenDe}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setTienTrinhChuyenDe(val);
-                    if (val) {
-                      setNotification({
-                        text: `Tiến trình chuyên đề: ${val}`,
-                        type: 'info',
-                      });
-                      setTimeout(() => setNotification(null), 3000);
-                    }
-                  }}
-                  className="text-xs font-black bg-white border border-indigo-300 rounded-lg px-2.5 py-1 text-indigo-900 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors"
-                  title="Tiến trình chuyên đề (Kiến thức có Lý thuyết & Bài tập; Luyện tập và Kiểm tra chỉ có Bài tập)"
-                >
-                  <option value="Kiến thức">📚 1. Kiến thức</option>
-                  <option value="Luyện tập">✍️ 2. Luyện tập</option>
-                  <option value="Kiểm tra">📝 3. Kiểm tra</option>
-                  <option value="Cải thiện">🚀 4. Cải thiện</option>
-                </select>
-              </div>
-
-              <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
-
               {/* NÚT SOẠN BÀI ▾ (Chỉ dành cho tài khoản Giáo viên trở lên - Giải pháp 1: Tự động đóng khung khi bôi đen hoặc chèn mới) */}
               {isTeacherOrHigher(currentRole) && (
                 <div className="relative">
@@ -5542,98 +5999,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
             <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
 
-            {/* 4. MENU CHÈN (XỔ XUỐNG): Chèn Bảng, Chèn hình ảnh, Chèn file, Chèn thư mục/E-learning */}
-            <div className="relative">
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  saveCurrentSelection();
-                }}
-                onClick={() => {
-                  setOpenInsertMenu(!openInsertMenu);
-                  setOpenFunctionMenu(false);
-                  setOpenAlignMenu(false);
-                  setOpenWordViewMenu(false);
-                }}
-                className={`px-3 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
-                  openInsertMenu ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200'
-                }`}
-                title="Chèn nội dung bảng, hình ảnh, file, e-learning vào tài liệu"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Chèn</span>
-                <ChevronDown className="w-3 h-3" />
-              </button>
-
-              {openInsertMenu && (
-                <div className="absolute z-50 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl w-60 py-1 divide-y divide-slate-100 animate-fade-in">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      saveCurrentSelection();
-                    }}
-                    onClick={handleInsertTable}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-indigo-50 text-slate-700 text-left font-semibold cursor-pointer"
-                  >
-                    <Table className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <div>
-                      <div className="font-bold">Chèn Bảng</div>
-                      <div className="text-[10px] text-slate-400 font-normal">Nhập số dòng, số cột, tùy chọn dòng tiêu đề</div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      saveCurrentSelection();
-                    }}
-                    onClick={handleInsertImage}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-emerald-50 text-emerald-900 text-left font-semibold cursor-pointer"
-                  >
-                    <ImageIcon className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <div>
-                      <div className="font-bold">Chèn Hình ảnh</div>
-                      <div className="text-[10px] text-slate-400 font-normal">Tải ảnh minh họa từ máy tính</div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      saveCurrentSelection();
-                    }}
-                    onClick={handleInsertFile}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-blue-50 text-blue-900 text-left font-semibold cursor-pointer"
-                  >
-                    <FileUp className="w-4 h-4 text-blue-600 shrink-0" />
-                    <div>
-                      <div className="font-bold">Chèn File</div>
-                      <div className="text-[10px] text-slate-400 font-normal">Đính kèm tệp PDF, Docx, Bài tập</div>
-                    </div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      saveCurrentSelection();
-                    }}
-                    onClick={handleInsertFolderElearning}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2.5 hover:bg-amber-50 text-amber-900 text-left font-semibold cursor-pointer"
-                  >
-                    <FolderArchive className="w-4 h-4 text-amber-600 shrink-0" />
-                    <div>
-                      <div className="font-bold">Chèn Thư mục (E-Learning)</div>
-                      <div className="text-[10px] text-slate-400 font-normal">Bài giảng KienThuc.html & Sandbox</div>
-                    </div>
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* 4. MENU CHÈN: Độc lập trong module con SoanThao/MenuChen (Chèn bảng, Chèn hình ảnh, Chèn File, Chèn Thư mục E-Learning) */}
+            <MenuChen
+              editorRef={editorRef}
+              saveCurrentSelection={saveCurrentSelection}
+              insertHtmlToEditor={insertHtmlToEditor}
+              chuyenDe={chuyenDe}
+              setNotification={setNotification}
+              onCloseOtherMenus={() => {
+                setOpenFunctionMenu(false);
+                setOpenAlignMenu(false);
+                setOpenWordViewMenu(false);
+              }}
+            />
 
             {/* 4.1. MENU HÀM SỐ: Độc lập trong module con SoanThao/MenuHamSo (Chèn công thức MathType/LaTeX, Chèn đồ thị TikZ & Chèn bảng biến thiên tikz-tab) */}
             <MenuHamSo
@@ -5649,25 +6027,6 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 setOpenWordViewMenu(false);
               }}
             />
-
-            <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
-
-            {/* Bỏ + Mốc slide, Hiệu ứng trên menu word vì đã có thanh mốc PPT đảm nhận - Giữ nút Phân tích mốc tự động cho Giáo viên */}
-            {isTeacherOrHigher(currentRole) && (
-              <button
-                type="button"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  saveCurrentSelection();
-                }}
-                onClick={handleAutoAnalyzeBreaks}
-                className="px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 hover:text-indigo-900 border border-indigo-200 flex items-center gap-1 transition-all cursor-pointer shadow-2xs active:scale-95"
-                title="Tự động phân tích toàn bộ văn bản và gắn mốc Slide & Hiệu ứng thông minh lên thanh mốc PPT"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                <span className="hidden md:inline">Phân tích mốc tự động</span>
-              </button>
-            )}
 
             <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
 
@@ -5790,17 +6149,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
             </div>
 
-            {/* Nút Lưu Drive góc phải Toolbar */}
+            {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
             <div className="ml-auto flex items-center gap-2">
-              <button
-                type="button"
-                disabled={isSaving}
+              <DongBoDriveButton
+                isSaving={isSaving}
                 onClick={handleSaveToDrive}
-                className="px-3.5 py-1.5 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-50"
-              >
-                <Cloud className="w-3.5 h-3.5" />
-                <span>{isSaving ? 'Đang lưu...' : 'Lưu Drive'}</span>
-              </button>
+              />
             </div>
           </div>
 
@@ -5954,6 +6308,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 {isTeacherOrHigher(currentRole) && (
                   <PptMarkerRail
                     markers={railMarkers}
+                    lineItems={railLineItems}
                     totalScrollHeight={editorRef.current?.scrollHeight || 1000}
                     onRailClick={handlePptRailClick}
                     onMarkerClick={(marker, e) => {
@@ -5967,10 +6322,22 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         snippet: marker.snippet,
                       });
                     }}
+                    onLinePlusClick={(lineItem, e) => {
+                      e.stopPropagation();
+                      setPptRailClickMenu({
+                        elementIndex: lineItem.elementIndex,
+                        x: e.clientX,
+                        y: e.clientY,
+                        isSlide: lineItem.hasSlideMarker,
+                        isEffect: lineItem.hasEffectMarker,
+                        snippet: lineItem.snippet,
+                      });
+                    }}
                     clickMenu={pptRailClickMenu}
                     onApplyBreak={handleApplyBreakFromRail}
                     onRemoveBreak={handleRemoveBreakFromRail}
                     onCloseClickMenu={() => setPptRailClickMenu(null)}
+                    onAutoAnalyze={handleAutoAnalyzeBreaks}
                   />
                 )}
 
@@ -7348,65 +7715,79 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 )}
               </div>
             ) : (
-              <div className="space-y-3 text-xs">
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Tên biến số:</label>
+              /* Chế độ 2: Nhập Tikz-tab 3 hàng gọn gàng không text dư thừa */
+              <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                {/* Hàng 1: [Tên biến (mặc định x)] [Các mốc] */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-4">
                     <input
                       type="text"
                       value={wordBbtVarName}
                       onChange={e => setWordBbtVarName(e.target.value)}
-                      placeholder="x hoặc t, u..."
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder="Tên biến (mặc định x)"
                     />
                   </div>
-                  <div>
-                    <label className="font-bold text-slate-700 block mb-1">Tên hàm số:</label>
+                  <div className="col-span-12 sm:col-span-8">
+                    <input
+                      type="text"
+                      value={wordBbtXPoints}
+                      onChange={e => setWordBbtXPoints(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder="Các mốc: -\infty, -1, 1, +\infty"
+                    />
+                  </div>
+                </div>
+
+                {/* Hàng 2: [Tên đạo hàm (mặc định {tên hàm}')] [Dấu đạo hàm (+; -; 0; |; ||)] */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-4">
+                    <input
+                      type="text"
+                      value={wordBbtDerivRow}
+                      onChange={e => setWordBbtDerivRow(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder={`Tên đạo hàm (mặc định ${wordBbtFuncRow || 'y'}')`}
+                    />
+                  </div>
+                  <div className="col-span-12 sm:col-span-8">
+                    <input
+                      type="text"
+                      value={wordBbtYPrimeSigns}
+                      onChange={e => setWordBbtYPrimeSigns(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs font-mono"
+                      placeholder="Dấu đạo hàm (+; -; 0; |; ||): , +, 0, -, 0, +, "
+                    />
+                  </div>
+                </div>
+
+                {/* Hàng 3: [Tên hàm (mặc định y)] [Các giá trị biến thiên (tự nhận diện trên/giữa/dưới)] */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-4">
                     <input
                       type="text"
                       value={wordBbtFuncRow}
                       onChange={e => {
                         const val = e.target.value;
+                        const oldFunc = wordBbtFuncRow;
                         setWordBbtFuncRow(val);
-                        setWordBbtDerivRow(val.includes('(') ? `${val.replace(/\(/, "'(")}` : `${val}'`);
+                        if (wordBbtDerivRow === "y'" || wordBbtDerivRow === `${oldFunc}'`) {
+                          setWordBbtDerivRow(val ? `${val}'` : "y'");
+                        }
                       }}
-                      placeholder="y hoặc f(x), s(t)..."
-                      className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder="Tên hàm (mặc định y)"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Các điểm mốc của {wordBbtVarName}:</label>
-                  <input
-                    type="text"
-                    value={wordBbtXPoints}
-                    onChange={e => setWordBbtXPoints(e.target.value)}
-                    placeholder="Ví dụ: -\\infty, -1, 1, +\\infty"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Dấu dòng đạo hàm {wordBbtDerivRow}:</label>
-                  <input
-                    type="text"
-                    value={wordBbtYPrimeSigns}
-                    onChange={e => setWordBbtYPrimeSigns(e.target.value)}
-                    placeholder="Ví dụ: , +, 0, -, 0, +, "
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
-                  />
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Giá trị biến thiên của {wordBbtFuncRow}:</label>
-                  <input
-                    type="text"
-                    value={wordBbtYValues}
-                    onChange={e => setWordBbtYValues(e.target.value)}
-                    placeholder="Mẫu: -/ -\\infty, +/ 2, -/ -2, +/ +\\infty"
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold focus:outline-emerald-600 bg-slate-50"
-                  />
+                  <div className="col-span-12 sm:col-span-8">
+                    <input
+                      type="text"
+                      value={wordBbtYValues}
+                      onChange={e => setWordBbtYValues(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs font-mono"
+                      placeholder="Các giá trị (tự nhận diện trên/giữa/dưới): -\infty, 2, -2, +\infty"
+                    />
+                  </div>
                 </div>
               </div>
             )}
@@ -7643,6 +8024,96 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal Thêm mới / Sửa tên / Xóa bài cho Kiến thức (KienThuc_*.html), Luyện tập (luyentap_*.json), KTĐG (KTDG_*.json) */}
+      {itemActionModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-indigo-100 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className={`p-2 rounded-xl text-white ${itemActionModal.type === 'delete' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+                  {itemActionModal.type === 'delete' ? <Trash2 className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm">
+                    {itemActionModal.type === 'delete'
+                      ? 'Xác nhận xóa'
+                      : itemActionModal.item
+                      ? 'Đổi tên bài'
+                      : 'Thêm bài mới'}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    {itemActionModal.category === 'kienThuc'
+                      ? 'Mục 1. Kiến thức (Tệp KienThuc_{tên}.html)'
+                      : itemActionModal.category === 'luyenTap'
+                      ? 'Mục 2. Luyện tập (Tệp luyentap_{tên}.json)'
+                      : 'Mục 3. KTĐG (Tệp KTDG_{tên}.json)'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setItemActionModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {itemActionModal.type === 'delete' ? (
+              <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                Bạn có chắc chắn muốn xóa bài <strong>"{itemActionModal.item}"</strong> không? Hành động này sẽ loại bỏ tệp tương ứng khỏi danh sách bài dạy.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">Tên bài mới:</label>
+                <input
+                  type="text"
+                  value={itemActionModal.newName}
+                  onChange={(e) => setItemActionModal({ ...itemActionModal, newName: e.target.value })}
+                  placeholder="Nhập tên bài..."
+                  className="w-full px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmItemAction();
+                    if (e.key === 'Escape') setItemActionModal(null);
+                  }}
+                />
+                <div className="text-[11px] text-indigo-600 font-mono bg-indigo-50/80 p-2 rounded-lg border border-indigo-100">
+                  📄 Tệp trên Drive sẽ là:{' '}
+                  <strong>
+                    {itemActionModal.category === 'kienThuc'
+                      ? `KienThuc_${(itemActionModal.newName || 'ten_kien_thuc').toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.html`
+                      : itemActionModal.category === 'luyenTap'
+                      ? `luyentap_${(itemActionModal.newName || 'ten_bai').toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json`
+                      : `KTDG_${(itemActionModal.newName || 'ten_de').toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json`}
+                  </strong>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setItemActionModal(null)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmItemAction}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs cursor-pointer ${
+                  itemActionModal.type === 'delete' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                {itemActionModal.type === 'delete' ? 'Xác nhận xóa' : 'Lưu tên bài'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

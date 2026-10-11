@@ -18,19 +18,24 @@ export interface BbtSolverResult {
 
 export interface BbtColData {
   isDouble: boolean;
-  dir?: '+' | '-';
+  dir?: '+' | '-' | 'C';
   val?: string;
+  heightRatio?: number;
   leftDir?: '+' | '-';
   leftVal?: string;
+  leftHeightRatio?: number;
   rightDir?: '+' | '-';
   rightVal?: string;
+  rightHeightRatio?: number;
 }
 
 export interface BbtInterval {
   startDir: '+' | '-';
   startVal: string;
+  startHeightRatio?: number;
   endDir: '+' | '-';
   endVal: string;
+  endHeightRatio?: number;
   isGoingUp: boolean;
   hasLeftLimit: boolean;
   hasRightLimit: boolean;

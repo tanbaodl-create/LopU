@@ -23,3 +23,12 @@ export interface PptRailClickMenuData {
   isEffect: boolean;
   snippet: string;
 }
+
+export interface RailLineItem {
+  elementIndex: number;
+  topOffset: number;
+  snippet: string;
+  hasSlideMarker: boolean;
+  hasEffectMarker: boolean;
+  marker?: RailMarker;
+}

@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Activity, Calculator, TrendingUp, Sparkles, Check, X } from 'lucide-react';
-import { solveFunctionForBbt, generateWordBbtHtml, detectFuncAndVar } from './bbtSolver';
+import { solveFunctionForBbt, generateWordBbtHtml, detectFuncAndVar, buildCanonicalTkzTabVar } from './bbtSolver';
 
 export interface WordBBTModalProps {
   isOpen: boolean;
@@ -35,7 +35,7 @@ export const WordBBTModal: React.FC<WordBBTModalProps> = ({
   initialFormula = 'y = x^3 - 3x',
   initialXPoints = '-\\infty, -1, 1, +\\infty',
   initialYPrimeSigns = ', +, 0, -, 0, +, ',
-  initialYValues = '-/ -\\infty, +/ 2, -/ -2, +/ +\\infty',
+  initialYValues = '-\\infty, 2, -2, +\\infty',
   initialVarName = 'x',
   initialFuncRow = 'y',
   initialDerivRow = "y'",
@@ -114,22 +114,24 @@ export const WordBBTModal: React.FC<WordBBTModalProps> = ({
       isTeacher
     );
 
+    const canonicalYValues = buildCanonicalTkzTabVar(wordBbtXPoints, wordBbtYPrimeSigns, wordBbtYValues);
     const rawTikzTab = `% Bảng biến thiên tikz-tab (${wordBbtMode === 'function' ? `Hàm số ${wordBbtFormula}` : 'Nhập trực tiếp'}):
 \\begin{tikzpicture}
   \\tkzTabInit[lgt=1.5, espcl=2.5]{$${wordBbtVarName}$ /1, $${wordBbtDerivRow}$ /1, $${wordBbtFuncRow}$ /2}{${wordBbtXPoints}}
   \\tkzTabLine{${wordBbtYPrimeSigns}}
-  \\tkzTabVar{${wordBbtYValues}}
+  \\tkzTabVar{${canonicalYValues}}
 \\end{tikzpicture}`;
 
     onInsertBbt(bbtHtml, rawTikzTab);
   };
 
   const handleExportTikZ = () => {
+    const canonicalYValues = buildCanonicalTkzTabVar(wordBbtXPoints, wordBbtYPrimeSigns, wordBbtYValues);
     const rawTikzTab = `% Bảng biến thiên tikz-tab (${wordBbtMode === 'function' ? `Hàm số ${wordBbtFormula}` : 'Nhập trực tiếp'}):
 \\begin{tikzpicture}
   \\tkzTabInit[lgt=1.5, espcl=2.5]{$${wordBbtVarName}$ /1, $${wordBbtDerivRow}$ /1, $${wordBbtFuncRow}$ /2}{${wordBbtXPoints}}
   \\tkzTabLine{${wordBbtYPrimeSigns}}
-  \\tkzTabVar{${wordBbtYValues}}
+  \\tkzTabVar{${canonicalYValues}}
 \\end{tikzpicture}`;
 
     window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
@@ -206,138 +208,123 @@ export const WordBBTModal: React.FC<WordBBTModalProps> = ({
 
         {/* Chế độ 1: Nhập hàm số tự động */}
         {wordBbtMode === 'function' ? (
-          <div className="space-y-3 p-3.5 bg-emerald-50/50 rounded-xl border border-emerald-100">
-            <div>
-              <label className="text-xs font-bold text-emerald-950 block mb-1">
-                Công thức hàm số:
-              </label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={wordBbtFormula}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setWordBbtFormula(val);
-                    const det = detectFuncAndVar(val);
-                    setWordBbtVarName(det.varName);
-                    setWordBbtFuncRow(det.funcRow);
-                    setWordBbtDerivRow(det.derivRow);
-                    const res = solveFunctionForBbt(val);
-                    if (res.success) {
-                      setWordBbtXPoints(res.xPoints);
-                      setWordBbtYPrimeSigns(res.yPrimeSigns);
-                      setWordBbtYValues(res.yValues);
-                      setWordBbtFormulaDesc(res.description);
-                      setWordBbtVarName(res.varName);
-                      setWordBbtFuncRow(res.funcRow);
-                      setWordBbtDerivRow(res.derivRow);
-                    }
-                  }}
-                  className="flex-1 px-3 py-2 rounded-xl border border-emerald-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
-                  placeholder="Ví dụ: y = x^3 - 3x, f(x) = (2x+1)/(x-1), s(t) = t^2 - 4t..."
-                />
-                <button
-                  type="button"
-                  onClick={handleAutoSolve}
-                  className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 flex items-center gap-1 cursor-pointer"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Giải tự động</span>
-                </button>
-              </div>
+          <div className="space-y-2 p-3 bg-emerald-50/50 rounded-xl border border-emerald-100">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={wordBbtFormula}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setWordBbtFormula(val);
+                  const det = detectFuncAndVar(val);
+                  setWordBbtVarName(det.varName);
+                  setWordBbtFuncRow(det.funcRow);
+                  setWordBbtDerivRow(det.derivRow);
+                  const res = solveFunctionForBbt(val);
+                  if (res.success) {
+                    setWordBbtXPoints(res.xPoints);
+                    setWordBbtYPrimeSigns(res.yPrimeSigns);
+                    setWordBbtYValues(res.yValues);
+                    setWordBbtFormulaDesc(res.description);
+                    setWordBbtVarName(res.varName);
+                    setWordBbtFuncRow(res.funcRow);
+                    setWordBbtDerivRow(res.derivRow);
+                  }
+                }}
+                className="flex-1 px-3 py-2 rounded-xl border border-emerald-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                placeholder="Công thức hàm: y = x^3 - 3x, f(x) = (2x+1)/(x-1), s(t) = t^2 - 4t..."
+              />
+              <button
+                type="button"
+                onClick={handleAutoSolve}
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 flex items-center gap-1 cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Giải tự động</span>
+              </button>
             </div>
 
             {/* Thông tin nhận diện hàm số */}
             {wordBbtFormulaDesc && (
-              <div className="p-2.5 bg-white/90 rounded-lg border border-emerald-200 text-[11px] text-emerald-900 leading-relaxed">
-                <div className="flex items-center justify-between mb-1">
-                  <b>⚡ Kết quả giải & nhận diện:</b>
-                  <span className="text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-800 font-semibold">
-                    Biến: <i>{wordBbtVarName}</i>, Hàm: <i>{wordBbtFuncRow}</i>
-                  </span>
-                </div>
+              <div className="p-2 bg-white/90 rounded-lg border border-emerald-200 text-[11px] text-emerald-900 leading-relaxed">
                 <span>{wordBbtFormulaDesc}</span>
               </div>
             )}
           </div>
         ) : (
-          /* Chế độ 2: Nhập Tikz-tab tùy chỉnh */
-          <div className="space-y-3">
-            {/* Tùy chỉnh tên biến và tên hàng hàm */}
-            <div className="grid grid-cols-3 gap-2 p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Tên biến:
-                </label>
+          /* Chế độ 2: Nhập Tikz-tab 3 hàng gọn gàng */
+          <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+            {/* Hàng 1: [Tên biến (mặc định x)] [Các mốc] */}
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-12 sm:col-span-4">
                 <input
                   type="text"
                   value={wordBbtVarName}
-                  onChange={e => setWordBbtVarName(e.target.value.trim() || 'x')}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-1 focus:ring-emerald-500 bg-white"
-                  placeholder="x, t, u..."
+                  onChange={e => setWordBbtVarName(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                  placeholder="Tên biến (mặc định x)"
                 />
               </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Hàng đạo hàm:
-                </label>
+              <div className="col-span-12 sm:col-span-8">
                 <input
                   type="text"
-                  value={wordBbtDerivRow}
-                  onChange={e => setWordBbtDerivRow(e.target.value.trim() || "y'")}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-1 focus:ring-emerald-500 bg-white"
-                  placeholder="y', f'(x)..."
-                />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-slate-700 block mb-1">
-                  Hàng hàm số:
-                </label>
-                <input
-                  type="text"
-                  value={wordBbtFuncRow}
-                  onChange={e => setWordBbtFuncRow(e.target.value.trim() || 'y')}
-                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-1 focus:ring-emerald-500 bg-white"
-                  placeholder="y, f(x), s(t)..."
+                  value={wordBbtXPoints}
+                  onChange={e => setWordBbtXPoints(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                  placeholder="Các mốc: -\infty, -1, 1, +\infty"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                Các điểm mốc của biến ({wordBbtVarName}):
-              </label>
-              <input
-                type="text"
-                value={wordBbtXPoints}
-                onChange={e => setWordBbtXPoints(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-slate-50 text-slate-900"
-                placeholder="-\infty, -1, 1, +\infty"
-              />
+            {/* Hàng 2: [Tên đạo hàm (mặc định {tên hàm}')] [Dấu đạo hàm (+; -; 0; |; ||)] */}
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-12 sm:col-span-4">
+                <input
+                  type="text"
+                  value={wordBbtDerivRow}
+                  onChange={e => setWordBbtDerivRow(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                  placeholder={`Tên đạo hàm (mặc định ${wordBbtFuncRow || 'y'}')`}
+                />
+              </div>
+              <div className="col-span-12 sm:col-span-8">
+                <input
+                  type="text"
+                  value={wordBbtYPrimeSigns}
+                  onChange={e => setWordBbtYPrimeSigns(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs font-mono"
+                  placeholder="Dấu đạo hàm (+; -; 0; |; ||): , +, 0, -, 0, +, "
+                />
+              </div>
             </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                Dấu của đạo hàm ({wordBbtDerivRow}):
-              </label>
-              <input
-                type="text"
-                value={wordBbtYPrimeSigns}
-                onChange={e => setWordBbtYPrimeSigns(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-slate-50 text-slate-900 font-mono"
-                placeholder=", +, 0, -, 0, +, "
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-slate-700 block mb-1">
-                Giá trị và hướng mũi tên biến thiên ({wordBbtFuncRow}):
-              </label>
-              <input
-                type="text"
-                value={wordBbtYValues}
-                onChange={e => setWordBbtYValues(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-slate-50 text-slate-900 font-mono"
-                placeholder="-/ -\infty, +/ 2, -/ -2, +/ +\infty"
-              />
+
+            {/* Hàng 3: [Tên hàm (mặc định y)] [Các giá trị biến thiên (tự nhận diện trên/giữa/dưới)] */}
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-12 sm:col-span-4">
+                <input
+                  type="text"
+                  value={wordBbtFuncRow}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const oldFunc = wordBbtFuncRow;
+                    setWordBbtFuncRow(val);
+                    if (wordBbtDerivRow === "y'" || wordBbtDerivRow === `${oldFunc}'`) {
+                      setWordBbtDerivRow(val ? `${val}'` : "y'");
+                    }
+                  }}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                  placeholder="Tên hàm (mặc định y)"
+                />
+              </div>
+              <div className="col-span-12 sm:col-span-8">
+                <input
+                  type="text"
+                  value={wordBbtYValues}
+                  onChange={e => setWordBbtYValues(e.target.value)}
+                  className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs font-mono"
+                  placeholder="Các giá trị (tự nhận diện trên/giữa/dưới): -\infty, 2, -2, +\infty"
+                />
+              </div>
             </div>
           </div>
         )}

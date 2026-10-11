@@ -80,8 +80,9 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
           el.classList.contains('lesson-template-box') ||
           el.tagName === 'H1' ||
           el.tagName === 'H2' ||
+          el.tagName === 'H3' ||
           el.classList.contains('word-bbt-wrapper') ||
-          (el.tagName === 'P' && /^(?:Câu|Bài|Ví dụ)\s+\d+[:\.]/i.test(el.textContent || ''))
+          (el.tagName === 'P' && /^(?:Chương|Bài|Vấn đề|Chuyên đề|Câu|Ví dụ|VD|Dạng|Dạng toán|Khái niệm|Định lý|Định nghĩa|Tính chất|Hệ quả|I\.|II\.|III\.|IV\.|V\.)\s*[\d\.\:\[]/i.test((el.textContent || '').trim()))
         );
     }
 

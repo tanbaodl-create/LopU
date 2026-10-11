@@ -1,27 +1,33 @@
 import React from 'react';
-import { Plus } from 'lucide-react';
-import { RailMarker, PptRailClickMenuData } from './types';
+import { Plus, Wand2 } from 'lucide-react';
+import { RailMarker, RailLineItem, PptRailClickMenuData } from './types';
 
 interface PptMarkerRailProps {
   markers: RailMarker[];
+  lineItems?: RailLineItem[];
   totalScrollHeight?: number;
   onRailClick: (e: React.MouseEvent<HTMLDivElement>) => void;
   onMarkerClick: (marker: RailMarker, e: React.MouseEvent) => void;
+  onLinePlusClick?: (lineItem: RailLineItem, e: React.MouseEvent) => void;
   clickMenu: PptRailClickMenuData | null;
   onApplyBreak: (type: 'slide' | 'effect', elementIndex: number) => void;
   onRemoveBreak: (elementIndex: number) => void;
   onCloseClickMenu: () => void;
+  onAutoAnalyze?: () => void;
 }
 
 export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
   markers,
+  lineItems = [],
   totalScrollHeight = 1000,
   onRailClick,
   onMarkerClick,
+  onLinePlusClick,
   clickMenu,
   onApplyBreak,
   onRemoveBreak,
   onCloseClickMenu,
+  onAutoAnalyze,
 }) => {
   return (
     <>
@@ -29,9 +35,23 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
       <div
         onClick={onRailClick}
         className="w-11 shrink-0 self-stretch min-h-[580px] bg-gradient-to-b from-purple-100/90 via-slate-100 to-amber-100/90 rounded-2xl border-2 border-purple-300/80 shadow-md relative cursor-pointer select-none group transition-all hover:border-purple-500 hover:shadow-lg flex flex-col items-center py-3"
-        title="Thanh Mốc PPT: Kích chuột vào vị trí bất kỳ trên thanh này để chèn +Mốc Slide hoặc +Hiệu ứng"
+        title="Thanh Mốc PPT: Kích vào dấu + đầu dòng bất kỳ để chèn +Mốc Slide hoặc +Hiệu ứng"
       >
-        <div className="flex flex-col items-center gap-1 mb-2">
+        <div className="flex flex-col items-center gap-1.5 mb-2">
+          {/* Nút Phân tích mốc tự động dùng biểu tượng Wand2 ở đầu thanh mốc PPT */}
+          {onAutoAnalyze && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onAutoAnalyze();
+              }}
+              className="p-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md transition-all transform hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center border border-purple-300 mb-0.5"
+              title="Phân tích mốc tự động: Mỗi câu hỏi (đề+lời giải), mục lý thuyết, Ví dụ (đề+lời giải) là 1 slide"
+            >
+              <Wand2 className="w-4 h-4 text-amber-300" />
+            </button>
+          )}
           <span className="p-1 rounded-lg bg-purple-600 text-white shadow-xs text-xs font-black">🎬</span>
           <span className="text-[9px] font-black tracking-tighter text-purple-900 uppercase [writing-mode:vertical-lr] rotate-180 select-none">
             Thanh Mốc PPT
@@ -41,24 +61,74 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
         <div className="w-full flex-1 relative min-h-[400px]">
           <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-purple-300/50 border-r border-dashed border-purple-400/80"></div>
 
-          {markers.map((marker, mIdx) => (
-            <div
-              key={marker.id || mIdx}
-              onClick={(e) => onMarkerClick(marker, e)}
-              className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 px-1 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
-                marker.type === 'slide'
-                  ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
-                  : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
-              }`}
-              style={{
-                top: `${Math.max(4, Math.min(96, (marker.topOffset / (totalScrollHeight || 1000)) * 100))}%`,
-              }}
-              title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng ${marker.stepNumber}`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
-            >
-              <span>{marker.type === 'slide' ? '🎬' : '⚡'}</span>
-              <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
-            </div>
-          ))}
+          {/* Dấu + tại mỗi đầu 1 dòng mới trên thanh mốc PPT */}
+          {lineItems.map((line) => {
+            const topPercent = Math.max(2, Math.min(98, (line.topOffset / (totalScrollHeight || 1000)) * 100));
+            if (line.marker) {
+              const marker = line.marker;
+              return (
+                <div
+                  key={marker.id || line.elementIndex}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onMarkerClick(marker, e);
+                  }}
+                  className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 px-1 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
+                    marker.type === 'slide'
+                      ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
+                      : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
+                  }`}
+                  style={{ top: `${topPercent}%` }}
+                  title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng ${marker.stepNumber}`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
+                >
+                  <span>{marker.type === 'slide' ? '🎬' : '⚡'}</span>
+                  <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={`line-plus-${line.elementIndex}`}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onLinePlusClick) {
+                    onLinePlusClick(line, e);
+                  }
+                }}
+                className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded-full bg-purple-600 hover:bg-purple-800 text-white flex items-center justify-center font-extrabold text-[10px] shadow-sm transition-all transform hover:scale-125 active:scale-95 cursor-pointer border border-white"
+                style={{ top: `${topPercent}%` }}
+                title={`Kích vào dấu + ở đầu dòng ${line.elementIndex + 1} ("${line.snippet}") để thêm mốc Slide hoặc Hiệu ứng`}
+              >
+                +
+              </button>
+            );
+          })}
+
+          {/* Fallback render markers if lineItems is empty */}
+          {lineItems.length === 0 &&
+            markers.map((marker, mIdx) => (
+              <div
+                key={marker.id || mIdx}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMarkerClick(marker, e);
+                }}
+                className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 px-1 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
+                  marker.type === 'slide'
+                    ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
+                    : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
+                }`}
+                style={{
+                  top: `${Math.max(4, Math.min(96, (marker.topOffset / (totalScrollHeight || 1000)) * 100))}%`,
+                }}
+                title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng ${marker.stepNumber}`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
+              >
+                <span>{marker.type === 'slide' ? '🎬' : '⚡'}</span>
+                <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
+              </div>
+            ))}
         </div>
 
         <div className="mt-auto pt-2 flex flex-col items-center gap-0.5 text-purple-700 opacity-60 group-hover:opacity-100 transition-opacity">

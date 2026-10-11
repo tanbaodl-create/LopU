@@ -14,6 +14,7 @@ import {
   sanitizeHierarchyStore,
   getDeletedFoldersBlacklist,
 } from '../../ModuleGiaoVien/TaiLieuCaNhan/hierarchyData';
+export { formatDocumentTitle };
 import {
   DriveStoredFile,
   connectGoogleDrive,
@@ -46,7 +47,7 @@ export interface HierarchyDriveResult {
 }
 
 // Helper function to find a folder by name and parent ID on real Google Drive
-async function findFolderOnDrive(token: string, name: string, parentId?: string): Promise<string | null> {
+export async function findFolderOnDrive(token: string, name: string, parentId?: string): Promise<string | null> {
   try {
     const cleanParent = parentId && parentId !== 'root' ? parentId : 'root';
     const query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and '${cleanParent}' in parents and trashed = false`;
@@ -80,7 +81,7 @@ async function findFolderOnDrive(token: string, name: string, parentId?: string)
 }
 
 // Helper function to create a folder on real Google Drive under a parent ID
-async function createFolderOnDrive(token: string, name: string, parentId?: string): Promise<string> {
+export async function createFolderOnDrive(token: string, name: string, parentId?: string): Promise<string> {
   const metadata: any = {
     name,
     mimeType: 'application/vnd.google-apps.folder',
@@ -219,12 +220,90 @@ export async function findFolderPathIdOnDrive(token: string, pathSegments: strin
   return currentParentId || null;
 }
 
-// Helper function to recursively find or create a deep folder path
-async function getOrCreateFolderPathOnDrive(token: string, pathSegments: string[]): Promise<string> {
+export const DRIVE_FOLDER_CACHE_KEY = 'lopu_drive_folder_id_cache_v1';
+export const DRIVE_FILE_CACHE_KEY = 'lopu_drive_file_id_cache_v1';
+
+export function getCachedDriveFolderId(pathKey: string): string | null {
+  try {
+    const raw = localStorage.getItem(DRIVE_FOLDER_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    return cache[pathKey] || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedDriveFolderId(pathKey: string, folderId: string): void {
+  try {
+    const raw = localStorage.getItem(DRIVE_FOLDER_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[pathKey] = folderId;
+    localStorage.setItem(DRIVE_FOLDER_CACHE_KEY, JSON.stringify(cache));
+  } catch (err) {
+    console.warn('Lỗi ghi cache folderID vào localStorage:', err);
+  }
+}
+
+export function getCachedDriveFileId(parentFolderId: string, fileName: string): string | null {
+  try {
+    const raw = localStorage.getItem(DRIVE_FILE_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    return cache[`${parentFolderId}:${fileName}`] || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedDriveFileId(parentFolderId: string, fileName: string, fileId: string): void {
+  try {
+    const raw = localStorage.getItem(DRIVE_FILE_CACHE_KEY);
+    const cache = raw ? JSON.parse(raw) : {};
+    cache[`${parentFolderId}:${fileName}`] = fileId;
+    localStorage.setItem(DRIVE_FILE_CACHE_KEY, JSON.stringify(cache));
+  } catch (err) {
+    console.warn('Lỗi ghi cache fileID vào localStorage:', err);
+  }
+}
+
+// Helper function to check if a folder id is still valid on drive
+export async function isDriveFolderValid(token: string, folderId: string): Promise<boolean> {
+  if (!folderId || folderId === 'root') return true;
+  try {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,trashed`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return false;
+    const data = await res.json();
+    return !data.trashed;
+  } catch {
+    return false;
+  }
+}
+
+// Helper function to recursively find or create a deep folder path, caching folderID to browser storage
+export async function getOrCreateFolderPathOnDrive(token: string, pathSegments: string[]): Promise<string> {
   let currentParentId: string | undefined = undefined;
+  const currentPathArray: string[] = [];
+
   for (const segment of pathSegments) {
     const cleanSegment = segment.trim();
     if (!cleanSegment) continue;
+    currentPathArray.push(cleanSegment);
+    const pathKey = currentPathArray.join('/');
+
+    // 1. Kiểm tra folderID trong bộ nhớ trình duyệt (localStorage cache) để truy cứu về sau siêu nhanh
+    const cachedFolderId = getCachedDriveFolderId(pathKey);
+    if (cachedFolderId) {
+      const valid = await isDriveFolderValid(token, cachedFolderId);
+      if (valid) {
+        currentParentId = cachedFolderId;
+        continue;
+      }
+    }
+
+    // 2. Nếu chưa có trong cache hoặc không còn hợp lệ, kiểm tra trên Drive
     let folderId = await findFolderOnDrive(token, cleanSegment, currentParentId);
     if (!folderId) {
       folderId = await createFolderOnDrive(token, cleanSegment, currentParentId);
@@ -232,10 +311,93 @@ async function getOrCreateFolderPathOnDrive(token: string, pathSegments: string[
     } else {
       console.log(`Tìm thấy thư mục hiện có trên Google Drive: ${cleanSegment} (ID: ${folderId})`);
     }
+
+    // 3. Lưu folderID về bộ nhớ trình duyệt để truy cứu về sau cho nhanh
+    setCachedDriveFolderId(pathKey, folderId);
     currentParentId = folderId;
   }
   return currentParentId || 'root';
 }
+
+export async function findFileInDriveFolder(token: string, parentFolderId: string, fileName: string): Promise<string | null> {
+  const cachedFileId = getCachedDriveFileId(parentFolderId, fileName);
+  if (cachedFileId) {
+    try {
+      const checkRes = await fetch(`https://www.googleapis.com/drive/v3/files/${cachedFileId}?fields=id,trashed`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (checkRes.ok) {
+        const fileInfo = await checkRes.json();
+        if (!fileInfo.trashed) return cachedFileId;
+      }
+    } catch {}
+  }
+
+  const cleanName = fileName.replace(/'/g, "\\'");
+  const query = `name = '${cleanName}' and '${parentFolderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`;
+  const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,trashed)&pageSize=10`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const file = (data.files || []).find((f: any) => !f.trashed);
+  if (file?.id) {
+    setCachedDriveFileId(parentFolderId, fileName, file.id);
+    return file.id;
+  }
+  return null;
+}
+
+export async function saveOrUpdateDriveFile(
+  token: string,
+  parentFolderId: string,
+  fileName: string,
+  content: string,
+  mimeType: string = 'text/plain'
+): Promise<{ success: boolean; fileId: string; isCreated: boolean }> {
+  const existingFileId = await findFileInDriveFolder(token, parentFolderId, fileName);
+
+  if (existingFileId) {
+    // File đã có -> cập nhật nội dung vào file tương ứng (PATCH)
+    const blob = new Blob([content], { type: mimeType });
+    const patchRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': mimeType,
+      },
+      body: blob,
+    });
+    if (!patchRes.ok) {
+      throw new Error(`Cập nhật file ${fileName} trên Drive thất bại (${patchRes.status})`);
+    }
+    setCachedDriveFileId(parentFolderId, fileName, existingFileId);
+    return { success: true, fileId: existingFileId, isCreated: false };
+  } else {
+    // File chưa có -> tạo file mới với tên tương ứng (POST)
+    const metadata = {
+      name: fileName,
+      parents: [parentFolderId],
+      mimeType,
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', new Blob([content], { type: mimeType }));
+
+    const postRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    if (!postRes.ok) {
+      throw new Error(`Tạo mới file ${fileName} trên Drive thất bại (${postRes.status})`);
+    }
+    const createdData = await postRes.json();
+    const newFileId = createdData.id;
+    setCachedDriveFileId(parentFolderId, fileName, newFileId);
+    return { success: true, fileId: newFileId, isCreated: true };
+  }
+}
+
 
 export function isRealGoogleOAuthToken(token?: string | null): boolean {
   if (!token) return false;

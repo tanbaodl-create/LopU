@@ -7,8 +7,8 @@
  * 4. Lấy cây thư mục/tệp tin lồng nhau (FolderID/FileID cấp con, cháu...) để tham chiếu.
  */
 
-import { getDriveConnectionState } from '../../ConnectData/ConnectDrive/driveService';
-import { createDriveFolderIfNotExists } from '../../ConnectData/ConnectDrive/googleDriveService';
+import { getDriveConnectionState, connectGoogleDrive } from '../../ConnectData/ConnectDrive/driveService';
+import { createDriveFolderIfNotExists, ensureValidDriveToken } from '../../ConnectData/ConnectDrive/googleDriveService';
 
 export interface PathToIdResult {
   found: boolean;
@@ -501,18 +501,12 @@ export async function createByPath(
     overrideToken?: string;
   }
 ): Promise<CreateByPathResult> {
-  const token = options?.overrideToken || getAccessToken();
   const pathArray = parsePathInput(pathInput);
   const fullPath = pathArray.join('/');
 
-  if (pathArray.length === 0) {
-    return {
-      success: false,
-      id: null,
-      path: '',
-      status: 'failed',
-      message: 'Đường dẫn đầu vào không hợp lệ.',
-    };
+  let token = options?.overrideToken || getAccessToken();
+  if (!token) {
+    token = await ensureValidDriveToken();
   }
 
   if (!token) {
@@ -521,7 +515,7 @@ export async function createByPath(
       id: null,
       path: fullPath,
       status: 'failed',
-      message: 'Chưa kết nối Google Drive. Vui lòng bấm Kết nối Drive.',
+      message: 'Chưa kết nối Google Drive hoặc phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.',
     };
   }
 

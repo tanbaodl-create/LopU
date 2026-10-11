@@ -33,12 +33,17 @@ import {
   FolderTree,
   FolderLock,
   CornerDownLeft,
+  Edit3,
+  Trash2,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { TeacherDocument, ClassItem, UserRole } from '../../../services/storageTypes';
-import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
-import { saveTeachingMaterialHierarchyToDrive, getDriveConnectionState } from '../../ConnectData/ConnectDrive/googleDriveService';
+import { getClasses, getTeacherDocuments } from '../../ConnectData/ConnectFirestore';
 import { HierarchySelector } from '../TaiLieuCaNhan/HierarchySelector';
 import { MenuHamSo } from './MenuHamSo';
+import { MenuChen } from './MenuChen';
+import { DongBoDriveButton, useDongBoDrive } from './DongBoDrive';
+import { renderLatexInHtml, autoRenderLatexInDom } from './latexUtils';
 
 export interface SoanThaoViewProps {
   currentRole?: UserRole;
@@ -57,6 +62,127 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
   const [vanDe, setVanDe] = useState<string>('');
   const [chuyenDe, setChuyenDe] = useState<string>('');
   const [tienTrinh, setTienTrinh] = useState<string>('Kiến thức');
+  const [selectedKienThucName, setSelectedKienThucName] = useState<string>('Lý thuyết trọng tâm');
+  const [selectedExerciseName, setSelectedExerciseName] = useState<string>('');
+
+  const [customKienThucList, setCustomKienThucList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lopu_custom_kienthuc_list');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['Lý thuyết trọng tâm', 'Tóm tắt công thức'];
+  });
+  const [customLuyenTapList, setCustomLuyenTapList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lopu_custom_luyentap_list');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['Bài luyện tập 1', 'Bài luyện tập 2', 'Bài luyện tập nâng cao'];
+  });
+  const [customKtdgList, setCustomKtdgList] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('lopu_custom_ktdg_list');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return ['Đề kiểm tra 15 phút', 'Đề kiểm tra 1 tiết', 'Đề đánh giá năng lực'];
+  });
+
+  // Modal sửa tên / xóa bài cho Kiến thức, Luyện tập, KTĐG
+  const [itemActionModal, setItemActionModal] = useState<{
+    type: 'rename' | 'delete';
+    category: 'kienThuc' | 'luyenTap' | 'ktdg';
+    item: string;
+    newName: string;
+  } | null>(null);
+
+  const handleConfirmItemAction = () => {
+    if (!itemActionModal) return;
+    const { type, category, item, newName } = itemActionModal;
+    const cleanName = newName.trim();
+
+    if (type === 'delete') {
+      if (category === 'kienThuc') {
+        const updated = customKienThucList.filter(x => x !== item);
+        const finalUpdated = updated.length > 0 ? updated : ['Lý thuyết trọng tâm'];
+        setCustomKienThucList(finalUpdated);
+        localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(finalUpdated));
+        setSelectedKienThucName(finalUpdated[0]);
+        setNotification({ text: `Đã xóa bài kiến thức "${item}" thành công!`, type: 'info' });
+      } else if (category === 'luyenTap') {
+        const updated = customLuyenTapList.filter(x => x !== item);
+        const finalUpdated = updated.length > 0 ? updated : ['Bài luyện tập 1'];
+        setCustomLuyenTapList(finalUpdated);
+        localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(finalUpdated));
+        setSelectedExerciseName(finalUpdated[0]);
+        setNotification({ text: `Đã xóa bài luyện tập "${item}" thành công!`, type: 'info' });
+      } else if (category === 'ktdg') {
+        const updated = customKtdgList.filter(x => x !== item);
+        const finalUpdated = updated.length > 0 ? updated : ['Đề kiểm tra 15 phút'];
+        setCustomKtdgList(finalUpdated);
+        localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(finalUpdated));
+        setSelectedExerciseName(finalUpdated[0]);
+        setNotification({ text: `Đã xóa đề kiểm tra "${item}" thành công!`, type: 'info' });
+      }
+      setItemActionModal(null);
+      setTimeout(() => setNotification(null), 3000);
+      return;
+    }
+
+    if (!cleanName) {
+      setNotification({ text: 'Vui lòng nhập tên hợp lệ!', type: 'error' });
+      return;
+    }
+
+    if (category === 'kienThuc') {
+      let updated: string[];
+      if (item) {
+        updated = customKienThucList.map(x => (x === item ? cleanName : x));
+      } else {
+        updated = Array.from(new Set([...customKienThucList, cleanName]));
+      }
+      setCustomKienThucList(updated);
+      localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(updated));
+      setSelectedKienThucName(cleanName);
+      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+      setNotification({
+        text: `Đã ${item ? 'đổi tên thành' : 'thêm bài kiến thức'} "${cleanName}" (Tệp Drive: KienThuc_${fileSlug}.html)`,
+        type: 'success',
+      });
+    } else if (category === 'luyenTap') {
+      let updated: string[];
+      if (item) {
+        updated = customLuyenTapList.map(x => (x === item ? cleanName : x));
+      } else {
+        updated = Array.from(new Set([...customLuyenTapList, cleanName]));
+      }
+      setCustomLuyenTapList(updated);
+      localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(updated));
+      setSelectedExerciseName(cleanName);
+      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+      setNotification({
+        text: `Đã ${item ? 'đổi tên thành' : 'thêm bài luyện tập'} "${cleanName}" (Tệp Drive: luyentap_${fileSlug}.json)`,
+        type: 'success',
+      });
+    } else if (category === 'ktdg') {
+      let updated: string[];
+      if (item) {
+        updated = customKtdgList.map(x => (x === item ? cleanName : x));
+      } else {
+        updated = Array.from(new Set([...customKtdgList, cleanName]));
+      }
+      setCustomKtdgList(updated);
+      localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(updated));
+      setSelectedExerciseName(cleanName);
+      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+      setNotification({
+        text: `Đã ${item ? 'đổi tên thành' : 'thêm đề KTĐG'} "${cleanName}" (Tệp Drive: KTDG_${fileSlug}.json)`,
+        type: 'success',
+      });
+    }
+
+    setItemActionModal(null);
+    setTimeout(() => setNotification(null), 3000);
+  };
   const [insertPositionMode, setInsertPositionMode] = useState<'cursor' | 'bottom'>('bottom');
   const [isHierarchyExpanded, setIsHierarchyExpanded] = useState<boolean>(false);
   const [openSoanBaiMenu, setOpenSoanBaiMenu] = useState<boolean>(false);
@@ -64,7 +190,6 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
   const [isForSale, setIsForSale] = useState<boolean>(false);
   const [priceDiamonds, setPriceDiamonds] = useState<number>(50);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
   // Editor styling states: bổ sung thêm cỡ chữ 12px và 22px (mặc định 22px)
@@ -72,6 +197,37 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
   const [fontSize, setFontSize] = useState<string>('22px');
   const [textColor, setTextColor] = useState<string>('#0f172a');
   const [highlightColor, setHighlightColor] = useState<string>('transparent');
+
+  // Module con DongBoDrive: Quản lý tự động đồng bộ & lưu đơn lẻ lên Drive theo phân cấp chuẩn
+  const {
+    isSaving,
+    syncStatus,
+    lastSavedTime,
+    saveDocument: saveDriveDoc,
+    markDirty,
+  } = useDongBoDrive({
+    enableAutoSave: true,
+    autoSaveDelayMs: 40000,
+    onNotification: (notif) => {
+      setNotification(notif);
+      setTimeout(() => setNotification(null), 5000);
+    },
+    getDocData: () => ({
+      title,
+      subject,
+      grade,
+      chuong,
+      bai,
+      vanDe,
+      chuyenDe,
+      tienTrinh,
+      contentHtml: editorRef.current ? editorRef.current.innerHTML : '<p>Chưa có nội dung</p>',
+      textContent: editorRef.current ? editorRef.current.innerText : '',
+      selectedClasses,
+      isForSale,
+      priceDiamonds,
+    }),
+  });
 
   const isTeacherOrHigher = !currentRole || ['teacher', 'manager', 'admin', 'superadmin'].includes(currentRole);
   const isChuyenDeSelected = Boolean(chuyenDe && chuyenDe.trim());
@@ -98,9 +254,9 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     if (matchedDoc) {
       const htmlContent = (matchedDoc as any).contentHtml || (matchedDoc as any).content;
       if (htmlContent) {
-        editorRef.current.innerHTML = htmlContent;
+        editorRef.current.innerHTML = renderLatexInHtml(htmlContent);
       } else if (matchedDoc.contentSnippet) {
-        editorRef.current.innerHTML = `<p>${matchedDoc.contentSnippet}</p>`;
+        editorRef.current.innerHTML = renderLatexInHtml(`<p>${matchedDoc.contentSnippet}</p>`);
       } else {
         editorRef.current.innerHTML = '';
       }
@@ -643,92 +799,18 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // Xử lý lưu tài liệu và chuyển sang Drive + Phát hành lớp học
+  // Xử lý lưu tài liệu và chuyển sang Drive + Phát hành lớp học (thông qua Module con DongBoDrive)
   const handleSaveDocument = async (startLiveTeaching: boolean = false) => {
-    if (!title.trim()) {
-      setNotification({ text: 'Vui lòng nhập tiêu đề bài giảng!', type: 'error' });
-      return;
-    }
-
-    setIsSaving(true);
-    setNotification({ text: 'Đang xử lý biên dịch & đồng bộ tài liệu...', type: 'info' });
-
-    const contentHtml = editorRef.current ? editorRef.current.innerHTML : '<p>Chưa có nội dung</p>';
-    const textContent = editorRef.current ? editorRef.current.innerText : '';
-    const plainSnippet = textContent.slice(0, 200).replace(/\n/g, ' ') + '...';
-
-    const driveFolder = `myApp / LopU / TaiLieu / ${title.trim() || 'TaiLieu'} / ${chuong} / ${bai} / ${vanDe} / ${chuyenDe}`;
-
-    const newDoc: TeacherDocument = {
-      id: `doc_${Date.now()}`,
-      title: title.trim(),
-      subject,
-      grade,
-      category: 'lesson_plan',
-      fileType: 'gdoc',
-      chuong: chuong.trim(),
-      bai: bai.trim(),
-      vanDe: vanDe.trim(),
-      chuyenDe: chuyenDe.trim(),
-      driveFolderPath: driveFolder,
-      createdAt: new Date().toLocaleString('vi-VN'),
-      updatedAt: new Date().toLocaleString('vi-VN'),
-      isPublished: selectedClasses.length > 0,
-      publishedToClasses: selectedClasses,
-      driveSynced: true,
-      fileSize: `${Math.ceil(contentHtml.length / 1024)} KB`,
-      authorId: 'u_gv01',
-      contentSnippet: plainSnippet,
-      isForSale,
-      priceDiamonds: isForSale ? priceDiamonds : 0,
-      purchasedUserIds: [],
-    };
-
-    try {
-      // 1. Sao lưu lên Google Drive cá nhân theo cấu trúc thư mục 4 cấp độ
-      await saveTeachingMaterialHierarchyToDrive(
-        newDoc,
-        chuong,
-        bai,
-        vanDe,
-        chuyenDe
-      );
-
-      // 2. Lưu thông tin vào Firestore/Database
-      await saveTeacherDocument(newDoc);
-      
-      const conn = getDriveConnectionState();
-      const cleanFileName = `[${chuyenDe}]_${title.trim().replace(/[\s:/\\?*]+/g, '_')}`;
-      
-      let successMsg = '';
-      if (conn.isConnected) {
-        successMsg = `Đã đồng bộ Drive & Lưu hệ thống thành công: ${cleanFileName} tại thư mục ${driveFolder}`;
-      } else {
-        successMsg = `Đã lưu tài liệu vào hệ thống thành công: ${cleanFileName}`;
-      }
-
-      if (selectedClasses.length > 0) {
-        successMsg += ` và đã phát hành tới ${selectedClasses.length} lớp học.`;
-      }
-
-      setNotification({ text: successMsg, type: 'success' });
-      
-      if (startLiveTeaching) {
-        setTimeout(() => {
-          setNotification({ text: '🚀 Đang chuẩn bị chuyển hướng bạn đến bảng dạy lớp chuyên đề...', type: 'success' });
-          // Giả lập chuyển tab
-          const btnMgmt = document.getElementById('menu-item-teaching-management');
-          if (btnMgmt) {
-            btnMgmt.click();
-          }
-        }, 2000);
-      }
-
-    } catch (err) {
-      setNotification({ text: 'Có lỗi xảy ra trong quá trình đồng bộ Drive.', type: 'error' });
-    } finally {
-      setIsSaving(false);
-      setTimeout(() => setNotification(null), 6000);
+    const res = await saveDriveDoc(false);
+    if (res.success && startLiveTeaching) {
+      setTimeout(() => {
+        setNotification({ text: '🚀 Đang chuẩn bị chuyển hướng bạn đến bảng dạy lớp chuyên đề...', type: 'success' });
+        // Giả lập chuyển tab
+        const btnMgmt = document.getElementById('menu-item-teaching-management');
+        if (btnMgmt) {
+          btnMgmt.click();
+        }
+      }, 1500);
     }
   };
 
@@ -793,19 +875,290 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
           <div className="space-y-4 animate-fade-in">
             {/* Thanh Phân cấp Thu Gọn Dành trọn vẹn màn hình cho Word */}
             <div className="bg-white p-3.5 rounded-2xl border border-indigo-200 shadow-xs flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2 flex-1 min-w-[280px]">
-                <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+              <div className="flex items-center gap-2.5 flex-1 min-w-[280px] flex-wrap">
+                <span className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
                   <FolderLock className="w-4 h-4" />
                 </span>
-                <div className="text-xs truncate">
-                  <span className="font-bold text-slate-500 uppercase text-[10px]">Đang soạn cho Chuyên đề: </span>
-                  <span className="font-extrabold text-indigo-950">
-                    {subject} ({grade}) ➔ {title || 'Tài liệu'} ➔ {chuong || 'Chương'} ➔ {bai || 'Bài'} ➔ {vanDe || 'Vấn đề'} ➔ <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-black">{chuyenDe}</span>
+
+                {/* Bỏ chữ 'Chuyên đề' ở đầu dòng, đưa luôn dropdown Tiến trình lên thay thế */}
+                <div className="flex items-center gap-1 shrink-0">
+                  <select
+                    value={tienTrinh}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setTienTrinh(val);
+                      if (val) {
+                        setNotification({
+                          text: `Tiến trình: ${val}`,
+                          type: 'info',
+                        });
+                        setTimeout(() => setNotification(null), 3000);
+                      }
+                    }}
+                    className="text-xs font-black bg-white border border-indigo-300 rounded-lg px-2.5 py-1 text-indigo-900 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/70 transition-colors"
+                    title="Chọn tiến trình (1. Kiến thức, 2. Luyện tập, 3. KTDG, 4. Cải thiện)"
+                  >
+                    <option value="Kiến thức">📚 1. Kiến thức</option>
+                    <option value="Luyện tập">✍️ 2. Luyện tập</option>
+                    <option value="KTDG">🎯 3. KTDG</option>
+                    <option value="Cải thiện">🚀 4. Cải thiện</option>
+                  </select>
+                </div>
+
+                {/* Tên Chuyên đề */}
+                <div className="text-xs truncate flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-400 font-medium hidden sm:inline">{subject} ({grade}) ➔</span>
+                  <span className="font-extrabold text-indigo-950 bg-indigo-50/90 px-3 py-1 rounded-lg border border-indigo-200 text-xs shadow-2xs shrink-0 max-w-xs truncate" title={chuyenDe}>
+                    {chuyenDe}
                   </span>
                 </div>
+
+                {/* Dropdown chọn tên bài luyện tập / đề KTDG tương ứng với tiến trình */}
+                {tienTrinh === 'Kiến thức' ? (() => {
+                  const list = customKienThucList.length > 0 ? customKienThucList : ['Lý thuyết trọng tâm'];
+                  const curVal = selectedKienThucName && list.includes(selectedKienThucName) ? selectedKienThucName : list[0];
+                  return (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">Bài:</span>
+                      <select
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedKienThucName(val);
+                          setNotification({
+                            text: `Đã chọn: ${val} (Lưu thành KienThuc_${val.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.html)`,
+                            type: 'info',
+                          });
+                          setTimeout(() => setNotification(null), 2500);
+                        }}
+                        className="text-xs font-bold bg-white border border-indigo-200 rounded-lg px-2.5 py-1 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors max-w-xs truncate"
+                        title="Chọn bài kiến thức"
+                      >
+                        {list.map((kt, idx) => (
+                          <option key={`${kt}-${idx}`} value={kt}>
+                            📚 {kt}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const defaultNew = `Kiến thức ${list.length + 1}`;
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'kienThuc',
+                            item: '',
+                            newName: defaultNew,
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
+                        title="Thêm file kiến thức mới"
+                      >
+                        + Thêm bài
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'kienThuc',
+                            item: curVal,
+                            newName: curVal,
+                          });
+                        }}
+                        className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                        title="Đổi tên bài kiến thức đang chọn"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {list.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'delete',
+                              category: 'kienThuc',
+                              item: curVal,
+                              newName: '',
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Xóa bài kiến thức này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })() : tienTrinh === 'Luyện tập' ? (() => {
+                  const list = customLuyenTapList.length > 0 ? customLuyenTapList : ['Bài luyện tập 1'];
+                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : list[0];
+                  return (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">Bài:</span>
+                      <select
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedExerciseName(val);
+                          setNotification({
+                            text: `Đã chọn: ${val} (Lưu thành luyentap_${val.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json)`,
+                            type: 'info',
+                          });
+                          setTimeout(() => setNotification(null), 2500);
+                        }}
+                        className="text-xs font-bold bg-white border border-indigo-200 rounded-lg px-2.5 py-1 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors max-w-xs truncate"
+                        title="Chọn bài luyện tập"
+                      >
+                        {list.map((ex, idx) => (
+                          <option key={`${ex}-${idx}`} value={ex}>
+                            ✍️ {ex}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newName = `Luyện tập ${list.length + 1}`;
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'luyenTap',
+                            item: '',
+                            newName,
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
+                        title="Thêm bài luyện tập mới"
+                      >
+                        + Thêm bài
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'luyenTap',
+                            item: curVal,
+                            newName: curVal,
+                          });
+                        }}
+                        className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                        title="Đổi tên bài luyện tập này"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {list.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'delete',
+                              category: 'luyenTap',
+                              item: curVal,
+                              newName: '',
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Xóa bài luyện tập này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })() : tienTrinh === 'KTDG' ? (() => {
+                  const list = customKtdgList.length > 0 ? customKtdgList : ['Đề kiểm tra 15 phút'];
+                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : list[0];
+                  return (
+                    <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                      <span className="text-[11px] font-bold text-slate-500">Đề:</span>
+                      <select
+                        value={curVal}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedExerciseName(val);
+                          setNotification({
+                            text: `Đã chọn bài KTDG: ${val} (Lưu thành KTDG_${val.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json)`,
+                            type: 'info',
+                          });
+                          setTimeout(() => setNotification(null), 2500);
+                        }}
+                        className="text-xs font-bold bg-white border border-rose-200 rounded-lg px-2.5 py-1 text-rose-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-rose-500 hover:bg-rose-50/60 transition-colors max-w-xs truncate"
+                        title="Chọn bài kiểm tra đánh giá"
+                      >
+                        {list.map((ex, idx) => (
+                          <option key={`${ex}-${idx}`} value={ex}>
+                            🎯 {ex}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newName = `KTDG ${list.length + 1}`;
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'ktdg',
+                            item: '',
+                            newName,
+                          });
+                        }}
+                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-2xs"
+                        title="Thêm bài kiểm tra đánh giá mới"
+                      >
+                        + Thêm đề
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setItemActionModal({
+                            type: 'rename',
+                            category: 'ktdg',
+                            item: curVal,
+                            newName: curVal,
+                          });
+                        }}
+                        className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                        title="Đổi tên bài KTDG này"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {list.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'delete',
+                              category: 'ktdg',
+                              item: curVal,
+                              newName: '',
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Xóa bài KTDG này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })() : tienTrinh === 'Cải thiện' ? (
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shrink-0 shadow-2xs">
+                    <span>🚀 Hồ sơ cải thiện học sinh (CaiThien.json)</span>
+                  </div>
+                ) : null}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsHierarchyExpanded(!isHierarchyExpanded)}
@@ -813,7 +1166,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   title="Mở rộng / Thu gọn chi tiết Cây phân cấp bài dạy"
                 >
                   {isHierarchyExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                  <span>{isHierarchyExpanded ? 'Đóng phân cấp' : 'Đổi phân cấp / Chuyên đề'}</span>
+                  <span>{isHierarchyExpanded ? 'Đóng lại' : 'Đổi chuyên đề'}</span>
                 </button>
                 <button
                   type="button"
@@ -852,23 +1205,6 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
             <div className="space-y-5">
               {/* Interactive Word Toolbar */}
               <div className="bg-slate-100/95 backdrop-blur-xs p-2.5 rounded-t-2xl border border-slate-300 border-b-0 flex flex-wrap items-center gap-1.5 shadow-sm sticky top-0 z-30">
-                {/* Tiến trình chuyên đề */}
-                <div className="flex items-center gap-1">
-                  <select
-                    value={tienTrinh}
-                    onChange={(e) => setTienTrinh(e.target.value)}
-                    className="text-xs font-black bg-white border border-indigo-300 rounded-lg px-2.5 py-1 text-indigo-900 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500"
-                    title="Tiến trình chuyên đề (Kiến thức có Lý thuyết & Bài tập; Luyện tập và Kiểm tra chỉ có Bài tập)"
-                  >
-                    <option value="Kiến thức">📚 1. Kiến thức</option>
-                    <option value="Luyện tập">✍️ 2. Luyện tập</option>
-                    <option value="Kiểm tra">📝 3. Kiểm tra</option>
-                    <option value="Cải thiện">🚀 4. Cải thiện</option>
-                  </select>
-                </div>
-
-                <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
-
                 {/* NÚT SOẠN BÀI ▾ (Chỉ dành cho tài khoản Giáo viên trở lên - Giải pháp 1: Tự động đóng khung khi bôi đen hoặc chèn mới) */}
                 {isTeacherOrHigher && (
                   <div className="relative">
@@ -1059,10 +1395,18 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-                {/* Custom Interactive Elements */}
-                <button onClick={handleInsertTable} className="p-1.5 rounded hover:bg-indigo-100 text-indigo-700 bg-indigo-50/50 transition-colors flex items-center gap-1 text-[11px] font-bold" title="Chèn Bảng">
-                  <Table className="w-3.5 h-3.5" /> Chèn Bảng
-                </button>
+                {/* Module Con Độc Lập: MENU CHÈN (Chèn bảng, Chèn hình ảnh, Chèn File, Chèn Thư mục E-Learning) */}
+                <MenuChen
+                  editorRef={editorRef}
+                  saveCurrentSelection={saveCurrentSelection}
+                  insertHtmlToEditor={insertHtmlToEditor}
+                  chuyenDe={chuyenDe}
+                  setNotification={(n) => {
+                    if (n) setNotification({ text: n.text, type: n.type });
+                    else setNotification(null);
+                  }}
+                />
+
                 {/* Module Con Độc Lập: MENU HÀM SỐ (Chèn công thức, Chèn đồ thị TikZ, Chèn bảng biến thiên) */}
                 <MenuHamSo
                   editorRef={editorRef}
@@ -1094,6 +1438,15 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   <option value="20px">Cỡ chữ 20px</option>
                   <option value="22px">Cỡ chữ 22px (Mặc định)</option>
                 </select>
+
+                {/* NÚT LƯU DRIVE CÓ SẴN (ĐÓNG GÓI HOÀN CHỈNH BỞI MODULE CON DONGBODRIVE) */}
+                <DongBoDriveButton
+                  isSaving={isSaving}
+                  syncStatus={syncStatus}
+                  lastSavedTime={lastSavedTime}
+                  onClick={() => handleSaveDocument(false)}
+                  className="ml-auto"
+                />
               </div>
 
               {/* Simulated A4 Editable Canvas - 1 trang trắng sẵn sàng để soạn thảo trực tiếp */}
@@ -1106,6 +1459,27 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   ref={editorRef}
                   contentEditable
                   suppressContentEditableWarning
+                  onInput={(e) => {
+                    markDirty();
+                    if (editorRef.current) {
+                      autoRenderLatexInDom(editorRef.current);
+                    }
+                  }}
+                  onKeyUp={(e) => {
+                    if (e.key === '$' || e.key === ' ' || e.key === 'Enter') {
+                      if (editorRef.current) {
+                        autoRenderLatexInDom(editorRef.current);
+                      }
+                    }
+                  }}
+                  onPaste={(e) => {
+                    setTimeout(() => {
+                      if (editorRef.current) {
+                        autoRenderLatexInDom(editorRef.current);
+                        markDirty();
+                      }
+                    }, 50);
+                  }}
                   onDoubleClick={handleDoubleClickToInsertRow}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && e.shiftKey) {
@@ -1210,7 +1584,97 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
             </div>
           </div>
         )}
-      </div>
+
+      {/* Modal Thêm mới / Sửa tên / Xóa bài cho Kiến thức (KienThuc_*.html), Luyện tập (luyentap_*.json), KTĐG (KTDG_*.json) */}
+      {itemActionModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-indigo-100 space-y-4 animate-scale-up">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className={`p-2 rounded-xl text-white ${itemActionModal.type === 'delete' ? 'bg-rose-600' : 'bg-indigo-600'}`}>
+                  {itemActionModal.type === 'delete' ? <Trash2 className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
+                </span>
+                <div>
+                  <h4 className="font-extrabold text-slate-800 text-sm">
+                    {itemActionModal.type === 'delete'
+                      ? 'Xác nhận xóa'
+                      : itemActionModal.item
+                      ? 'Đổi tên bài'
+                      : 'Thêm bài mới'}
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    {itemActionModal.category === 'kienThuc'
+                      ? 'Mục 1. Kiến thức (Tệp KienThuc_{tên}.html)'
+                      : itemActionModal.category === 'luyenTap'
+                      ? 'Mục 2. Luyện tập (Tệp luyentap_{tên}.json)'
+                      : 'Mục 3. KTĐG (Tệp KTDG_{tên}.json)'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setItemActionModal(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            {itemActionModal.type === 'delete' ? (
+              <p className="text-xs text-slate-700 font-medium leading-relaxed">
+                Bạn có chắc chắn muốn xóa bài <strong>"{itemActionModal.item}"</strong> không? Hành động này sẽ loại bỏ tệp tương ứng khỏi danh sách bài dạy.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-700 block">Tên bài mới:</label>
+                <input
+                  type="text"
+                  value={itemActionModal.newName}
+                  onChange={(e) => setItemActionModal({ ...itemActionModal, newName: e.target.value })}
+                  placeholder="Nhập tên bài..."
+                  className="w-full px-3 py-2 text-xs font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmItemAction();
+                    if (e.key === 'Escape') setItemActionModal(null);
+                  }}
+                />
+                <div className="text-[11px] text-indigo-600 font-mono bg-indigo-50/80 p-2 rounded-lg border border-indigo-100">
+                  📄 Tệp trên Drive sẽ là:{' '}
+                  <strong>
+                    {itemActionModal.category === 'kienThuc'
+                      ? `KienThuc_${(itemActionModal.newName || 'ten_kien_thuc').toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.html`
+                      : itemActionModal.category === 'luyenTap'
+                      ? `luyentap_${(itemActionModal.newName || 'ten_bai').toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json`
+                      : `KTDG_${(itemActionModal.newName || 'ten_de').toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json`}
+                  </strong>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setItemActionModal(null)}
+                className="px-3.5 py-1.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmItemAction}
+                className={`px-4 py-1.5 rounded-xl text-xs font-bold text-white shadow-xs cursor-pointer ${
+                  itemActionModal.type === 'delete' ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                {itemActionModal.type === 'delete' ? 'Xác nhận xóa' : 'Lưu tên bài'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
     </div>
   );
 };

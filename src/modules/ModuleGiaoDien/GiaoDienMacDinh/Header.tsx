@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Menu,
   Cloud,
@@ -9,6 +10,10 @@ import {
   LogIn,
   User,
   ChevronDown,
+  Key,
+  Sparkles,
+  Check,
+  X,
 } from 'lucide-react';
 import { ViewId, getViewMeta } from '../Navigation';
 import { UserRole, UserProfile, SUPERADMIN_EMAILS } from '../../../services/storageTypes';
@@ -85,6 +90,74 @@ export const Header: React.FC<HeaderProps> = ({
     };
   }, [showAccountDropdown]);
 
+  // Quản lý Gemini API Keys
+  const [showGeminiModal, setShowGeminiModal] = useState<boolean>(false);
+  const [geminiKeysInput, setGeminiKeysInput] = useState<string>('');
+  const [geminiKeyCount, setGeminiKeyCount] = useState<number>(0);
+  const [geminiKeyStatus, setGeminiKeyStatus] = useState<'none' | 'active' | 'invalid'>('none');
+  const [savedGeminiNotice, setSavedGeminiNotice] = useState<string | null>(null);
+
+  const refreshGeminiKeysStatus = () => {
+    try {
+      const stored = localStorage.getItem('lopu_gemini_api_keys') || '';
+      setGeminiKeysInput(stored);
+      const list = stored
+        .split(/[\n,;]+/)
+        .map(k => k.trim())
+        .filter(Boolean);
+      setGeminiKeyCount(list.length);
+      const manualStatus = localStorage.getItem('lopu_gemini_api_status');
+
+      if (list.length === 0) {
+        setGeminiKeyStatus('none');
+      } else if (manualStatus === 'invalid' || manualStatus === 'all_exhausted') {
+        setGeminiKeyStatus('invalid');
+      } else {
+        const hasValidKey = list.some(k => k.length >= 10 && !k.toLowerCase().includes('error') && !k.toLowerCase().includes('expired'));
+        setGeminiKeyStatus(hasValidKey ? 'active' : 'invalid');
+      }
+    } catch {
+      setGeminiKeyStatus('none');
+    }
+  };
+
+  useEffect(() => {
+    refreshGeminiKeysStatus();
+    const handleUpdated = () => refreshGeminiKeysStatus();
+    window.addEventListener('gemini_keys_updated', handleUpdated);
+    return () => window.removeEventListener('gemini_keys_updated', handleUpdated);
+  }, []);
+
+  const handleSaveGeminiKeys = () => {
+    try {
+      const raw = geminiKeysInput.trim();
+      localStorage.setItem('lopu_gemini_api_keys', raw);
+      const list = raw
+        .split(/[\n,;]+/)
+        .map(k => k.trim())
+        .filter(Boolean);
+      setGeminiKeyCount(list.length);
+      if (list.length === 0) {
+        setGeminiKeyStatus('none');
+        localStorage.removeItem('lopu_gemini_api_status');
+        setSavedGeminiNotice('Đã xóa danh sách API key (Chìa khóa sẽ ẩn).');
+      } else {
+        const hasValidKey = list.some(k => k.length >= 10 && !k.toLowerCase().includes('error') && !k.toLowerCase().includes('expired'));
+        const newStatus = hasValidKey ? 'active' : 'invalid';
+        setGeminiKeyStatus(newStatus);
+        localStorage.setItem('lopu_gemini_api_status', newStatus);
+        setSavedGeminiNotice(`Đã lưu thành công ${list.length} khóa Gemini API (${hasValidKey ? 'Khóa Xanh: Đang hoạt động' : 'Khóa Đỏ: Không còn hoạt động'})!`);
+      }
+      window.dispatchEvent(new Event('gemini_keys_updated'));
+      setTimeout(() => {
+        setSavedGeminiNotice(null);
+        setShowGeminiModal(false);
+      }, 1400);
+    } catch {
+      setSavedGeminiNotice('Không thể lưu vào bộ nhớ trình duyệt!');
+    }
+  };
+
   const isConnected = Boolean(isDriveConnected || firebaseUser);
   const activeConnectedAccount = firebaseUser?.email || currentUserProfile?.email || (isDriveConnected ? driveEmail : '') || 'tanbaodl@gmail.com';
 
@@ -153,97 +226,171 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           </div>
 
-          {/* Cụm gôm các mục theo yêu cầu: Đăng nhập khi chưa kết nối, hoặc [tài khoản kết nối] kèm dropdown khi đã kết nối */}
-          {!isConnected ? (
-            /* Khi chưa kết nối tài khoản Google: CHỈ có chữ Đăng nhập */
+          {/* Nút Đăng nhập Google Drive nhanh khi chưa kết nối */}
+          {!isConnected && (
             <button
               id="btn-header-login"
               onClick={onSignInGoogle || onConnectDrive}
               title="Đăng nhập tài khoản Google"
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors cursor-pointer shrink-0"
             >
               <LogIn className="w-3.5 h-3.5" />
               <span>Đăng nhập</span>
             </button>
-          ) : (
-            /* Khi đã kết nối: [tài khoản kết nối] (bỏ chữ Drive:) và dropdown xổ xuống */
-            <div ref={accountDropdownRef} className="relative">
-              <button
-                id="btn-header-account-cluster"
-                onClick={() => setShowAccountDropdown(prev => !prev)}
-                title={`Tài khoản kết nối: ${activeConnectedAccount}`}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 shadow-2xs transition-all cursor-pointer"
-              >
-                <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                <span className="font-bold truncate max-w-[120px] sm:max-w-[180px]">
-                  {activeConnectedAccount}
+          )}
+
+          {/* Cụm tài khoản: Luôn hiển thị để người dùng cấu hình Gemini API và quan sát biểu tượng chìa khóa */}
+          <div ref={accountDropdownRef} className="relative">
+            <button
+              id="btn-header-account-cluster"
+              onClick={() => setShowAccountDropdown(prev => !prev)}
+              title={`Tài khoản: ${activeConnectedAccount}${
+                geminiKeyStatus === 'active'
+                  ? ' • Khóa Gemini API: Đang hoạt động (Chìa khóa Xanh)'
+                  : geminiKeyStatus === 'invalid'
+                  ? ' • Khóa Gemini API: Không còn hoạt động (Chìa khóa Đỏ)'
+                  : ' • Chưa có khóa Gemini API'
+              }`}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-200 shadow-2xs transition-all cursor-pointer"
+            >
+              {/* Biểu tượng chìa khóa theo trạng thái API:
+                  - Có ít nhất 1 API hoạt động: hiển thị biểu tượng chìa khóa XANH
+                  - Không còn API hoạt động: hiển thị biểu tượng chìa khóa ĐỎ
+                  - Không có danh sách API: KHÔNG hiển thị chìa khóa */}
+              {geminiKeyStatus === 'active' && (
+                <span className="p-0.5 rounded-md bg-emerald-100 text-emerald-700 shrink-0" title="Gemini API: Đang hoạt động (Chìa khóa Xanh)">
+                  <Key className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 </span>
-                <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${showAccountDropdown ? 'rotate-180' : ''}`} />
-              </button>
+              )}
+              {geminiKeyStatus === 'invalid' && (
+                <span className="p-0.5 rounded-md bg-rose-100 text-rose-700 shrink-0" title="Gemini API: Không còn API hoạt động (Chìa khóa Đỏ)">
+                  <Key className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                </span>
+              )}
 
-              {/* Dropdown xổ xuống chứa: Vai trò, Điểm Kim cương, Điểm Tim, Đăng xuất */}
-              {showAccountDropdown && (
-                <div
-                  id="header-account-dropdown-menu"
-                  className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl space-y-3 z-[60] text-slate-800 animate-scale-up"
-                >
-                  {/* Header tài khoản trong dropdown */}
-                  <div className="border-b border-slate-100 pb-2.5">
-                    <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider">
-                      Tài khoản kết nối
-                    </div>
-                    <div className="text-xs font-bold text-slate-900 truncate mt-0.5">
-                      {activeConnectedAccount}
+              {/* Biểu tượng hình người */}
+              <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+              <span className="font-bold truncate max-w-[120px] sm:max-w-[180px]">
+                {activeConnectedAccount}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${showAccountDropdown ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Dropdown xổ xuống chứa: Tài khoản, Vai trò, Điểm Kim cương, Điểm Tim, Cấu hình Gemini API, Đăng xuất/Đăng nhập */}
+            {showAccountDropdown && (
+              <div
+                id="header-account-dropdown-menu"
+                className="absolute right-0 top-full mt-2 w-72 bg-white border border-slate-200 rounded-2xl p-3.5 shadow-2xl space-y-3 z-[60] text-slate-800 animate-scale-up"
+              >
+                {/* Header tài khoản trong dropdown */}
+                <div className="border-b border-slate-100 pb-2.5">
+                  <div className="text-[11px] font-bold text-indigo-600 uppercase tracking-wider flex items-center justify-between">
+                    <span>Tài khoản {isConnected ? 'kết nối' : 'trải nghiệm'}</span>
+                    {geminiKeyStatus === 'active' && (
+                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Key className="w-2.5 h-2.5" /> API Xanh
+                      </span>
+                    )}
+                    {geminiKeyStatus === 'invalid' && (
+                      <span className="text-[10px] text-rose-600 font-bold bg-rose-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                        <Key className="w-2.5 h-2.5" /> API Đỏ
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-xs font-bold text-slate-900 truncate mt-0.5">
+                    {activeConnectedAccount}
+                  </div>
+                </div>
+
+                {/* 1. Vai trò của tài khoản */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-semibold text-slate-500 block">
+                    Vai trò tài khoản:
+                  </label>
+                  <select
+                    id="select-user-role"
+                    value={currentRole}
+                    onChange={e => {
+                      onChangeRole(e.target.value as UserRole);
+                    }}
+                    title={availableRoles.length > 1 ? "Chọn vai trò để chuyển đổi giao diện hiển thị" : "Vai trò của tài khoản"}
+                    className="w-full bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-bold py-2 px-2.5 rounded-xl border border-slate-200 shadow-2xs focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    {availableRoles.map(role => (
+                      <option key={role} value={role}>
+                        {ROLE_LABELS[role] || role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Điểm kim cương & điểm Tim */}
+                <div className="grid grid-cols-2 gap-2 pt-0.5">
+                  <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                    <span className="text-base leading-none">💎</span>
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Kim cương</div>
+                      <div className="font-mono font-bold text-slate-900">
+                        {currentUserProfile?.diamonds !== undefined ? currentUserProfile.diamonds : 0}
+                      </div>
                     </div>
                   </div>
 
-                  {/* 1. Vai trò của tài khoản */}
-                  <div className="space-y-1">
-                    <label className="text-[11px] font-semibold text-slate-500 block">
-                      Vai trò tài khoản:
-                    </label>
-                    <select
-                      id="select-user-role"
-                      value={currentRole}
-                      onChange={e => {
-                        onChangeRole(e.target.value as UserRole);
+                  <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
+                    <span className="text-base leading-none">❤️</span>
+                    <div>
+                      <div className="text-[10px] text-slate-500 uppercase font-semibold">Điểm Tim</div>
+                      <div className="font-mono font-bold text-slate-900">
+                        {currentUserProfile?.hearts !== undefined ? currentUserProfile.hearts : 0}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Nút Quản lý API */}
+                <div className="pt-1 border-t border-slate-100">
+                  <button
+                    id="btn-header-gemini-api"
+                    type="button"
+                    onClick={() => {
+                      setShowAccountDropdown(false);
+                      setShowGeminiModal(true);
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 transition-colors cursor-pointer"
+                    title="Quản lý danh sách khóa Gemini API sử dụng cho các chức năng thông minh"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Key className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                      <span>Quản lý API</span>
+                    </div>
+                    {geminiKeyCount > 0 ? (
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-black text-white ${geminiKeyStatus === 'active' ? 'bg-emerald-600' : 'bg-rose-600'}`}>
+                        {geminiKeyCount} key
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-indigo-500 font-semibold italic">
+                        Chưa có
+                      </span>
+                    )}
+                  </button>
+                </div>
+
+                {/* 4. Nút Đăng nhập / Đăng xuất */}
+                <div className="pt-0.5">
+                  {!isConnected ? (
+                    <button
+                      id="btn-header-dropdown-login"
+                      onClick={() => {
+                        setShowAccountDropdown(false);
+                        const loginFn = onSignInGoogle || onConnectDrive;
+                        if (loginFn) loginFn();
                       }}
-                      title={availableRoles.length > 1 ? "Chọn vai trò để chuyển đổi giao diện hiển thị" : "Vai trò của tài khoản"}
-                      className="w-full bg-slate-50 hover:bg-slate-100 text-slate-800 text-xs font-bold py-2 px-2.5 rounded-xl border border-slate-200 shadow-2xs focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-colors cursor-pointer"
                     >
-                      {availableRoles.map(role => (
-                        <option key={role} value={role}>
-                          {ROLE_LABELS[role] || role}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* 2. Điểm kim cương & điểm Tim */}
-                  <div className="grid grid-cols-2 gap-2 pt-0.5">
-                    <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                      <span className="text-base leading-none">💎</span>
-                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-semibold">Kim cương</div>
-                        <div className="font-mono font-bold text-slate-900">
-                          {currentUserProfile?.diamonds !== undefined ? currentUserProfile.diamonds : 0}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs">
-                      <span className="text-base leading-none">❤️</span>
-                      <div>
-                        <div className="text-[10px] text-slate-500 uppercase font-semibold">Điểm Tim</div>
-                        <div className="font-mono font-bold text-slate-900">
-                          {currentUserProfile?.hearts !== undefined ? currentUserProfile.hearts : 0}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 3. Nút Đăng xuất */}
-                  <div className="pt-1 border-t border-slate-100">
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>Đăng nhập Google</span>
+                    </button>
+                  ) : (
                     <button
                       id="btn-header-google-signout"
                       onClick={() => {
@@ -255,13 +402,134 @@ export const Header: React.FC<HeaderProps> = ({
                       <LogOut className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                       <span>Đăng xuất</span>
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Modal quản lý danh sách Gemini API Key (Bọc createPortal, padding-top đảm bảo không bị che khuất trên đầu) */}
+      {showGeminiModal && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[99999] overflow-y-auto bg-slate-900/60 backdrop-blur-sm animate-fade-in flex items-start justify-center p-4 sm:p-6 pt-16 sm:pt-20">
+          <div className="bg-white rounded-2xl shadow-2xl border border-indigo-100 max-w-lg w-full p-5 sm:p-6 space-y-4 animate-scale-up relative my-4 sm:my-6">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
+                  <Key className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="font-extrabold text-slate-800 text-base">Quản lý API</h3>
+                  <p className="text-xs text-slate-500">Khóa API sử dụng cho các chức năng trợ lý và xử lý thông minh</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowGeminiModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 cursor-pointer"
+                title="Đóng cửa sổ"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 block">
+                Danh sách API Keys:
+              </label>
+              <textarea
+                value={geminiKeysInput}
+                onChange={(e) => setGeminiKeysInput(e.target.value)}
+                placeholder="Nhập 1 hoặc nhiều API keys. Cách nhau bởi dấu phẩy (,), dấu chấm phẩy (;) hoặc mỗi API một dòng..."
+                rows={5}
+                className="w-full p-3 text-xs font-mono border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-slate-50/50"
+              />
+              <div className="text-[11px] text-slate-500 flex items-center justify-between">
+                <span>💡 Hỗ trợ ngăn cách bằng dấu <code>,</code> hoặc <code>;</code> hoặc mỗi key 1 dòng.</span>
+                <span className="font-bold text-indigo-600">
+                  Đã nhập: {geminiKeysInput.split(/[\n,;]+/).filter(k => k.trim()).length} key
+                </span>
+              </div>
+            </div>
+
+            {/* Trạng thái hiển thị biểu tượng Chìa khóa */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-slate-700">Trạng thái biểu tượng chìa khóa:</span>
+                {geminiKeyStatus === 'active' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    Chìa khóa XANH (Có API hoạt động)
+                  </span>
+                )}
+                {geminiKeyStatus === 'invalid' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 font-bold text-[11px]">
+                    <span className="w-2 h-2 rounded-full bg-rose-500" />
+                    Chìa khóa ĐỎ (Không còn API hoạt động)
+                  </span>
+                )}
+                {geminiKeyStatus === 'none' && (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-600 font-medium text-[11px]">
+                    Ẩn chìa khóa (Chưa có danh sách API)
+                  </span>
+                )}
+              </div>
+              <div className="text-[11px] text-slate-500 flex items-center gap-2 pt-1 border-t border-slate-200/60">
+                <span>Kiểm tra trạng thái nhanh:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('lopu_gemini_api_status', 'active');
+                    setGeminiKeyStatus('active');
+                    window.dispatchEvent(new Event('gemini_keys_updated'));
+                  }}
+                  className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-bold hover:bg-emerald-100 cursor-pointer"
+                >
+                  🟢 Đặt Khóa Xanh
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    localStorage.setItem('lopu_gemini_api_status', 'invalid');
+                    setGeminiKeyStatus('invalid');
+                    window.dispatchEvent(new Event('gemini_keys_updated'));
+                  }}
+                  className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-bold hover:bg-rose-100 cursor-pointer"
+                >
+                  🔴 Đặt Khóa Đỏ
+                </button>
+              </div>
+            </div>
+
+            {savedGeminiNotice && (
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{savedGeminiNotice}</span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowGeminiModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 border border-slate-200 cursor-pointer"
+              >
+                Đóng
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveGeminiKeys}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm cursor-pointer flex items-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Lưu khóa API</span>
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </header>
   );
 };

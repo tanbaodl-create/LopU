@@ -26,6 +26,8 @@ import {
   RotateCcw,
   Sparkles,
   Check,
+  Undo2,
+  Redo2,
   BookOpen,
   Filter,
   FolderLock,
@@ -70,6 +72,7 @@ import { IconNam, IconNu } from '../../ModuleHocSinh/SoDoLop/SoDoLopView';
 import { MathTypeEditorModal } from './MathTypeEditorModal';
 import { MathFormulaRenderer } from './MathFormulaRenderer';
 import { convertMathExprToJs } from './TikZVisualRenderer';
+import { detectFuncAndVar, solveFunctionForBbt, generateWordBbtHtml } from '../SoanThao/MenuHamSo/bbtSolver';
 import { auth } from '../../../config/firebase';
 import { signOut } from 'firebase/auth';
 
@@ -357,7 +360,11 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [graphOldTikz, setGraphOldTikz] = useState<string>('');
 
   const [showBBTModal, setShowBBTModal] = useState<boolean>(false);
+  const [bbtMode, setBbtMode] = useState<'function' | 'manual'>('function');
   const [bbtFormula, setBbtFormula] = useState<string>('y = x^2 - 1');
+  const [bbtVarName, setBbtVarName] = useState<string>('x');
+  const [bbtFuncRow, setBbtFuncRow] = useState<string>('y');
+  const [bbtDerivRow, setBbtDerivRow] = useState<string>("y'");
   const [bbtDomain, setBbtDomain] = useState<string>('(-\\infty; +\\infty)');
   const [bbtRequirement, setBbtRequirement] = useState<string>('Gạch xiên 60 độ vùng không xác định / ngoài miền');
   const [bbtXPoints, setBbtXPoints] = useState<string>('-\\infty, -1, 1, +\\infty');
@@ -443,18 +450,151 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   const [sketchGeneratedTikZ, setSketchGeneratedTikZ] = useState<string>('');
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
+  const sketchStrokesRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
+  const sketchRedoStackRef = useRef<Array<Array<{ x: number; y: number }>>>([]);
+  const currentSketchStrokeRef = useRef<Array<{ x: number; y: number }>>([]);
+  const [canSketchUndo, setCanSketchUndo] = useState<boolean>(false);
+  const [canSketchRedo, setCanSketchRedo] = useState<boolean>(false);
 
-  // Canvas drawing handlers
-  const initCanvas = () => {
+  const updateSketchUndoRedo = () => {
+    setCanSketchUndo(sketchStrokesRef.current.length > 0);
+    setCanSketchRedo(sketchRedoStackRef.current.length > 0);
+  };
+
+  // Hàm lọc bỏ điểm quá gần để khử rung tay
+  const filterSketchPoints = (points: Array<{ x: number; y: number }>, minDistance: number = 3.5): Array<{ x: number; y: number }> => {
+    if (points.length <= 2) return points;
+    const result: Array<{ x: number; y: number }> = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+      const prev = result[result.length - 1];
+      const cur = points[i];
+      const dist = Math.hypot(cur.x - prev.x, cur.y - prev.y);
+      if (dist >= minDistance || i === points.length - 1) {
+        result.push(cur);
+      }
+    }
+    return result;
+  };
+
+  // Tái lấy mẫu đều theo chiều dài cung (Arc-length Resampling) triệt tiêu hoàn toàn sự gián đoạn do tốc độ kéo chuột/tay
+  const resampleSketchCurveEvenly = (points: Array<{ x: number; y: number }>, stepSize: number = 6): Array<{ x: number; y: number }> => {
+    if (points.length <= 2) return points;
+    const resampled: Array<{ x: number; y: number }> = [points[0]];
+    let accumulatedDist = 0;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const segLen = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (segLen === 0) continue;
+
+      let d = stepSize - accumulatedDist;
+      while (d <= segLen) {
+        const t = d / segLen;
+        resampled.push({
+          x: p1.x + t * (p2.x - p1.x),
+          y: p1.y + t * (p2.y - p1.y),
+        });
+        d += stepSize;
+      }
+      accumulatedDist = segLen - (d - stepSize);
+    }
+
+    const lastRaw = points[points.length - 1];
+    const lastRes = resampled[resampled.length - 1];
+    if (Math.hypot(lastRaw.x - lastRes.x, lastRaw.y - lastRes.y) > 2) {
+      resampled.push(lastRaw);
+    }
+    return resampled;
+  };
+
+  // Hàm lọc mượt Gaussian 5 điểm đa tầng (triệt tiêu hoàn toàn răng cưa và rung lắc)
+  const smoothSketchPointsGaussian = (points: Array<{ x: number; y: number }>, iterations: number = 4): Array<{ x: number; y: number }> => {
+    if (points.length <= 3) return points;
+    let pts = [...points];
+
+    for (let it = 0; it < iterations; it++) {
+      const smoothed: Array<{ x: number; y: number }> = [{ ...pts[0] }];
+      for (let i = 1; i < pts.length - 1; i++) {
+        const pPrev2 = pts[Math.max(0, i - 2)];
+        const pPrev1 = pts[i - 1];
+        const pCur = pts[i];
+        const pNext1 = pts[i + 1];
+        const pNext2 = pts[Math.min(pts.length - 1, i + 2)];
+
+        const smoothX = 0.05 * pPrev2.x + 0.25 * pPrev1.x + 0.40 * pCur.x + 0.25 * pNext1.x + 0.05 * pNext2.x;
+        const smoothY = 0.05 * pPrev2.y + 0.25 * pPrev1.y + 0.40 * pCur.y + 0.25 * pNext1.y + 0.05 * pNext2.y;
+
+        smoothed.push({ x: smoothX, y: smoothY });
+      }
+      smoothed.push({ ...pts[pts.length - 1] });
+      pts = smoothed;
+    }
+
+    return pts;
+  };
+
+  // Phân loại hình học nét vẽ tay trên bảng biến thiên
+  const classifyTaiLieuBbtStroke = (stroke: Array<{ x: number; y: number }>) => {
+    const filtered = filterSketchPoints(stroke, 3);
+    const smoothed = smoothSketchPointsGaussian(resampleSketchCurveEvenly(filtered, 5), 3);
+    const pts = smoothed.length >= 2 ? smoothed : stroke;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let sumX = 0, sumY = 0;
+    let totalLen = 0;
+
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+      sumX += p.x;
+      sumY += p.y;
+      if (i > 0) totalLen += Math.hypot(p.x - pts[i - 1].x, p.y - pts[i - 1].y);
+    }
+
+    const w = Math.max(1, maxX - minX);
+    const h = Math.max(1, maxY - minY);
+    const startPt = pts[0];
+    const endPt = pts[pts.length - 1];
+    const directDist = Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y);
+    const straightness = totalLen > 0 ? directDist / totalLen : 1;
+    const center = { x: sumX / pts.length, y: sumY / pts.length };
+    const bounds = { minX, minY, maxX, maxY, width: w, height: h };
+
+    if (straightness > 0.85 && w > 35 && h < 18) {
+      return { type: 'h-line', points: pts, startPt: { x: minX, y: center.y }, endPt: { x: maxX, y: center.y }, center, bounds };
+    }
+    if (straightness > 0.85 && h > 25 && w < 16) {
+      return { type: 'v-line', points: pts, startPt: { x: center.x, y: minY }, endPt: { x: center.x, y: maxY }, center, bounds };
+    }
+    if (w > 20 && h > 16 && straightness > 0.78) {
+      if (startPt.y > endPt.y + 10) return { type: 'arrow-up', points: pts, startPt, endPt, center, bounds };
+      if (endPt.y > startPt.y + 10) return { type: 'arrow-down', points: pts, startPt, endPt, center, bounds };
+      return { type: 'arrow-right', points: pts, startPt, endPt, center, bounds };
+    }
+    if (straightness > 0.85 && w >= 10 && w <= 36 && h <= 12) {
+      return { type: 'minus', points: pts, startPt: { x: minX, y: center.y }, endPt: { x: maxX, y: center.y }, center, bounds };
+    }
+    if (w >= 10 && w <= 36 && h >= 12 && h <= 45 && directDist / totalLen < 0.40) {
+      return { type: 'zero', points: pts, startPt, endPt, center, bounds };
+    }
+    return { type: 'smooth-curve', points: pts, startPt, endPt, center, bounds };
+  };
+
+  const redrawSketchCanvas = () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
+
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // Vẽ lưới tọa độ mờ trợ giúp vẽ
-    ctx.strokeStyle = '#f1f5f9';
+    ctx.strokeStyle = '#f8fafc';
     ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 25) {
       ctx.beginPath();
@@ -470,36 +610,205 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
     }
 
     if (drawSketchType === 'graph') {
-      // Vẽ trục tọa độ gợi ý mờ
-      ctx.strokeStyle = '#cbd5e1';
+      const ox = canvas.width / 2;
+      const oy = canvas.height / 2;
+
+      // Trục tọa độ Ox, Oy
+      ctx.strokeStyle = '#64748b';
       ctx.lineWidth = 1.5;
+
+      // Trục hoành Ox
       ctx.beginPath();
-      ctx.moveTo(30, canvas.height / 2);
-      ctx.lineTo(canvas.width - 30, canvas.height / 2);
-      ctx.moveTo(canvas.width / 2, canvas.height - 20);
-      ctx.lineTo(canvas.width / 2, 20);
+      ctx.moveTo(20, oy);
+      ctx.lineTo(canvas.width - 20, oy);
+      ctx.lineTo(canvas.width - 28, oy - 4);
+      ctx.moveTo(canvas.width - 20, oy);
+      ctx.lineTo(canvas.width - 28, oy + 4);
       ctx.stroke();
-      setSketchRecognizedShape('Đồ thị parabol y = x² - 2x + 1 (Nắn chuẩn)');
-      setSketchGeneratedTikZ(`% Đồ thị TikZ tự vẽ tay (Hệ thống nắn chỉnh chuẩn):
-\\begin{tikzpicture}[scale=0.85, >=stealth]
-  \\draw[->,thick] (-3,0) -- (3,0) node[right] {$x$};
-  \\draw[->,thick] (0,-2) -- (0,4) node[above] {$y$};
-  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{\\x*\\x - 1});
-  \\filldraw[blue] (0,-1) circle (1.5pt) node[below right] {$-1$};
-  \\node at (0,0) [below left] {$O$};
-\\end{tikzpicture}`);
+
+      // Trục tung Oy
+      ctx.beginPath();
+      ctx.moveTo(ox, canvas.height - 15);
+      ctx.lineTo(ox, 15);
+      ctx.lineTo(ox - 4, 23);
+      ctx.moveTo(ox, 15);
+      ctx.lineTo(ox + 4, 23);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'italic bold 15px "Times New Roman", serif';
+      ctx.fillText('x', canvas.width - 22, oy - 7);
+      ctx.fillText('y', ox + 7, 22);
+      ctx.font = '14px "Times New Roman", serif';
+      ctx.fillText('O', ox - 14, oy + 16);
     } else {
-      // Vẽ khung bảng BBT gợi ý mờ
-      ctx.strokeStyle = '#cbd5e1';
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(30, 25, canvas.width - 60, canvas.height - 50);
-      setSketchRecognizedShape('Bảng biến thiên hàm bậc 3 (2 cực trị x = -1, 1)');
-      setSketchGeneratedTikZ(`% Bảng biến thiên tikz-tab tự vẽ tay (Nắn chỉnh cấu trúc chuẩn):
-\\begin{tikzpicture}
-  \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
-  \\tkzTabLine{, +, 0, -, 0, +, }
-  \\tkzTabVar{-/ $-\\infty$, +/ $2$, -/ $-2$, +/ $+\\infty$}
-\\end{tikzpicture}`);
+      // Khung lưới Bảng biến thiên chuẩn
+      const headerW = 75;
+      const yRow1 = 65;
+      const yRow2 = 115;
+
+      ctx.strokeStyle = '#0f172a';
+      ctx.lineWidth = 1.6;
+
+      ctx.strokeRect(20, 20, canvas.width - 40, canvas.height - 40);
+
+      ctx.beginPath();
+      ctx.moveTo(20 + headerW, 20);
+      ctx.lineTo(20 + headerW, canvas.height - 20);
+      ctx.moveTo(20, yRow1);
+      ctx.lineTo(canvas.width - 20, yRow1);
+      ctx.moveTo(20, yRow2);
+      ctx.lineTo(canvas.width - 20, yRow2);
+      ctx.stroke();
+
+      ctx.fillStyle = '#0f172a';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = 'italic bold 17px "Times New Roman", serif';
+      ctx.fillText('x', 20 + headerW / 2, 42);
+      ctx.fillText("y'", 20 + headerW / 2, 90);
+      ctx.fillText('y', 20 + headerW / 2, 185);
+
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 4]);
+      const contentW = canvas.width - 40 - headerW;
+      for (let i = 1; i <= 3; i++) {
+        const gx = 20 + headerW + (contentW * i) / 4;
+        ctx.beginPath();
+        ctx.moveTo(gx, 20);
+        ctx.lineTo(gx, canvas.height - 20);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.textAlign = 'start';
+      ctx.textBaseline = 'alphabetic';
+    }
+
+    // Vẽ lại tất cả các nét bằng nét vẽ máy thông minh (đoạn thẳng, mũi tên, ký hiệu toán, hoặc Spline Bézier mượt mà)
+    sketchStrokesRef.current.forEach(stroke => {
+      if (stroke.length < 2) return;
+      if (drawSketchType === 'bbt') {
+        const analyzed = classifyTaiLieuBbtStroke(stroke);
+        if (analyzed.type === 'h-line' || analyzed.type === 'v-line') {
+          ctx.beginPath();
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.8;
+          ctx.moveTo(analyzed.startPt.x, analyzed.startPt.y);
+          ctx.lineTo(analyzed.endPt.x, analyzed.endPt.y);
+          ctx.stroke();
+          return;
+        }
+        if (analyzed.type === 'arrow-up' || analyzed.type === 'arrow-down' || analyzed.type === 'arrow-right') {
+          ctx.beginPath();
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 2.0;
+          ctx.lineCap = 'round';
+          ctx.moveTo(analyzed.startPt.x, analyzed.startPt.y);
+          ctx.lineTo(analyzed.endPt.x, analyzed.endPt.y);
+          ctx.stroke();
+
+          const angle = Math.atan2(analyzed.endPt.y - analyzed.startPt.y, analyzed.endPt.x - analyzed.startPt.x);
+          const headLen = 10;
+          ctx.beginPath();
+          ctx.fillStyle = '#0f172a';
+          ctx.moveTo(analyzed.endPt.x, analyzed.endPt.y);
+          ctx.lineTo(
+            analyzed.endPt.x - headLen * Math.cos(angle - Math.PI / 7),
+            analyzed.endPt.y - headLen * Math.sin(angle - Math.PI / 7)
+          );
+          ctx.lineTo(
+            analyzed.endPt.x - headLen * Math.cos(angle + Math.PI / 7),
+            analyzed.endPt.y - headLen * Math.sin(angle + Math.PI / 7)
+          );
+          ctx.closePath();
+          ctx.fill();
+          return;
+        }
+        if (analyzed.type === 'minus') {
+          ctx.beginPath();
+          ctx.strokeStyle = '#dc2626';
+          ctx.lineWidth = 2.4;
+          ctx.lineCap = 'round';
+          ctx.moveTo(analyzed.startPt.x, analyzed.startPt.y);
+          ctx.lineTo(analyzed.endPt.x, analyzed.endPt.y);
+          ctx.stroke();
+          return;
+        }
+        if (analyzed.type === 'zero') {
+          ctx.beginPath();
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 1.8;
+          ctx.ellipse(analyzed.center.x, analyzed.center.y, Math.max(4, analyzed.bounds.width / 2), Math.max(6, analyzed.bounds.height / 2), 0, 0, 2 * Math.PI);
+          ctx.stroke();
+          return;
+        }
+      }
+
+      const filtered = filterSketchPoints(stroke, 3.5);
+      const resampled = resampleSketchCurveEvenly(filtered, 6);
+      const smoothed = smoothSketchPointsGaussian(resampled, 4);
+      if (smoothed.length < 2) return;
+
+      ctx.beginPath();
+      ctx.strokeStyle = '#2563eb';
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.moveTo(smoothed[0].x, smoothed[0].y);
+
+      const tension = 6;
+      for (let i = 0; i < smoothed.length - 1; i++) {
+        const p0 = i > 0 ? smoothed[i - 1] : smoothed[0];
+        const p1 = smoothed[i];
+        const p2 = smoothed[i + 1];
+        const p3 = i + 2 < smoothed.length ? smoothed[i + 2] : p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / tension;
+        const cp1y = p1.y + (p2.y - p0.y) / tension;
+        const cp2x = p2.x - (p3.x - p1.x) / tension;
+        const cp2y = p2.y - (p3.y - p1.y) / tension;
+
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+      }
+      ctx.stroke();
+    });
+  };
+
+  // Canvas drawing handlers
+  const initCanvas = () => {
+    sketchStrokesRef.current = [];
+    sketchRedoStackRef.current = [];
+    currentSketchStrokeRef.current = [];
+    setSketchRecognizedShape('Đồ thị đường cong trơn nhẵn (nét vẽ máy)');
+    updateSketchUndoRedo();
+    redrawSketchCanvas();
+    handleAutoAlignSketch();
+  };
+
+  const handleUndoSketch = () => {
+    if (sketchStrokesRef.current.length === 0) return;
+    const undone = sketchStrokesRef.current.pop();
+    if (undone) {
+      sketchRedoStackRef.current.push(undone);
+    }
+    updateSketchUndoRedo();
+    redrawSketchCanvas();
+    if (sketchAutoAlign) {
+      handleAutoAlignSketch();
+    }
+  };
+
+  const handleRedoSketch = () => {
+    if (sketchRedoStackRef.current.length === 0) return;
+    const redone = sketchRedoStackRef.current.pop();
+    if (redone) {
+      sketchStrokesRef.current.push(redone);
+    }
+    updateSketchUndoRedo();
+    redrawSketchCanvas();
+    if (sketchAutoAlign) {
+      handleAutoAlignSketch();
     }
   };
 
@@ -526,10 +835,11 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const { x, y } = getCanvasCoords(e);
+    currentSketchStrokeRef.current = [{ x, y }];
     ctx.beginPath();
     ctx.moveTo(x, y);
     ctx.strokeStyle = sketchIsErasing ? '#ffffff' : sketchStrokeColor;
-    ctx.lineWidth = sketchIsErasing ? 20 : 3;
+    ctx.lineWidth = sketchIsErasing ? 20 : 2.5;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     setIsDrawing(true);
@@ -541,32 +851,110 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const { x, y } = getCanvasCoords(e);
-    ctx.lineTo(x, y);
-    ctx.stroke();
+    const pt = getCanvasCoords(e);
+    const pts = currentSketchStrokeRef.current;
+    pts.push(pt);
+
+    if (sketchIsErasing) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 14;
+      ctx.lineTo(pt.x, pt.y);
+      ctx.stroke();
+    } else {
+      ctx.strokeStyle = sketchStrokeColor;
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Làm mượt đường nét ngay trong thời gian thực kéo chuột qua midpoint quadratic curve
+      if (pts.length >= 3) {
+        const pPrev = pts[pts.length - 2];
+        const pPrevPrev = pts[pts.length - 3];
+        const midX = (pPrev.x + pt.x) / 2;
+        const midY = (pPrev.y + pt.y) / 2;
+        const prevMidX = (pPrevPrev.x + pPrev.x) / 2;
+        const prevMidY = (pPrevPrev.y + pPrev.y) / 2;
+
+        ctx.beginPath();
+        ctx.moveTo(prevMidX, prevMidY);
+        ctx.quadraticCurveTo(pPrev.x, pPrev.y, midX, midY);
+        ctx.stroke();
+      } else {
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        ctx.lineTo(pt.x, pt.y);
+        ctx.stroke();
+      }
+    }
   };
 
   const stopDrawing = () => {
     if (!isDrawing) return;
     setIsDrawing(false);
-    // Tự động nhận diện nét vẽ & nắn chỉnh đường nét
+    if (!sketchIsErasing && currentSketchStrokeRef.current.length > 1) {
+      sketchStrokesRef.current.push([...currentSketchStrokeRef.current]);
+      sketchRedoStackRef.current = [];
+      updateSketchUndoRedo();
+    }
+    currentSketchStrokeRef.current = [];
+    // Ngay khi nhả chuột/tay, tự động nắn và vẽ lại bằng nét vẽ máy mượt mà (không răng cưa)
+    redrawSketchCanvas();
     if (sketchAutoAlign) {
       handleAutoAlignSketch();
     }
   };
 
   const handleAutoAlignSketch = () => {
+    const canvas = canvasRef.current;
+    const ox = canvas ? canvas.width / 2 : 280;
+    const oy = canvas ? canvas.height / 2 : 130;
+
     if (drawSketchType === 'graph') {
-      setSketchRecognizedShape('Đồ thị hàm số liên tục & Trục tọa độ chuẩn');
-      setSketchGeneratedTikZ(`\\begin{tikzpicture}[scale=0.85, >=stealth]
+      if (sketchStrokesRef.current.length > 0) {
+        setSketchRecognizedShape('Đường cong nét vẽ máy trơn nhẵn (không răng cưa)');
+        const tikzPlots = sketchStrokesRef.current
+          .map((stroke, sIdx) => {
+            const filtered = filterSketchPoints(stroke, 3.5);
+            const resampled = resampleSketchCurveEvenly(filtered, 6);
+            const smoothed = smoothSketchPointsGaussian(resampled, 4);
+            const sampleStep = Math.max(1, Math.floor(smoothed.length / 20));
+            const sampled = smoothed.filter((_, idx) => idx % sampleStep === 0 || idx === smoothed.length - 1);
+            const coords = sampled
+              .map(p => {
+                const tx = ((p.x - ox) / 40).toFixed(2);
+                const ty = ((oy - p.y) / 40).toFixed(2);
+                return `(${tx},${ty})`;
+              })
+              .join(' ');
+            return `  % Đường cong nét vẽ máy ${sIdx + 1}:\n  \\draw[blue, ultra thick, smooth, tension=0.7] plot coordinates { ${coords} };`;
+          })
+          .join('\n');
+
+        setSketchGeneratedTikZ(`% Đồ thị nét vẽ máy (vẽ lại đúng đường vẽ tay trơn nhẵn):
+\\begin{tikzpicture}[scale=0.85, >=stealth]
   \\draw[->,thick] (-3.5,0) -- (3.5,0) node[right] {$x$};
-  \\draw[->,thick] (0,-2.5) -- (0,4.5) node[above] {$y$};
-  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{0.5*\\x*\\x*\\x - \\x});
+  \\draw[->,thick] (0,-2.5) -- (0,4) node[above] {$y$};
+  \\node at (0,0) [below left] {$O$};
+${tikzPlots}
+\\end{tikzpicture}`);
+      } else {
+        setSketchRecognizedShape('Đồ thị đường cong trơn nhẵn (mẫu chuẩn)');
+        setSketchGeneratedTikZ(`% Đồ thị TikZ tự vẽ tay (Nét vẽ máy trơn nhẵn):
+\\begin{tikzpicture}[scale=0.85, >=stealth]
+  \\draw[->,thick] (-3,0) -- (3,0) node[right] {$x$};
+  \\draw[->,thick] (0,-2) -- (0,4) node[above] {$y$};
+  \\draw[domain=-2.2:2.2,smooth,variable=\\x,blue,ultra thick] plot ({\\x},{\\x*\\x - 1});
   \\node at (0,0) [below left] {$O$};
 \\end{tikzpicture}`);
+      }
     } else {
-      setSketchRecognizedShape('Bảng biến thiên 3 hàng 4 cột với mũi tên tăng/giảm');
-      setSketchGeneratedTikZ(`\\begin{tikzpicture}
+      if (sketchStrokesRef.current.length > 0) {
+        setSketchRecognizedShape('Bảng biến thiên nét vẽ máy (đoạn thẳng, mũi tên vector, ký hiệu toán, ||, vô cực)');
+      } else {
+        setSketchRecognizedShape('Bảng biến thiên 3 hàng 4 cột chuẩn SGK (mẫu chuẩn)');
+      }
+      setSketchGeneratedTikZ(`% Bảng biến thiên nét vẽ máy chuẩn SGK:
+\\begin{tikzpicture}
   \\tkzTabInit[lgt=1.5, espcl=2.5]{$x$ /1, $y'$ /1, $y$ /2}{$-\\infty$, $-1$, $1$, $+\\infty$}
   \\tkzTabLine{, +, 0, -, 0, +, }
   \\tkzTabVar{-/ $-\\infty$, +/ $4$, -/ $0$, +/ $+\\infty$}
@@ -3820,7 +4208,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                             )}
                           </div>
 
-                          {/* 3. Chèn bảng biến thiên (4 menu con: Từ máy tính, Nhập điểm cực trị, Nhập hàm, Tự vẽ) */}
+                          {/* 3. Chèn bảng biến thiên */}
                           <div className="py-1">
                             <button
                               type="button"
@@ -3830,8 +4218,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                               <div className="flex items-center gap-2">
                                 <Activity className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                 <div>
-                                  <div className="font-bold">Chèn bảng biến thiên (tikz-tab)</div>
-                                  <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Điểm cực trị, Nhập hàm, Tự vẽ</div>
+                                  <div className="font-bold">Chèn bảng biến thiên</div>
+                                  <div className="text-[10px] text-slate-400 font-normal">Nhập BBT, Vẽ BBT, Tải lên BBT</div>
                                 </div>
                               </div>
                               <ChevronDown className={`w-3.5 h-3.5 text-emerald-500 transition-transform ${expandedBbtMenu ? 'rotate-180' : ''}`} />
@@ -3839,23 +4227,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
                             {expandedBbtMenu && (
                               <div className="ml-5 pl-2.5 border-l-2 border-emerald-200 py-1 space-y-1 bg-emerald-50/40 rounded-r-lg mr-1.5 my-1">
-                                {/* 3.1 Từ máy tính */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    bbtUploadRef.current?.click();
-                                    setOpenFunctionMenuModal(false);
-                                  }}
-                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                                >
-                                  <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <div>
-                                    <div className="font-bold text-[11px] text-emerald-950">1. Từ máy tính</div>
-                                    <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên hệ thống dùng tikz-tab vẽ lại</div>
-                                  </div>
-                                </button>
-
-                                {/* 3.2 Nhập điểm cực trị (đổi tên từ Nhập hàm) */}
+                                {/* 3.1 Nhập BBT (Hàm số & TikZ-Tab chung 1 cửa sổ) */}
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -3866,28 +4238,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                 >
                                   <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                   <div>
-                                    <div className="font-bold text-[11px] text-emerald-950">2. Nhập điểm cực trị</div>
-                                    <div className="text-[9px] text-slate-500 font-normal">Nhập điểm mốc x, cực trị, dấu y' & giá trị y</div>
+                                    <div className="font-bold text-[11px] text-emerald-950">1. Nhập BBT</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Nhập mốc TikZ-Tab hoặc nhập hàm số giải tự động</div>
                                   </div>
                                 </button>
 
-                                {/* 3.3 Nhập hàm (Bổ sung mới) */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setShowBBTModal(true);
-                                    setOpenFunctionMenuModal(false);
-                                  }}
-                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                                >
-                                  <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                                  <div>
-                                    <div className="font-bold text-[11px] text-emerald-950">3. Nhập hàm</div>
-                                    <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số, tự động giải & dựng BBT</div>
-                                  </div>
-                                </button>
-
-                                {/* 3.4 Tự vẽ */}
+                                {/* 3.2 Vẽ BBT */}
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -3900,8 +4256,24 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                 >
                                   <PenTool className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                                   <div>
-                                    <div className="font-bold text-[11px] text-emerald-950">4. Tự vẽ</div>
-                                    <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo BBT, hệ thống nắn chỉnh chuẩn tikz-tab</div>
+                                    <div className="font-bold text-[11px] text-emerald-950">2. Vẽ BBT</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Vẽ phác thảo tay, nắn chuẩn nét vẽ máy vector & Undo/Redo</div>
+                                  </div>
+                                </button>
+
+                                {/* 3.3 Tải lên BBT */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    bbtUploadRef.current?.click();
+                                    setOpenFunctionMenuModal(false);
+                                  }}
+                                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                                >
+                                  <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                  <div>
+                                    <div className="font-bold text-[11px] text-emerald-950">3. Tải lên BBT</div>
+                                    <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên từ máy tính để dựng lại</div>
                                   </div>
                                 </button>
                               </div>
@@ -4592,7 +4964,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       {/* Modal Chèn bảng biến thiên (Nhập trực tiếp hoặc Chọn ảnh từ máy) */}
       {showBBTModal && createPortal(
         <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs overflow-y-auto p-3 sm:p-4 flex items-center justify-center">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-5 shadow-2xl border border-slate-200 space-y-4 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-5 shadow-2xl border border-slate-200 space-y-3.5 animate-scale-up my-auto max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <h4 className="font-bold text-sm text-emerald-900 flex items-center gap-1.5">
                 <Activity className="w-5 h-5 text-emerald-600" />
@@ -4607,177 +4979,181 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               </button>
             </div>
 
-            <div className="space-y-3.5 text-xs">
-              <div className="p-3 bg-emerald-50/70 rounded-xl border border-emerald-100 space-y-2.5">
-                <span className="block font-bold text-emerald-800 text-[11px] uppercase tracking-wider">Cách 1: Nhập công thức hàm, miền & Bảng biến thiên</span>
-                
-                <div className="space-y-2.5">
-                  {/* Ô nhập công thức hàm */}
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-700 block mb-1">
-                      Công thức hàm số (Ví dụ: y = x^2 - 1, N(x) = t + 10, y = x^3 - 3x^2 + 2):
-                    </label>
+            {/* Tab chuyển đổi chế độ */}
+            <div className="flex items-center p-1 bg-slate-100 rounded-xl gap-1">
+              <button
+                type="button"
+                onClick={() => setBbtMode('function')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  bbtMode === 'function' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Calculator className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Nhập hàm (Giải tự động SGK)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBbtMode('manual')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  bbtMode === 'manual' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Nhập Tikz-tab</span>
+              </button>
+            </div>
+
+            {bbtMode === 'function' ? (
+              <div className="space-y-2 p-3 bg-emerald-50/60 rounded-xl border border-emerald-100 text-xs">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={bbtFormula}
+                    onChange={e => setBbtFormula(e.target.value)}
+                    placeholder="Công thức hàm: y = x^3 - 3x, f(x) = (2x+1)/(x-1), s(t) = t^2 - 4t..."
+                    className="flex-1 px-3 py-2 rounded-xl border border-emerald-200 text-xs font-bold focus:ring-2 focus:ring-emerald-500 bg-white text-slate-900 shadow-2xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const det = detectFuncAndVar(bbtFormula);
+                      setBbtVarName(det.varName);
+                      setBbtFuncRow(det.funcRow);
+                      setBbtDerivRow(det.derivRow);
+                      const solved = solveFunctionForBbt(bbtFormula);
+                      if (solved.success) {
+                        setBbtXPoints(solved.xPoints);
+                        setBbtYPrimeSigns(solved.yPrimeSigns);
+                        setBbtYValues(solved.yValues);
+                        setBbtVarName(solved.varName);
+                        setBbtFuncRow(solved.funcRow);
+                        setBbtDerivRow(solved.derivRow);
+                      }
+                    }}
+                    className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 flex items-center gap-1 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Giải tự động</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Chế độ 2: Nhập Tikz-tab 3 hàng gọn gàng không text dư thừa */
+              <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                {/* Hàng 1: [Tên biến (mặc định x)] [Các mốc] */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-4">
                     <input
                       type="text"
-                      value={bbtFormula}
-                      onChange={e => setBbtFormula(e.target.value)}
-                      placeholder="Ví dụ: y = x^2 - 1 hoặc N(x) = t + 10"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                      value={bbtVarName}
+                      onChange={e => setBbtVarName(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder="Tên biến (mặc định x)"
                     />
                   </div>
-
-                  {/* Ô nhập miền cần lập bảng biến thiên & nút gợi ý vô cực */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-bold text-slate-700">
-                        Miền cần lập bảng biến thiên (Mặc định toàn tập số thực ℝ):
-                      </label>
-                    </div>
-                    <input
-                      type="text"
-                      value={bbtDomain}
-                      onChange={e => setBbtDomain(e.target.value)}
-                      placeholder="Ví dụ: (-\infty; +\infty), [0; +\infty), [a; b]"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold focus:outline-emerald-600 bg-white"
-                    />
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {[
-                        { label: 'ℝ (Toàn tập số thực)', val: '(-\\infty; +\\infty)' },
-                        { label: '[0; +∞)', val: '[0; +\\infty)' },
-                        { label: '(-∞; 0]', val: '(-\\infty; 0]' },
-                        { label: 'ℝ \\ {0}', val: '\\mathbb{R} \\setminus \\{0\\}' },
-                        { label: '[a; b]', val: '[a; b]' },
-                      ].map((dm, dIdx) => (
-                        <button
-                          key={dIdx}
-                          type="button"
-                          onClick={() => setBbtDomain(dm.val)}
-                          className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-100/80 hover:bg-emerald-200 text-emerald-900 border border-emerald-200 cursor-pointer font-medium"
-                        >
-                          {dm.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Ô nhập yêu cầu đặc biệt của giáo viên */}
-                  <div>
-                    <label className="text-[10px] font-bold text-emerald-800 block mb-1">
-                      Ô nhập yêu cầu đặc biệt (Gạch xiên 60 độ ngoài miền, điểm không xác định ||...):
-                    </label>
-                    <input
-                      type="text"
-                      value={bbtRequirement}
-                      onChange={e => setBbtRequirement(e.target.value)}
-                      placeholder="Ví dụ: Gạch xiên 60 độ ngoài miền [0; 5]; Điểm x = 1 hai gạch ||"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-emerald-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
-                    />
-                  </div>
-
-                  {/* Nút gợi ý ký hiệu tikz-tab */}
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-500 mb-1 flex items-center gap-1">
-                      <Sparkles className="w-3 h-3 text-emerald-600" />
-                      <span>Gợi ý chèn nhanh ký hiệu bảng biến thiên:</span>
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {[
-                        { label: '-∞', val: '-\\infty' },
-                        { label: '+∞', val: '+\\infty' },
-                        { label: '|| (2 gạch)', val: '||' },
-                        { label: '| (1 gạch)', val: '|' },
-                        { label: '0 (đạo hàm 0)', val: '0' },
-                        { label: '+ (dương)', val: '+' },
-                        { label: '- (âm)', val: '-' },
-                        { label: 'h (gạch xiên 60°)', val: 'h' },
-                        { label: 'd (double bar)', val: 'd' },
-                        { label: '+/ (tăng lên)', val: '+/ ' },
-                        { label: '-/ (giảm xuống)', val: '-/ ' },
-                      ].map((sym, sIdx) => (
-                        <button
-                          key={sIdx}
-                          type="button"
-                          onClick={() => setBbtXPoints(prev => prev + (prev.endsWith(', ') ? '' : ', ') + sym.val)}
-                          className="px-2 py-0.5 rounded-md bg-white hover:bg-emerald-100 border border-slate-200 text-[10px] font-mono text-emerald-800 transition-colors cursor-pointer shadow-2xs"
-                        >
-                          {sym.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Danh sách điểm x (Phân tách bằng dấu phẩy):</label>
+                  <div className="col-span-12 sm:col-span-8">
                     <input
                       type="text"
                       value={bbtXPoints}
                       onChange={e => setBbtXPoints(e.target.value)}
-                      placeholder="Ví dụ: -\infty, -1, 1, +\infty"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder="Các mốc: -\infty, -1, 1, +\infty"
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Dấu của y' (Phân tách bằng dấu phẩy):</label>
+                {/* Hàng 2: [Tên đạo hàm (mặc định {tên hàm}')] [Dấu đạo hàm (+; -; 0; |; ||)] */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-4">
+                    <input
+                      type="text"
+                      value={bbtDerivRow}
+                      onChange={e => setBbtDerivRow(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder={`Tên đạo hàm (mặc định ${bbtFuncRow || 'y'}')`}
+                    />
+                  </div>
+                  <div className="col-span-12 sm:col-span-8">
                     <input
                       type="text"
                       value={bbtYPrimeSigns}
                       onChange={e => setBbtYPrimeSigns(e.target.value)}
-                      placeholder="Ví dụ: , +, 0, -, 0, +, "
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs font-mono"
+                      placeholder="Dấu đạo hàm (+; -; 0; |; ||): , +, 0, -, 0, +, "
                     />
                   </div>
+                </div>
 
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-600 block mb-1">Giá trị biến thiên của y (Ví dụ: -/ -\\infty, +/ 2, -/ -2, +/ +\\infty):</label>
+                {/* Hàng 3: [Tên hàm (mặc định y)] [Các giá trị biến thiên (tự nhận diện trên/giữa/dưới)] */}
+                <div className="grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-4">
+                    <input
+                      type="text"
+                      value={bbtFuncRow}
+                      onChange={e => {
+                        const val = e.target.value;
+                        const oldFunc = bbtFuncRow;
+                        setBbtFuncRow(val);
+                        if (bbtDerivRow === "y'" || bbtDerivRow === `${oldFunc}'`) {
+                          setBbtDerivRow(val ? `${val}'` : "y'");
+                        }
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs"
+                      placeholder="Tên hàm (mặc định y)"
+                    />
+                  </div>
+                  <div className="col-span-12 sm:col-span-8">
                     <input
                       type="text"
                       value={bbtYValues}
                       onChange={e => setBbtYValues(e.target.value)}
-                      placeholder="Mẫu: -/ -\\infty, +/ 2"
-                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs font-semibold focus:outline-emerald-600 bg-white"
+                      className="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs font-bold focus:ring-2 focus:ring-emerald-500 focus:outline-none bg-white text-slate-900 shadow-2xs font-mono"
+                      placeholder="Các giá trị (tự nhận diện trên/giữa/dưới): -\infty, 2, -2, +\infty"
                     />
                   </div>
-
-                  <div className="text-[10px] text-slate-500 italic bg-emerald-100/50 p-2 rounded-lg border border-emerald-200/60">
-                    📌 <strong>Quy chuẩn bảng biến thiên:</strong> Mặc định bảng biến thiên xác định trên toàn tập số thực ℝ; đối với phần ngoài miền hoặc điểm không xác định sẽ tự động dùng dấu gạch xiên 60 độ để gạch cách biệt.
-                  </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleGenerateBBTTikZ}
-                  className="w-full mt-2.5 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <Activity className="w-4 h-4" />
-                  <span>🚀 Tạo & Chèn Bảng Biến Thiên Vào Word</span>
-                </button>
               </div>
+            )}
 
-              <div className="p-3 bg-slate-50 border border-dashed border-slate-300 rounded-xl space-y-2 text-center">
-                <span className="block font-bold text-slate-700 text-[11px] uppercase tracking-wider text-left">Cách 2: Chọn hình ảnh bảng biến thiên có sẵn</span>
-                <p className="text-[11px] text-slate-400 text-left">Hệ thống sẽ tự động quét, nhận diện các dòng cực trị và hướng mũi tên để sinh code tikz-tab chuẩn xác.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    bbtUploadRef.current?.click();
-                    setShowBBTModal(false);
-                  }}
-                  className="w-full py-2 px-4 bg-white hover:bg-slate-100 border border-slate-300 hover:border-slate-400 text-slate-700 font-bold text-xs rounded-xl shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                >
-                  <ImageIcon className="w-4 h-4 text-slate-500" />
-                  <span>Chọn ảnh từ máy...</span>
-                </button>
-              </div>
+            {/* Live Preview */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center min-h-[130px] overflow-x-auto shadow-inner">
+              <div
+                className="w-full flex justify-center"
+                dangerouslySetInnerHTML={{
+                  __html: generateWordBbtHtml(
+                    bbtXPoints,
+                    bbtYPrimeSigns,
+                    bbtYValues,
+                    'bbt-preview-modal',
+                    bbtFormula,
+                    bbtMode,
+                    undefined,
+                    'center',
+                    bbtVarName,
+                    bbtFuncRow,
+                    bbtDerivRow,
+                    false
+                  )
+                }}
+              />
             </div>
 
-            <div className="flex items-center justify-end pt-1 border-t border-slate-100">
+            {/* Footer Actions */}
+            <div className="shrink-0 pt-2 border-t border-slate-100 flex items-center justify-end gap-2">
               <button
                 type="button"
                 onClick={() => setShowBBTModal(false)}
-                className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg cursor-pointer"
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl cursor-pointer"
               >
-                Đóng
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateBBTTikZ}
+                className="py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <Activity className="w-4 h-4" />
+                <span>Chèn bảng biến thiên</span>
               </button>
             </div>
           </div>
@@ -4833,6 +5209,34 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   }`}
                 >
                   <span>Tẩy</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleUndoSketch}
+                  disabled={!canSketchUndo}
+                  className={`px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-colors ${
+                    canSketchUndo
+                      ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer shadow-2xs'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                  }`}
+                  title="Hoàn tác nét vừa vẽ (Ctrl+Z)"
+                >
+                  <Undo2 className="w-3.5 h-3.5" />
+                  <span>Hoàn tác</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRedoSketch}
+                  disabled={!canSketchRedo}
+                  className={`px-2.5 py-1.5 rounded-lg font-semibold flex items-center gap-1 transition-colors ${
+                    canSketchRedo
+                      ? 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 cursor-pointer shadow-2xs'
+                      : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed opacity-60'
+                  }`}
+                  title="Làm lại nét đã xóa (Ctrl+Y)"
+                >
+                  <Redo2 className="w-3.5 h-3.5" />
+                  <span>Làm lại</span>
                 </button>
                 <button
                   type="button"

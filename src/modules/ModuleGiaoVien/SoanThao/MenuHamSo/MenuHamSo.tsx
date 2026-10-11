@@ -521,7 +521,7 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
             )}
           </div>
 
-          {/* 3. Chèn bảng biến thiên (tikz-tab) */}
+          {/* 3. Chèn bảng biến thiên */}
           <div className="py-1">
             <button
               type="button"
@@ -535,8 +535,8 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
               <div className="flex items-center gap-2">
                 <Activity className="w-4 h-4 text-emerald-600 shrink-0" />
                 <div>
-                  <div className="font-bold">Chèn bảng biến thiên (tikz-tab)</div>
-                  <div className="text-[10px] text-slate-400 font-normal">Từ máy tính, Nhập Tikz-tab, Nhập hàm, Tự vẽ</div>
+                  <div className="font-bold">Chèn bảng biến thiên</div>
+                  <div className="text-[10px] text-slate-400 font-normal">Nhập BBT, Vẽ BBT, Tải lên BBT</div>
                 </div>
               </div>
               <ChevronDown className={`w-3.5 h-3.5 text-emerald-500 transition-transform ${openBbtSubmenu ? 'rotate-180' : ''}`} />
@@ -544,26 +544,7 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
 
             {openBbtSubmenu && (
               <div className="ml-5 pl-2.5 border-l-2 border-emerald-200 py-1 space-y-1 bg-emerald-50/40 rounded-r-lg mr-1.5 my-1">
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    saveCurrentSelection();
-                  }}
-                  onClick={() => {
-                    saveCurrentSelection();
-                    bbtInputRef.current?.click();
-                    setOpenFunctionMenu(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                >
-                  <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-[11px] text-emerald-950">1. Từ máy tính</div>
-                    <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên hệ thống dùng tikz-tab vẽ lại</div>
-                  </div>
-                </button>
-
+                {/* 3.1 Nhập BBT (Hàm số & TikZ-Tab chung 1 cửa sổ) */}
                 <button
                   type="button"
                   onMouseDown={(e) => {
@@ -581,42 +562,12 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
                 >
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <div>
-                    <div className="font-bold text-[11px] text-emerald-950">2. Nhập Tikz-tab</div>
-                    <div className="text-[9px] text-slate-500 font-normal">Nhập điểm mốc x, dấu y' & giá trị y theo tikz-tab</div>
+                    <div className="font-bold text-[11px] text-emerald-950">1. Nhập BBT</div>
+                    <div className="text-[9px] text-slate-500 font-normal">Nhập mốc TikZ-Tab hoặc nhập hàm số giải tự động</div>
                   </div>
                 </button>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    saveCurrentSelection();
-                  }}
-                  onClick={() => {
-                    saveCurrentSelection();
-                    setBbtMode('function');
-                    setEditingBbtId(null);
-                    const res = solveFunctionForBbt(bbtFormula);
-                    if (res.success) {
-                      setBbtXPoints(res.xPoints);
-                      setBbtYPrimeSigns(res.yPrimeSigns);
-                      setBbtYValues(res.yValues);
-                      setBbtVarName(res.varName);
-                      setBbtFuncRow(res.funcRow);
-                      setBbtDerivRow(res.derivRow);
-                    }
-                    setShowBBTModal(true);
-                    setOpenFunctionMenu(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
-                >
-                  <Calculator className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-[11px] text-emerald-950">3. Nhập hàm</div>
-                    <div className="text-[9px] text-slate-500 font-normal">Nhập công thức hàm số, tự động giải & dựng BBT</div>
-                  </div>
-                </button>
-
+                {/* 3.2 Vẽ BBT */}
                 <button
                   type="button"
                   onMouseDown={(e) => {
@@ -633,8 +584,29 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
                 >
                   <PenTool className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                   <div>
-                    <div className="font-bold text-[11px] text-emerald-950">4. Tự vẽ</div>
-                    <div className="text-[9px] text-slate-500 font-normal">Vẽ tay phác thảo BBT, hệ thống nắn chỉnh chuẩn tikz-tab</div>
+                    <div className="font-bold text-[11px] text-emerald-950">2. Vẽ BBT</div>
+                    <div className="text-[9px] text-slate-500 font-normal">Vẽ phác thảo tay, nắn chuẩn nét vẽ máy vector & Undo/Redo</div>
+                  </div>
+                </button>
+
+                {/* 3.3 Tải lên BBT */}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    saveCurrentSelection();
+                  }}
+                  onClick={() => {
+                    saveCurrentSelection();
+                    bbtInputRef.current?.click();
+                    setOpenFunctionMenu(false);
+                  }}
+                  className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-emerald-100/70 text-slate-800 text-left rounded-md cursor-pointer"
+                >
+                  <Laptop className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="font-bold text-[11px] text-emerald-950">3. Tải lên BBT</div>
+                    <div className="text-[9px] text-slate-500 font-normal">Chọn ảnh bảng biến thiên từ máy tính để dựng lại</div>
                   </div>
                 </button>
               </div>
