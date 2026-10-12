@@ -52,9 +52,9 @@ export async function findFolderOnDrive(token: string, name: string, parentId?: 
     const cleanParent = parentId && parentId !== 'root' ? parentId : 'root';
     const query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and '${cleanParent}' in parents and trashed = false`;
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents,trashed)&pageSize=10`;
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { Authorization: `Bearer ${token}` }
-    });
+    }, 8000);
     if (res.status === 401) {
       localStorage.removeItem('lopu_google_drive_token_v1');
       localStorage.removeItem('lopu_gdrive_token');
@@ -89,14 +89,14 @@ export async function createFolderOnDrive(token: string, name: string, parentId?
   if (parentId && parentId !== 'root') {
     metadata.parents = [parentId];
   }
-  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const res = await fetchWithTimeout('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(metadata),
-  });
+  }, 10000);
   if (!res.ok) {
     if (res.status === 401) {
       localStorage.removeItem('lopu_google_drive_token_v1');
@@ -121,10 +121,10 @@ async function deleteItemOnDrive(token: string, fileId: string): Promise<boolean
   let deleteSuccess = false;
   // 1. Thử gọi DELETE trực tiếp
   try {
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${fileId}?supportsAllDrives=true`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
-    });
+    }, 10000);
     if (res.status === 401) {
       localStorage.removeItem('lopu_google_drive_token_v1');
       localStorage.removeItem('lopu_gdrive_token');
@@ -170,11 +170,27 @@ async function deleteItemOnDrive(token: string, fileId: string): Promise<boolean
   return deleteSuccess;
 }
 
-// Helper function to find all folders by name on real Google Drive
+// Helper function to find all folders by name on real Google Drive (hỗ trợ cả tìm chính xác, tìm chứa chuỗi và không dấu)
 async function findFoldersByNameOnDrive(token: string, name: string): Promise<string[]> {
   try {
-    const cleanName = name.replace(/'/g, "\\'");
-    const query = `mimeType = 'application/vnd.google-apps.folder' and name = '${cleanName}' and trashed = false`;
+    const cleanName = name.replace(/'/g, "\\'").trim();
+    if (!cleanName) return [];
+    const cleanNoTone = removeVietnameseTones(cleanName).replace(/'/g, "\\'").trim();
+    
+    // An toàn tuyệt đối cho cú pháp Google Drive API v3:
+    // Tránh để ký tự đặc biệt như dấu gạch ngang '-' bên trong toán tử 'contains' vì sẽ gây lỗi 400 Bad Request
+    const safeWords = cleanName.replace(/[^a-zA-Z0-9\s]/g, ' ').trim().split(/\s+/).filter(w => w.length >= 2);
+    
+    let query = `mimeType = 'application/vnd.google-apps.folder' and trashed = false and (name = '${cleanName}'`;
+    if (cleanNoTone && cleanNoTone !== cleanName) {
+      query += ` or name = '${cleanNoTone}'`;
+    }
+    if (safeWords.length > 0) {
+      const containsTerms = safeWords.map(w => `name contains '${w}'`).join(' and ');
+      query += ` or (${containsTerms})`;
+    }
+    query += `)`;
+
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents)&pageSize=50`;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` }
@@ -185,14 +201,16 @@ async function findFoldersByNameOnDrive(token: string, name: string): Promise<st
       throw new Error('Phiên kết nối Google Drive đã hết hạn (401). Vui lòng bấm Kết nối Drive để xác thực lại.');
     }
     if (!res.ok) {
-      let errorDetail = res.statusText;
-      try {
-        const errJson = await res.json();
-        errorDetail = errJson.error?.message || JSON.stringify(errJson);
-      } catch {
-        errorDetail = await res.text().catch(() => res.statusText);
+      console.warn(`Drive folder search query non-ok (${res.status}), retrying exact name query...`);
+      const simpleQuery = `mimeType = 'application/vnd.google-apps.folder' and name = '${cleanName}' and trashed = false`;
+      const simpleRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(simpleQuery)}&fields=files(id,name,parents)&pageSize=50`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (simpleRes.ok) {
+        const sData = await simpleRes.json();
+        return (sData.files || []).map((f: any) => f.id);
       }
-      throw new Error(`Không thể tìm kiếm thư mục "${name}" trên Google Drive (mã ${res.status}): ${errorDetail}`);
+      return [];
     }
     const data = await res.json();
     if (data.files && Array.isArray(data.files)) {
@@ -203,7 +221,76 @@ async function findFoldersByNameOnDrive(token: string, name: string): Promise<st
     if (err.message && err.message.includes('401')) {
       throw err;
     }
-    throw err;
+    console.warn(`Lỗi tìm thư mục "${name}" trên Drive:`, err);
+    return [];
+  }
+}
+
+// Helper function to remove Vietnamese tones
+export function removeVietnameseTones(str: string): string {
+  let s = str || '';
+  s = s.replace(/à|á|ạ|ả|ã|â|ầ|ấ|ậ|ẩ|ẫ|ă|ằ|ắ|ặ|ẳ|ẵ/g, 'a');
+  s = s.replace(/è|é|ẹ|ẻ|ẽ|ê|ề|ế|ệ|ể|ễ/g, 'e');
+  s = s.replace(/ì|í|ị|ỉ|ĩ/g, 'i');
+  s = s.replace(/ò|ó|ọ|ỏ|õ|ô|ồ|ố|ộ|ổ|ỗ|ơ|ờ|ớ|ợ|ở|ỡ/g, 'o');
+  s = s.replace(/ù|ú|ụ|ủ|ũ|ư|ừ|ứ|ự|ử|ữ/g, 'u');
+  s = s.replace(/ỳ|ý|ỵ|ỷ|ỹ/g, 'y');
+  s = s.replace(/đ/g, 'd');
+  s = s.replace(/À|Á|Ạ|Ả|Ã|Â|Ầ|Ấ|Ậ|Ẩ|Ẫ|Ă|Ằ|Ắ|Ặ|Ẳ|Ẵ/g, 'a');
+  s = s.replace(/È|É|Ẹ|Ẻ|Ẽ|Ê|Ề|Ế|Ệ|Ể|Ễ/g, 'e');
+  s = s.replace(/Ì|Í|Ị|Ỉ|Ĩ/g, 'i');
+  s = s.replace(/Ò|Ó|Ọ|Ỏ|Õ|Ô|Ồ|Ố|Ộ|Ổ|Ỗ|Ơ|Ờ|Ớ|Ợ|Ở|Ỡ/g, 'o');
+  s = s.replace(/Ù|Ú|Ụ|Ủ|Ũ|Ư|Ừ|Ứ|Ự|Ử|Ữ/g, 'u');
+  s = s.replace(/Ỳ|Ý|Ỵ|Ỷ|Ỹ/g, 'y');
+  s = s.replace(/Đ/g, 'd');
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+// Helper function to find a folder flexibly (exact, case-insensitive, unaccented, or slug)
+export async function findFlexibleFolderInDrive(token: string, name: string, parentId?: string): Promise<string | null> {
+  const cleanParent = parentId && parentId !== 'root' ? parentId : 'root';
+  
+  // 1. Thử tìm chính xác trước
+  const directId = await findFolderOnDrive(token, name, parentId);
+  if (directId) return directId;
+
+  // 2. Nếu không tìm thấy bằng query chính xác, quét các thư mục con trực tiếp của parentId để so khớp mềm
+  try {
+    const url = `https://www.googleapis.com/drive/v3/files?q=mimeType='application/vnd.google-apps.folder'+and+'${cleanParent}'+in+parents+and+trashed=false&fields=files(id,name,trashed)&pageSize=100`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const folders: Array<{ id: string; name: string }> = (data.files || []).filter((f: any) => !f.trashed && f.name);
+    
+    const targetNorm = name.trim().toLowerCase();
+    const targetNoTone = removeVietnameseTones(targetNorm);
+    const targetSlug = targetNoTone.replace(/[^a-z0-9]/g, '');
+
+    // Khớp 1: Không phân biệt hoa thường
+    const matchCase = folders.find(f => f.name.trim().toLowerCase() === targetNorm);
+    if (matchCase) return matchCase.id;
+
+    // Khớp 2: Bỏ dấu tiếng Việt
+    const matchTone = folders.find(f => removeVietnameseTones(f.name.trim().toLowerCase()) === targetNoTone);
+    if (matchTone) return matchTone.id;
+
+    // Khớp 3: Bỏ ký tự đặc biệt
+    if (targetSlug) {
+      const matchSlug = folders.find(f => removeVietnameseTones(f.name).toLowerCase().replace(/[^a-z0-9]/g, '') === targetSlug);
+      if (matchSlug) return matchSlug.id;
+    }
+
+    // Khớp 4: Tên thư mục chứa hoặc được chứa trong tên đích
+    const matchSubstr = folders.find(f => {
+      const fNorm = removeVietnameseTones(f.name).toLowerCase();
+      return (fNorm && targetNoTone && (fNorm.includes(targetNoTone) || targetNoTone.includes(fNorm)));
+    });
+    if (matchSubstr) return matchSubstr.id;
+
+    return null;
+  } catch (err) {
+    console.warn(`Lỗi khi tìm kiếm mềm thư mục ${name}:`, err);
+    return null;
   }
 }
 
@@ -218,6 +305,488 @@ export async function findFolderPathIdOnDrive(token: string, pathSegments: strin
     currentParentId = folderId;
   }
   return currentParentId || null;
+}
+
+// Helper function to find a folder ID by flexible hierarchy path (exact, unaccented, slug, or substring)
+export async function findFlexibleFolderPathOnDrive(token: string, pathSegments: string[]): Promise<string | null> {
+  let currentParentId: string | undefined = undefined;
+  for (const segment of pathSegments) {
+    const cleanSegment = segment.trim();
+    if (!cleanSegment) continue;
+    const folderId = await findFlexibleFolderInDrive(token, cleanSegment, currentParentId);
+    if (!folderId) return null;
+    currentParentId = folderId;
+  }
+  return currentParentId || null;
+}
+
+// Liệt kê tất cả các tệp (không phải thư mục) trong một thư mục Drive
+export async function listFilesInDriveFolder(
+  token: string,
+  folderId: string
+): Promise<Array<{ id: string; name: string; mimeType: string; size?: string; modifiedTime?: string }>> {
+  try {
+    const query = `'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,size,modifiedTime)&pageSize=100`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem('lopu_google_drive_token_v1');
+        localStorage.removeItem('lopu_gdrive_token');
+        throw new Error('Phiên kết nối Google Drive đã hết hạn (401).');
+      }
+      return [];
+    }
+    const data = await res.json();
+    return data.files || [];
+  } catch (err: any) {
+    if (err.message && err.message.includes('401')) throw err;
+    console.warn('Lỗi khi lấy danh sách tệp trong thư mục Drive:', err);
+    return [];
+  }
+}
+
+// Tải nội dung tệp từ Google Drive và chuyển đổi thành định dạng HTML chuẩn cho cửa sổ soạn thảo Word
+export async function downloadFileContentAsHtml(
+  token: string,
+  file: { id: string; name: string; mimeType: string }
+): Promise<string> {
+  const { id, name, mimeType } = file;
+
+  // 1. Google Doc -> Export sang HTML
+  if (mimeType === 'application/vnd.google-apps.document') {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${id}/export?mimeType=text/html`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }, 15000);
+    if (!res.ok) throw new Error(`Không thể xuất Google Doc sang HTML (${res.status})`);
+    return await res.text();
+  }
+
+  // 2. Tệp HTML
+  if (mimeType === 'text/html' || name.toLowerCase().endsWith('.html') || name.toLowerCase().endsWith('.htm')) {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }, 15000);
+    if (!res.ok) throw new Error(`Không thể tải tệp HTML từ Drive (${res.status})`);
+    return await res.text();
+  }
+
+  // 3. Tệp Word (.docx)
+  if (
+    mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    name.toLowerCase().endsWith('.docx')
+  ) {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }, 20000);
+    if (!res.ok) throw new Error(`Không thể tải tệp Word (.docx) từ Drive (${res.status})`);
+    const arrayBuffer = await res.arrayBuffer();
+    const mammothModule = await import('mammoth');
+    const mammoth = mammothModule.default || mammothModule;
+    const result = await mammoth.convertToHtml({ arrayBuffer });
+    return result.value || '';
+  }
+
+  // 4. Tệp văn bản thuần (.txt, .md)
+  if (mimeType.startsWith('text/') || name.toLowerCase().endsWith('.txt') || name.toLowerCase().endsWith('.md')) {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }, 12000);
+    if (!res.ok) throw new Error(`Không thể tải tệp text từ Drive (${res.status})`);
+    const rawText = await res.text();
+    return rawText
+      .split('\n\n')
+      .map(p => `<p>${p.replace(/\n/g, '<br/>')}</p>`)
+      .join('');
+  }
+
+  // 5. Tệp JSON (ví dụ luyentap.json, KTDG.json, CaiThien.json)
+  if (mimeType === 'application/json' || name.toLowerCase().endsWith('.json')) {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+      headers: { Authorization: `Bearer ${token}` }
+    }, 15000);
+    if (!res.ok) throw new Error(`Không thể tải tệp JSON từ Drive (${res.status})`);
+    const rawJson = await res.text();
+    try {
+      const parsed = JSON.parse(rawJson);
+      if (parsed && Array.isArray(parsed.questions) && parsed.questions.length > 0) {
+        let html = `<h2>${parsed.tieuDe || name}</h2><p><em>Mục độ: ${parsed.mucDo || 'Tổng hợp'}</em></p>`;
+        parsed.questions.forEach((q: any, idx: number) => {
+          html += `<div class="lesson-template-box" style="background-color: #f8fafc; border: 1.5px solid #cbd5e1; border-left: 5px solid #4f46e5; padding: 14px 16px; margin: 14px 0; border-radius: 8px;">`;
+          html += `<strong style="color: #0f172a; font-size: 15px;">Câu ${q.questionNumber || idx + 1}:</strong>`;
+          html += `<div style="margin-top: 6px; font-weight: 500;">${q.content || ''}</div>`;
+          if (Array.isArray(q.options) && q.options.length > 0) {
+            html += `<div style="margin-top: 8px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">`;
+            q.options.forEach((opt: any) => {
+              html += `<div><strong>${opt.key || ''}.</strong> ${opt.text || ''}</div>`;
+            });
+            html += `</div>`;
+          }
+          if (q.solution || q.correctAnswer) {
+            html += `<div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #cbd5e1; color: #15803d; font-size: 13px;">`;
+            if (q.correctAnswer) html += `<strong>Đáp án:</strong> ${q.correctAnswer} &nbsp;|&nbsp; `;
+            if (q.solution) html += `<strong>Lời giải:</strong> ${q.solution}`;
+            html += `</div>`;
+          }
+          html += `</div>`;
+        });
+        return html;
+      }
+      return `<pre style="white-space: pre-wrap; font-family: monospace; background: #f1f5f9; padding: 12px; border-radius: 8px;">${rawJson}</pre>`;
+    } catch {
+      return `<pre>${rawJson}</pre>`;
+    }
+  }
+
+  // Fallback
+  const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` }
+  }, 15000);
+  return await res.text();
+}
+
+export interface LoadChuyenDeResult {
+  success: boolean;
+  foundFolder: boolean;
+  folderId?: string;
+  files: Array<{ id: string; name: string; mimeType: string; size?: string; modifiedTime?: string }>;
+  loadedFile?: { id: string; name: string; mimeType: string };
+  contentHtml?: string;
+  kienThucFiles: string[];
+  luyenTapFiles: string[];
+  ktdgFiles: string[];
+  error?: string;
+}
+
+// Tự động tìm kiếm thư mục chuyên đề trên Drive, quét tất cả tệp và tải nội dung vào cửa sổ soạn thảo Word
+export async function loadChuyenDeContentFromDrive(params: {
+  title: string;
+  subject?: string;
+  grade?: string;
+  chuong: string;
+  bai: string;
+  vanDe: string;
+  chuyenDe: string;
+  tienTrinh?: string;
+  selectedKienThucName?: string;
+  selectedExerciseName?: string;
+  firstDropdownItemName?: string;
+}): Promise<LoadChuyenDeResult> {
+  const {
+    title,
+    subject = 'Toán Học',
+    grade = 'Khối 10',
+    chuong,
+    bai,
+    vanDe,
+    chuyenDe,
+    tienTrinh = 'Kiến thức',
+    selectedKienThucName = '',
+    selectedExerciseName = '',
+    firstDropdownItemName = '',
+  } = params;
+
+  if (!chuyenDe || !chuyenDe.trim()) {
+    return {
+      success: false,
+      foundFolder: false,
+      files: [],
+      kienThucFiles: [],
+      luyenTapFiles: [],
+      ktdgFiles: [],
+      error: 'Chưa chọn chuyên đề',
+    };
+  }
+
+  let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+  const rawChuyenDe = chuyenDe.trim();
+  const cleanChuyenDeWithoutPrefix = rawChuyenDe.replace(/^(?:Chuyên\s*đề|Chuyen\s*de)\s*:?\s*/i, '').trim();
+  const cacheKey = `lopu_kienthuc_${rawChuyenDe}`;
+  const cachedContent = localStorage.getItem(cacheKey)
+    || localStorage.getItem(`lopu_kienthuc_${cleanChuyenDeWithoutPrefix}`)
+    || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${rawChuyenDe}`)
+    || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${cleanChuyenDeWithoutPrefix}`)
+    || localStorage.getItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html');
+
+  if (!token || !isRealGoogleOAuthToken(token)) {
+    if (cachedContent) {
+      return {
+        success: true,
+        foundFolder: true,
+        files: [{ id: 'cached_id', name: 'KienThuc_LyThuyetTrongTam.html', mimeType: 'text/html' }],
+        loadedFile: { id: 'cached_id', name: 'KienThuc_LyThuyetTrongTam.html', mimeType: 'text/html' },
+        contentHtml: cachedContent,
+        kienThucFiles: ['Lý thuyết trọng tâm'],
+        luyenTapFiles: [],
+        ktdgFiles: [],
+      };
+    }
+    return {
+      success: false,
+      foundFolder: false,
+      files: [],
+      kienThucFiles: [],
+      luyenTapFiles: [],
+      ktdgFiles: [],
+      error: 'Chưa kết nối Google Drive',
+    };
+  }
+
+  try {
+    const formattedTitle = formatDocumentTitle(subject, grade, title);
+    const cleanTitle = (title || 'TaiLieu').trim();
+
+    // Thử các biến thể đường dẫn thư mục phân cấp và tên chuyên đề (hỗ trợ cả 1a-2, Chuyên đề 1a-2, Chuyen de 1a-2)
+    const chuyenDeVariants = Array.from(new Set([
+      rawChuyenDe,
+      cleanChuyenDeWithoutPrefix,
+      `Chuyên đề ${cleanChuyenDeWithoutPrefix}`,
+      `Chuyen de ${cleanChuyenDeWithoutPrefix}`,
+      `Chuyên đề: ${cleanChuyenDeWithoutPrefix}`,
+      `[${cleanChuyenDeWithoutPrefix}]`,
+      `[Chuyên đề ${cleanChuyenDeWithoutPrefix}]`,
+    ])).filter(Boolean);
+
+    const pathVariants: string[][] = [];
+    for (const cd of chuyenDeVariants) {
+      pathVariants.push(
+        ['myApp', 'LopU', 'TaiLieu', cleanTitle, chuong, bai, vanDe, cd],
+        ['myApp', 'LopU', 'TaiLieu', formattedTitle, chuong, bai, vanDe, cd],
+        ['myApp', 'LopU', 'TaiLieu', chuong, bai, vanDe, cd],
+        ['myApp', 'LopU', 'TaiLieu', cd],
+        ['TaiLieu', cleanTitle, chuong, bai, vanDe, cd],
+      );
+    }
+
+    let folderId: string | null = null;
+    for (const p of pathVariants) {
+      const filteredPath = p.filter(Boolean);
+      folderId = await findFlexibleFolderPathOnDrive(token, filteredPath);
+      if (folderId) break;
+    }
+
+    // Nếu vẫn chưa tìm ra theo đường dẫn cứng, tìm trực tiếp folder có tên theo các biến thể chuyenDe trên Drive
+    if (!folderId) {
+      for (const cd of chuyenDeVariants) {
+        const matchedFolderIds = await findFoldersByNameOnDrive(token, cd);
+        if (matchedFolderIds && matchedFolderIds.length > 0) {
+          folderId = matchedFolderIds[0];
+          break;
+        }
+      }
+    }
+
+    // Thử thêm tìm kiếm mềm không dấu cho tên chuyên đề
+    if (!folderId) {
+      for (const cd of chuyenDeVariants) {
+        const cleanNoTone = removeVietnameseTones(cd);
+        if (cleanNoTone !== cd) {
+          const fallbackIds = await findFoldersByNameOnDrive(token, cleanNoTone);
+          if (fallbackIds && fallbackIds.length > 0) {
+            folderId = fallbackIds[0];
+            break;
+          }
+        }
+      }
+    }
+
+    let directFoundFile: { id: string; name: string; mimeType: string; parents?: string[] } | null = null;
+
+    // GIẢI PHÁP TÌM KIẾM MẠNH: Quét trực tiếp tệp bài giảng KienThuc_LyThuyetTrongTam.html trên Google Drive
+    try {
+      // 1. Tìm chính xác tệp KienThuc_LyThuyetTrongTam.html (Query Drive v3 chuẩn 100% không lỗi cú pháp)
+      const exactFileQuery = `trashed = false and name = 'KienThuc_LyThuyetTrongTam.html'`;
+      const exactUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(exactFileQuery)}&fields=files(id,name,mimeType,size,modifiedTime,parents)&pageSize=20`;
+      const exactRes = await fetch(exactUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (exactRes.ok) {
+        const exactData = await exactRes.json();
+        const found = exactData.files || [];
+        if (found.length > 0) {
+          directFoundFile = found[0];
+          if (!folderId && directFoundFile?.parents && directFoundFile.parents.length > 0) {
+            folderId = directFoundFile.parents[0];
+          }
+        }
+      }
+
+      // 2. Nếu chưa có, tìm các tệp chứa 'KienThuc' hoặc 'kienthuc'
+      if (!directFoundFile) {
+        const fallbackFileQuery = `trashed = false and (name = 'KienThuc.html' or name contains 'KienThuc' or name contains 'kienthuc')`;
+        const fbUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(fallbackFileQuery)}&fields=files(id,name,mimeType,size,modifiedTime,parents)&pageSize=25`;
+        const fbRes = await fetch(fbUrl, { headers: { Authorization: `Bearer ${token}` } });
+        if (fbRes.ok) {
+          const fbData = await fbRes.json();
+          const allFound: any[] = (fbData.files || []).filter((f: any) => f.name.toLowerCase().endsWith('.html') || f.mimeType === 'text/html');
+          const cdSlug = removeVietnameseTones(cleanChuyenDeWithoutPrefix || rawChuyenDe).toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matched = allFound.find(f => {
+            const lower = removeVietnameseTones(f.name).toLowerCase();
+            return cdSlug && lower.includes(cdSlug);
+          }) || allFound.find(f => f.name.toLowerCase() === 'kienthuc_lythuyettrongtam.html')
+            || allFound.find(f => f.name.toLowerCase().startsWith('kienthuc_'))
+            || allFound[0];
+          if (matched) {
+            directFoundFile = matched;
+            if (!folderId && matched.parents && matched.parents.length > 0) {
+              folderId = matched.parents[0];
+            }
+          }
+        }
+      }
+    } catch (directSearchErr) {
+      console.warn('Lỗi tìm kiếm trực tiếp tệp bài giảng trên Drive:', directSearchErr);
+    }
+
+    if (!folderId && !directFoundFile) {
+      if (cachedContent) {
+        return {
+          success: true,
+          foundFolder: true,
+          files: [{ id: 'cached_id', name: 'KienThuc_LyThuyetTrongTam.html', mimeType: 'text/html' }],
+          loadedFile: { id: 'cached_id', name: 'KienThuc_LyThuyetTrongTam.html', mimeType: 'text/html' },
+          contentHtml: cachedContent,
+          kienThucFiles: ['Lý thuyết trọng tâm'],
+          luyenTapFiles: [],
+          ktdgFiles: [],
+        };
+      }
+      return {
+        success: true,
+        foundFolder: false,
+        files: [],
+        kienThucFiles: [],
+        luyenTapFiles: [],
+        ktdgFiles: [],
+      };
+    }
+
+    // Lấy danh sách tệp trong thư mục Chuyên đề nếu có folderId
+    let files: Array<{ id: string; name: string; mimeType: string; size?: string; modifiedTime?: string }> = [];
+    if (folderId) {
+      files = await listFilesInDriveFolder(token, folderId);
+    }
+    if (directFoundFile && !files.some(f => f.id === directFoundFile!.id)) {
+      files.unshift(directFoundFile);
+    }
+
+    // Phân loại tệp
+    const kienThucFiles: string[] = [];
+    const luyenTapFiles: string[] = [];
+    const ktdgFiles: string[] = [];
+
+    files.forEach(f => {
+      const lower = f.name.toLowerCase();
+      if (lower.startsWith('kienthuc_') && lower.endsWith('.html')) {
+        const raw = f.name.slice('KienThuc_'.length, -'.html'.length);
+        if (raw) kienThucFiles.push(raw);
+      } else if (lower === 'kienthuc.html' || lower === 'index.html') {
+        kienThucFiles.push('Lý thuyết trọng tâm');
+      } else if (lower.startsWith('luyentap_') && lower.endsWith('.json')) {
+        const raw = f.name.slice('luyentap_'.length, -'.json'.length);
+        if (raw) luyenTapFiles.push(raw);
+      } else if (lower.startsWith('ktdg_') && lower.endsWith('.json')) {
+        const raw = f.name.slice('ktdg_'.length, -'.json'.length);
+        if (raw) ktdgFiles.push(raw);
+      }
+    });
+
+    // Xác định tệp cần tải nội dung vào cửa sổ soạn thảo dựa trên ĐÚNG tùy chọn đang được chọn
+    let targetFile: { id: string; name: string; mimeType: string } | null = null;
+
+    if (tienTrinh === 'Kiến thức') {
+      const searchKienThucName = selectedKienThucName || firstDropdownItemName || 'Lý thuyết trọng tâm';
+      if (searchKienThucName) {
+        const slug = removeVietnameseTones(searchKienThucName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        // 1. Tìm chính xác file trên Drive theo tên bài được chọn (ví dụ KienThuc_TomTatCongThuc.html hoặc tomtatcongthuc.html)
+        targetFile = files.find(f => {
+          const lower = removeVietnameseTones(f.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return lower.includes(slug) && (f.name.endsWith('.html') || f.mimeType === 'application/vnd.google-apps.document');
+        }) || null;
+
+        // 2. Nếu đang chọn Lý thuyết trọng tâm mà chưa thấy file KienThuc_LyThuyetTrongTam.html, thử tìm KienThuc.html hoặc index.html hoặc directFoundFile
+        if (!targetFile && (slug === 'lythuyettrongtam' || slug === 'kienthuc')) {
+          targetFile = files.find(f => f.name.toLowerCase() === 'kienthuc_lythuyettrongtam.html')
+            || files.find(f => f.name.toLowerCase() === 'kienthuc.html')
+            || files.find(f => f.name.toLowerCase() === 'index.html')
+            || (directFoundFile && directFoundFile.name.toLowerCase().includes('lythuyettrongtam') ? directFoundFile : null);
+        }
+      }
+    } else if (tienTrinh === 'Luyện tập') {
+      const searchExerciseName = selectedExerciseName || firstDropdownItemName || '';
+      if (searchExerciseName) {
+        const slug = removeVietnameseTones(searchExerciseName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        targetFile = files.find(f => {
+          const lower = removeVietnameseTones(f.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return lower.startsWith('luyentap') && lower.includes(slug);
+        }) || null;
+      }
+    } else if (tienTrinh === 'KTDG') {
+      const searchKtdgName = selectedExerciseName || firstDropdownItemName || '';
+      if (searchKtdgName) {
+        const slug = removeVietnameseTones(searchKtdgName).toLowerCase().replace(/[^a-z0-9]/g, '');
+        targetFile = files.find(f => {
+          const lower = removeVietnameseTones(f.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+          return lower.startsWith('ktdg') && lower.includes(slug);
+        }) || null;
+      }
+    } else if (tienTrinh === 'Cải thiện') {
+      targetFile = files.find(f => f.name.toLowerCase().includes('caithien') && f.name.endsWith('.json')) || null;
+    }
+
+    let contentHtml: string | undefined = undefined;
+    if (targetFile) {
+      try {
+        contentHtml = await downloadFileContentAsHtml(token, targetFile);
+      } catch (dlErr) {
+        console.warn('Lỗi tải trực tiếp tệp từ Drive:', dlErr);
+      }
+      if (contentHtml && contentHtml.trim()) {
+        try {
+          localStorage.setItem(cacheKey, contentHtml);
+          if (targetFile.name) {
+            localStorage.setItem(`lopu_drive_file_content_name_${targetFile.name}`, contentHtml);
+          }
+        } catch {}
+      }
+    }
+
+    if (!targetFile || !contentHtml || !contentHtml.trim()) {
+      return {
+        success: false,
+        foundFolder: Boolean(folderId),
+        folderId: folderId || undefined,
+        files,
+        loadedFile: undefined,
+        contentHtml: undefined,
+        kienThucFiles,
+        luyenTapFiles,
+        ktdgFiles,
+        error: `Không tìm thấy file tương ứng cho "${selectedKienThucName || selectedExerciseName || 'bài'}" trên Google Drive`,
+      };
+    }
+
+    return {
+      success: true,
+      foundFolder: true,
+      folderId: folderId || undefined,
+      files,
+      loadedFile: targetFile || undefined,
+      contentHtml,
+      kienThucFiles,
+      luyenTapFiles,
+      ktdgFiles,
+    };
+  } catch (err: any) {
+    console.error('Lỗi khi nạp dữ liệu chuyên đề từ Drive:', err);
+    return {
+      success: false,
+      foundFolder: false,
+      files: [],
+      kienThucFiles: [],
+      luyenTapFiles: [],
+      ktdgFiles: [],
+      error: err.message || 'Lỗi không xác định khi nạp dữ liệu từ Google Drive',
+    };
+  }
 }
 
 export const DRIVE_FOLDER_CACHE_KEY = 'lopu_drive_folder_id_cache_v1';
@@ -271,9 +840,9 @@ export function setCachedDriveFileId(parentFolderId: string, fileName: string, f
 export async function isDriveFolderValid(token: string, folderId: string): Promise<boolean> {
   if (!folderId || folderId === 'root') return true;
   try {
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,trashed`, {
+    const res = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,trashed`, {
       headers: { Authorization: `Bearer ${token}` },
-    });
+    }, 8000);
     if (!res.ok) return false;
     const data = await res.json();
     return !data.trashed;
@@ -293,17 +862,14 @@ export async function getOrCreateFolderPathOnDrive(token: string, pathSegments: 
     currentPathArray.push(cleanSegment);
     const pathKey = currentPathArray.join('/');
 
-    // 1. Kiểm tra folderID trong bộ nhớ trình duyệt (localStorage cache) để truy cứu về sau siêu nhanh
+    // 1. Sử dụng trực tiếp folderID từ cache nếu có để tối ưu tốc độ lưu (không gọi 8 HTTP fetch nối tiếp)
     const cachedFolderId = getCachedDriveFolderId(pathKey);
     if (cachedFolderId) {
-      const valid = await isDriveFolderValid(token, cachedFolderId);
-      if (valid) {
-        currentParentId = cachedFolderId;
-        continue;
-      }
+      currentParentId = cachedFolderId;
+      continue;
     }
 
-    // 2. Nếu chưa có trong cache hoặc không còn hợp lệ, kiểm tra trên Drive
+    // 2. Nếu chưa có trong cache, kiểm tra trên Drive
     let folderId = await findFolderOnDrive(token, cleanSegment, currentParentId);
     if (!folderId) {
       folderId = await createFolderOnDrive(token, cleanSegment, currentParentId);
@@ -312,7 +878,7 @@ export async function getOrCreateFolderPathOnDrive(token: string, pathSegments: 
       console.log(`Tìm thấy thư mục hiện có trên Google Drive: ${cleanSegment} (ID: ${folderId})`);
     }
 
-    // 3. Lưu folderID về bộ nhớ trình duyệt để truy cứu về sau cho nhanh
+    // 3. Lưu folderID về bộ nhớ trình duyệt để truy cứu siêu tốc
     setCachedDriveFolderId(pathKey, folderId);
     currentParentId = folderId;
   }
@@ -323,9 +889,9 @@ export async function findFileInDriveFolder(token: string, parentFolderId: strin
   const cachedFileId = getCachedDriveFileId(parentFolderId, fileName);
   if (cachedFileId) {
     try {
-      const checkRes = await fetch(`https://www.googleapis.com/drive/v3/files/${cachedFileId}?fields=id,trashed`, {
+      const checkRes = await fetchWithTimeout(`https://www.googleapis.com/drive/v3/files/${cachedFileId}?fields=id,trashed`, {
         headers: { Authorization: `Bearer ${token}` }
-      });
+      }, 5000);
       if (checkRes.ok) {
         const fileInfo = await checkRes.json();
         if (!fileInfo.trashed) return cachedFileId;
@@ -336,7 +902,7 @@ export async function findFileInDriveFolder(token: string, parentFolderId: strin
   const cleanName = fileName.replace(/'/g, "\\'");
   const query = `name = '${cleanName}' and '${parentFolderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`;
   const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,trashed)&pageSize=10`;
-  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const res = await fetchWithTimeout(url, { headers: { Authorization: `Bearer ${token}` } }, 10000);
   if (!res.ok) return null;
   const data = await res.json();
   const file = (data.files || []).find((f: any) => !f.trashed);
@@ -354,48 +920,53 @@ export async function saveOrUpdateDriveFile(
   content: string,
   mimeType: string = 'text/plain'
 ): Promise<{ success: boolean; fileId: string; isCreated: boolean }> {
-  const existingFileId = await findFileInDriveFolder(token, parentFolderId, fileName);
+  let existingFileId = await findFileInDriveFolder(token, parentFolderId, fileName);
 
   if (existingFileId) {
     // File đã có -> cập nhật nội dung vào file tương ứng (PATCH)
     const blob = new Blob([content], { type: mimeType });
-    const patchRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`, {
+    const patchRes = await fetchWithTimeout(`https://www.googleapis.com/upload/drive/v3/files/${existingFileId}?uploadType=media`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': mimeType,
       },
       body: blob,
-    });
-    if (!patchRes.ok) {
+    }, 15000);
+    if (patchRes.ok) {
+      setCachedDriveFileId(parentFolderId, fileName, existingFileId);
+      return { success: true, fileId: existingFileId, isCreated: false };
+    }
+    if (patchRes.status === 404) {
+      // Nếu file cũ không còn trên Drive, gỡ cache và tiếp tục tạo mới bên dưới
+      existingFileId = null;
+    } else {
       throw new Error(`Cập nhật file ${fileName} trên Drive thất bại (${patchRes.status})`);
     }
-    setCachedDriveFileId(parentFolderId, fileName, existingFileId);
-    return { success: true, fileId: existingFileId, isCreated: false };
-  } else {
-    // File chưa có -> tạo file mới với tên tương ứng (POST)
-    const metadata = {
-      name: fileName,
-      parents: [parentFolderId],
-      mimeType,
-    };
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', new Blob([content], { type: mimeType }));
-
-    const postRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: form,
-    });
-    if (!postRes.ok) {
-      throw new Error(`Tạo mới file ${fileName} trên Drive thất bại (${postRes.status})`);
-    }
-    const createdData = await postRes.json();
-    const newFileId = createdData.id;
-    setCachedDriveFileId(parentFolderId, fileName, newFileId);
-    return { success: true, fileId: newFileId, isCreated: true };
   }
+
+  // File chưa có hoặc bị 404 -> tạo file mới với tên tương ứng (POST)
+  const metadata = {
+    name: fileName,
+    parents: [parentFolderId],
+    mimeType,
+  };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+  form.append('file', new Blob([content], { type: mimeType }));
+
+  const postRes = await fetchWithTimeout('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  }, 15000);
+  if (!postRes.ok) {
+    throw new Error(`Tạo mới file ${fileName} trên Drive thất bại (${postRes.status})`);
+  }
+  const createdData = await postRes.json();
+  const newFileId = createdData.id;
+  setCachedDriveFileId(parentFolderId, fileName, newFileId);
+  return { success: true, fileId: newFileId, isCreated: true };
 }
 
 
@@ -405,20 +976,45 @@ export function isRealGoogleOAuthToken(token?: string | null): boolean {
 }
 
 /**
- * Kiểm tra mã Token Google Drive có tồn tại và còn hiệu lực hay không.
- * Nếu chưa kết nối hoặc phiên kết nối đã hết hạn (401/403/token không hợp lệ),
- * tự động bật cửa sổ đăng nhập Google (OAuth popup) để kết nối lại trước khi thực hiện các yêu cầu.
+ * Helper gọi fetch có Timeout để chống treo mãi mãi khi mạng lag hoặc Google API chậm
  */
-export async function ensureValidDriveToken(): Promise<string | null> {
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 8000): Promise<Response> {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(id);
+    return response;
+  } catch (error: any) {
+    clearTimeout(id);
+    if (error.name === 'AbortError') {
+      throw new Error(`Kết nối Google Drive quá thời gian chờ (${Math.round(timeoutMs / 1000)} giây). Vui lòng thử lại.`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Kiểm tra mã Token Google Drive có tồn tại và còn hiệu lực hay không.
+ * Có cơ chế Timeout 8s chống treo. Nếu chưa kết nối hoặc token hết hạn (401/403),
+ * sẽ kích hoạt đăng nhập lại.
+ */
+export async function ensureValidDriveToken(
+  onProgress?: (step: string) => void
+): Promise<string | null> {
   let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
   
   let isValid = false;
   if (isRealGoogleOAuthToken(token)) {
     try {
-      // Test nhanh quyền truy cập API Google Drive
-      const res = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+      if (onProgress) onProgress('Kiểm tra phiên kết nối Google Drive...');
+      // Test nhanh quyền truy cập API Google Drive với Timeout 5s
+      const res = await fetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { Authorization: `Bearer ${token}` }
-      });
+      }, 5000);
       if (res.ok) {
         isValid = true;
       } else if (res.status === 401 || res.status === 403) {
@@ -427,19 +1023,38 @@ export async function ensureValidDriveToken(): Promise<string | null> {
         localStorage.removeItem('lopu_gdrive_token');
         token = null;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Lỗi kiểm tra tính hợp lệ của Token Google Drive:', err);
+      // Nếu timeout hoặc lỗi mạng nhưng token có sẵn dạng ya29, vẫn cho dùng thử để upload
+      if (token && token.startsWith('ya29.')) {
+        isValid = true;
+      }
     }
   }
 
   if (!isValid) {
+    if (onProgress) onProgress('Đang mở cửa sổ xác thực tài khoản Google Drive...');
     console.log('Mở cửa sổ đăng nhập Google Drive để kết nối lại...');
-    const conn = await connectGoogleDrive();
-    if (conn.success) {
-      token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-      if (isRealGoogleOAuthToken(token)) {
-        return token;
+    
+    // Timeout tối đa 30s cho popup đăng nhập
+    const connectPromise = connectGoogleDrive();
+    const timeoutPromise = new Promise<{ success: boolean; email: string; message: string }>((_, reject) => {
+      setTimeout(() => reject(new Error('Quá thời gian xác thực Google Drive (hơn 30 giây hoặc cửa sổ bị đóng/chặn popup).')), 30000);
+    });
+
+    try {
+      const conn = await Promise.race([connectPromise, timeoutPromise]);
+      if (conn.success) {
+        token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+        if (isRealGoogleOAuthToken(token)) {
+          return token;
+        }
+      } else {
+        throw new Error(conn.message || 'Không thể xác thực tài khoản Google Drive');
       }
+    } catch (authErr: any) {
+      console.warn('Xác thực Google Drive không thành công:', authErr);
+      throw new Error(authErr.message || 'Chưa thể kết nối Google Drive. Vui lòng cho phép Pop-up và thử lại.');
     }
     return null;
   }
@@ -1028,28 +1643,76 @@ export async function fetchKienThucHtmlFromDrive(
   }
 
   try {
-    const parentFolderId = await findFolderPathIdOnDrive(token, physicalFolders);
+    let parentFolderId = await findFolderPathIdOnDrive(token, physicalFolders);
     if (!parentFolderId) {
-      if (cachedContent) return { success: true, content: cachedContent };
-      return { success: false, error: 'Chưa tìm thấy thư mục chuyên đề trên Google Drive' };
+      parentFolderId = await findFlexibleFolderPathOnDrive(token, physicalFolders);
     }
-
-    // Tìm file KienThuc.html trong thư mục này
-    const query = `'${parentFolderId}' in parents and (name = 'KienThuc.html' or name = 'index.html') and trashed = false`;
-    const searchRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,size,mimeType)`,
-      {
-        headers: { Authorization: `Bearer ${token}` },
+    const chuyenDeName = physicalFolders[physicalFolders.length - 1];
+    if (!parentFolderId && chuyenDeName) {
+      const matched = await findFoldersByNameOnDrive(token, chuyenDeName);
+      if (matched && matched.length > 0) {
+        parentFolderId = matched[0];
       }
-    );
-
-    if (!searchRes.ok) {
-      if (cachedContent) return { success: true, content: cachedContent };
-      return { success: false, error: 'Không thể truy vấn Google Drive' };
     }
 
-    const data = await searchRes.json();
-    const targetFile = data.files && data.files.length > 0 ? data.files[0] : null;
+    let targetFile: { id: string; name: string } | null = null;
+
+    if (parentFolderId) {
+      // Tìm file KienThuc_*.html, KienThuc.html hoặc index.html trong thư mục này
+      const query = `'${parentFolderId}' in parents and (name = 'KienThuc.html' or name = 'index.html' or name contains 'KienThuc' or name contains 'kienthuc') and trashed = false`;
+      const searchRes = await fetch(
+        `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,size,mimeType)`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (searchRes.ok) {
+        const data = await searchRes.json();
+        const found = data.files || [];
+        targetFile = found.find((f: any) => f.name.toLowerCase() === 'kienthuc_lythuyettrongtam.html')
+          || found.find((f: any) => f.name.toLowerCase().startsWith('kienthuc_') && f.name.endsWith('.html'))
+          || found.find((f: any) => f.name.toLowerCase() === 'kienthuc.html')
+          || found[0] || null;
+      }
+    }
+
+    // Nếu chưa tìm thấy tệp theo thư mục cha, quét trực tiếp file trên Google Drive
+    if (!targetFile) {
+      try {
+        // 1. Quét chính xác tệp KienThuc_LyThuyetTrongTam.html
+        const exactFileQuery = `trashed = false and name = 'KienThuc_LyThuyetTrongTam.html'`;
+        const exactUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(exactFileQuery)}&fields=files(id,name,mimeType,parents)&pageSize=20`;
+        const exactRes = await fetch(exactUrl, { headers: { Authorization: `Bearer ${token}` } });
+        if (exactRes.ok) {
+          const exactData = await exactRes.json();
+          const found = exactData.files || [];
+          if (found.length > 0) {
+            targetFile = found[0];
+          }
+        }
+
+        // 2. Nếu chưa thấy, tìm theo name contains 'KienThuc'
+        if (!targetFile) {
+          const fallbackQuery = `trashed = false and (name = 'KienThuc.html' or name contains 'KienThuc' or name contains 'kienthuc')`;
+          const fbUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(fallbackQuery)}&fields=files(id,name,mimeType,parents)&pageSize=25`;
+          const fbRes = await fetch(fbUrl, { headers: { Authorization: `Bearer ${token}` } });
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            const found = (fbData.files || []).filter((f: any) => f.name.toLowerCase().endsWith('.html') || f.mimeType === 'text/html');
+            const cdSlug = chuyenDeName ? removeVietnameseTones(chuyenDeName).toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+            targetFile = found.find((f: any) => {
+              const lower = removeVietnameseTones(f.name).toLowerCase();
+              return cdSlug && lower.includes(cdSlug);
+            }) || found.find((f: any) => f.name.toLowerCase() === 'kienthuc_lythuyettrongtam.html')
+              || found.find((f: any) => f.name.toLowerCase().startsWith('kienthuc_'))
+              || found[0] || null;
+          }
+        }
+      } catch (fErr) {
+        console.warn('Lỗi quét trực tiếp file bài giảng trên Drive:', fErr);
+      }
+    }
 
     if (!targetFile) {
       if (cachedContent) return { success: true, content: cachedContent };
@@ -1068,6 +1731,11 @@ export async function fetchKienThucHtmlFromDrive(
 
     const htmlText = await contentRes.text();
     localStorage.setItem(cacheKey, htmlText);
+    if (chuyenDeName) {
+      localStorage.setItem(`lopu_kienthuc_${chuyenDeName}`, htmlText);
+      localStorage.setItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${chuyenDeName}`, htmlText);
+    }
+    localStorage.setItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html', htmlText);
     return { success: true, content: htmlText };
   } catch (err: any) {
     if (cachedContent) return { success: true, content: cachedContent };

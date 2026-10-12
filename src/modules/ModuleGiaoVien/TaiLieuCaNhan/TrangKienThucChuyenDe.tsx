@@ -46,7 +46,7 @@ export interface TrangKienThucChuyenDeProps {
   bai: string;
   vanDe: string;
   chuyenDe: string;
-  onOpenWordEditor?: () => void;
+  onOpenWordEditor?: (contentHtml?: string) => void;
   onSelectTienTrinh?: (step: 'kienThuc' | 'luyenTap' | 'kiemTra' | 'caiThien') => void;
 }
 
@@ -302,13 +302,28 @@ export const TrangKienThucChuyenDe: React.FC<TrangKienThucChuyenDeProps> = ({
         if (res.success && res.content && res.content.trim()) {
           setHtmlContent(res.content);
         } else {
-          // Nạp mẫu nếu chưa có trên Drive
-          const sample = getSampleKienThucHtml();
-          setHtmlContent(sample);
+          // Kiểm tra bộ nhớ đệm trước khi dùng mẫu mặc định
+          const cached = localStorage.getItem(`lopu_kienthuc_${chuyenDe}`)
+            || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${chuyenDe}`)
+            || localStorage.getItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html');
+          if (cached && cached.trim()) {
+            setHtmlContent(cached);
+          } else {
+            // Nạp mẫu nếu chưa có trên Drive
+            const sample = getSampleKienThucHtml();
+            setHtmlContent(sample);
+          }
         }
       } catch (err) {
         console.warn('Dùng mẫu kiến thức mặc định do chưa nạp được Drive:', err);
-        setHtmlContent(getSampleKienThucHtml());
+        const cached = localStorage.getItem(`lopu_kienthuc_${chuyenDe}`)
+          || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${chuyenDe}`)
+          || localStorage.getItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html');
+        if (cached && cached.trim()) {
+          setHtmlContent(cached);
+        } else {
+          setHtmlContent(getSampleKienThucHtml());
+        }
       } finally {
         setIsLoading(false);
       }
@@ -635,7 +650,7 @@ export const TrangKienThucChuyenDe: React.FC<TrangKienThucChuyenDeProps> = ({
 
           {onOpenWordEditor && (
             <button
-              onClick={onOpenWordEditor}
+              onClick={() => onOpenWordEditor(htmlContent)}
               className="flex items-center gap-1.5 text-xs font-bold text-indigo-300 hover:text-white hover:underline cursor-pointer"
             >
               <Edit3 className="w-3.5 h-3.5" />

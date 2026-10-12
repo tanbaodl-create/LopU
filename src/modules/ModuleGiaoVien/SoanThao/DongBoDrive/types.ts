@@ -72,6 +72,8 @@ export interface DongBoDriveDocData {
   priceDiamonds?: number;
   // Các tệp đồng bộ theo yêu cầu Chuyên đề
   kienThucName?: string; // Tên bài kiến thức đang chọn (tùy chỉnh)
+  selectedKienThucName?: string; // Tên bài kiến thức đang chọn trong dropdown
+  selectedExerciseName?: string; // Tên bài luyện tập hoặc đề KTDG đang chọn trong dropdown
   kienThucList?: { name: string; title?: string; contentHtml?: string }[]; // Mục 1. Kiến thức (nhiều file -> KienThuc_{tên}.html)
   luyenTapList?: ExerciseItemData[]; // Mục 2. Luyện tập (nhiều bài -> luyentap_{tên}.json)
   ktdgList?: KtdgItemData[]; // Mục 3. KTDG (nhiều bài -> KTDG_{tên}.json)

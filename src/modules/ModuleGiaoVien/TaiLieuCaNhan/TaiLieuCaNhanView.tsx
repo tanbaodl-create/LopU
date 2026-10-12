@@ -3385,7 +3385,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             bai={selectedChuyenDeForKienThuc?.bai || filterBai || 'Bài 1'}
             vanDe={selectedChuyenDeForKienThuc?.vanDe || filterVanDe || 'Vấn đề 1'}
             chuyenDe={selectedChuyenDeForKienThuc?.chuyenDe || filterChuyenDe || 'Chuyên đề 1'}
-            onOpenWordEditor={() => {
+            onOpenWordEditor={(loadedHtml) => {
               window.dispatchEvent(new CustomEvent('app-open-word-document', {
                 detail: {
                   title: selectedChuyenDeForKienThuc?.title || filterTitle || 'Toán 10 - Đại Số',
@@ -3393,6 +3393,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   bai: selectedChuyenDeForKienThuc?.bai || filterBai,
                   vanDe: selectedChuyenDeForKienThuc?.vanDe || filterVanDe,
                   chuyenDe: selectedChuyenDeForKienThuc?.chuyenDe || filterChuyenDe,
+                  contentHtml: loadedHtml,
                 }
               }));
               setNotification('Đang mở bài giảng trong Soạn thảo Word...');

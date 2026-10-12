@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FileText,
   Save,
@@ -35,6 +35,8 @@ import {
   CornerDownLeft,
   Edit3,
   Trash2,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { TeacherDocument, ClassItem, UserRole } from '../../../services/storageTypes';
@@ -42,7 +44,7 @@ import { getClasses, getTeacherDocuments } from '../../ConnectData/ConnectFirest
 import { HierarchySelector } from '../TaiLieuCaNhan/HierarchySelector';
 import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
-import { DongBoDriveButton, useDongBoDrive } from './DongBoDrive';
+import { DongBoDriveButton, useDongBoDrive, loadChuyenDeContentFromDrive, removeVietnameseTones } from './DongBoDrive';
 import { renderLatexInHtml, autoRenderLatexInDom } from './latexUtils';
 
 export interface SoanThaoViewProps {
@@ -77,14 +79,14 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
       const saved = localStorage.getItem('lopu_custom_luyentap_list');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return ['Bài luyện tập 1', 'Bài luyện tập 2', 'Bài luyện tập nâng cao'];
+    return [];
   });
   const [customKtdgList, setCustomKtdgList] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem('lopu_custom_ktdg_list');
       if (saved) return JSON.parse(saved);
     } catch {}
-    return ['Đề kiểm tra 15 phút', 'Đề kiểm tra 1 tiết', 'Đề đánh giá năng lực'];
+    return [];
   });
 
   // Modal sửa tên / xóa bài cho Kiến thức, Luyện tập, KTĐG
@@ -95,7 +97,7 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     newName: string;
   } | null>(null);
 
-  const handleConfirmItemAction = () => {
+  const handleConfirmItemAction = async () => {
     if (!itemActionModal) return;
     const { type, category, item, newName } = itemActionModal;
     const cleanName = newName.trim();
@@ -110,17 +112,15 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
         setNotification({ text: `Đã xóa bài kiến thức "${item}" thành công!`, type: 'info' });
       } else if (category === 'luyenTap') {
         const updated = customLuyenTapList.filter(x => x !== item);
-        const finalUpdated = updated.length > 0 ? updated : ['Bài luyện tập 1'];
-        setCustomLuyenTapList(finalUpdated);
-        localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(finalUpdated));
-        setSelectedExerciseName(finalUpdated[0]);
+        setCustomLuyenTapList(updated);
+        localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(updated));
+        setSelectedExerciseName(updated[0] || '');
         setNotification({ text: `Đã xóa bài luyện tập "${item}" thành công!`, type: 'info' });
       } else if (category === 'ktdg') {
         const updated = customKtdgList.filter(x => x !== item);
-        const finalUpdated = updated.length > 0 ? updated : ['Đề kiểm tra 15 phút'];
-        setCustomKtdgList(finalUpdated);
-        localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(finalUpdated));
-        setSelectedExerciseName(finalUpdated[0]);
+        setCustomKtdgList(updated);
+        localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(updated));
+        setSelectedExerciseName(updated[0] || '');
         setNotification({ text: `Đã xóa đề kiểm tra "${item}" thành công!`, type: 'info' });
       }
       setItemActionModal(null);
@@ -133,6 +133,49 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
       return;
     }
 
+    // Khi thêm mới (!item): Kiểm tra tệp đã có trong danh sách hoặc trên Google Drive hay chưa
+    if (!item) {
+      const targetList = category === 'kienThuc' ? customKienThucList : category === 'luyenTap' ? customLuyenTapList : customKtdgList;
+      const cleanSlug = removeVietnameseTones(cleanName).toLowerCase().replace(/[^a-z0-9]/g, '');
+      const isExistInList = targetList.some(x => x.toLowerCase().trim() === cleanName.toLowerCase() || removeVietnameseTones(x).toLowerCase().replace(/[^a-z0-9]/g, '') === cleanSlug);
+
+      if (isExistInList) {
+        setNotification({
+          text: `Bài/Tệp "${cleanName}" đã tồn tại trong danh sách. Không thể thêm trùng tên!`,
+          type: 'error',
+        });
+        setTimeout(() => setNotification(null), 4000);
+        return;
+      }
+
+      // Kiểm tra thực tế trên Google Drive
+      const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+      if (token && chuyenDe) {
+        try {
+          const driveCheck = await loadChuyenDeContentFromDrive({
+            title, subject, grade, chuong, bai, vanDe, chuyenDe,
+            tienTrinh: category === 'kienThuc' ? 'Kiến thức' : category === 'luyenTap' ? 'Luyện tập' : 'KTDG',
+            selectedKienThucName: cleanName,
+            selectedExerciseName: cleanName,
+          });
+
+          if (driveCheck.loadedFile && driveCheck.loadedFile.name) {
+            const loadedSlug = removeVietnameseTones(driveCheck.loadedFile.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (loadedSlug.includes(cleanSlug) || cleanSlug.includes(loadedSlug)) {
+              setNotification({
+                text: `Tệp "${driveCheck.loadedFile.name}" đã tồn tại trên Google Drive. Không thể thêm trùng tên!`,
+                type: 'error',
+              });
+              setTimeout(() => setNotification(null), 4500);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn('Lỗi kiểm tra trùng lặp tệp trên Drive:', err);
+        }
+      }
+    }
+
     if (category === 'kienThuc') {
       let updated: string[];
       if (item) {
@@ -143,9 +186,15 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
       setCustomKienThucList(updated);
       localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(updated));
       setSelectedKienThucName(cleanName);
-      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+
+      if (!item) {
+        if (editorRef.current) editorRef.current.innerHTML = '<p><br></p>';
+        lastLoadedKeyRef.current = `${title}__${chuong}__${bai}__${vanDe}__${chuyenDe}__${tienTrinh}__${cleanName}__${selectedExerciseName}`;
+      }
+
+      const fileSlug = removeVietnameseTones(cleanName).toLowerCase().replace(/[^a-z0-9]/g, '_');
       setNotification({
-        text: `Đã ${item ? 'đổi tên thành' : 'thêm bài kiến thức'} "${cleanName}" (Tệp Drive: KienThuc_${fileSlug}.html)`,
+        text: `Đã ${item ? 'đổi tên thành' : 'mở trang Word mới với nội dung rỗng cho bài'} "${cleanName}" (Tệp Drive: KienThuc_${fileSlug}.html)`,
         type: 'success',
       });
     } else if (category === 'luyenTap') {
@@ -158,9 +207,15 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
       setCustomLuyenTapList(updated);
       localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(updated));
       setSelectedExerciseName(cleanName);
-      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+
+      if (!item) {
+        if (editorRef.current) editorRef.current.innerHTML = '<p><br></p>';
+        lastLoadedKeyRef.current = `${title}__${chuong}__${bai}__${vanDe}__${chuyenDe}__${tienTrinh}__${selectedKienThucName}__${cleanName}`;
+      }
+
+      const fileSlug = removeVietnameseTones(cleanName).toLowerCase().replace(/[^a-z0-9]/g, '_');
       setNotification({
-        text: `Đã ${item ? 'đổi tên thành' : 'thêm bài luyện tập'} "${cleanName}" (Tệp Drive: luyentap_${fileSlug}.json)`,
+        text: `Đã ${item ? 'đổi tên thành' : 'mở trang Word mới với nội dung rỗng cho bài'} "${cleanName}" (Tệp Drive: luyentap_${fileSlug}.json)`,
         type: 'success',
       });
     } else if (category === 'ktdg') {
@@ -173,15 +228,21 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
       setCustomKtdgList(updated);
       localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(updated));
       setSelectedExerciseName(cleanName);
-      const fileSlug = cleanName.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_');
+
+      if (!item) {
+        if (editorRef.current) editorRef.current.innerHTML = '<p><br></p>';
+        lastLoadedKeyRef.current = `${title}__${chuong}__${bai}__${vanDe}__${chuyenDe}__${tienTrinh}__${selectedKienThucName}__${cleanName}`;
+      }
+
+      const fileSlug = removeVietnameseTones(cleanName).toLowerCase().replace(/[^a-z0-9]/g, '_');
       setNotification({
-        text: `Đã ${item ? 'đổi tên thành' : 'thêm đề KTĐG'} "${cleanName}" (Tệp Drive: KTDG_${fileSlug}.json)`,
+        text: `Đã ${item ? 'đổi tên thành' : 'mở trang Word mới với nội dung rỗng cho đề'} "${cleanName}" (Tệp Drive: KTDG_${fileSlug}.json)`,
         type: 'success',
       });
     }
 
     setItemActionModal(null);
-    setTimeout(() => setNotification(null), 3000);
+    setTimeout(() => setNotification(null), 3500);
   };
   const [insertPositionMode, setInsertPositionMode] = useState<'cursor' | 'bottom'>('bottom');
   const [isHierarchyExpanded, setIsHierarchyExpanded] = useState<boolean>(false);
@@ -221,6 +282,8 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
       vanDe,
       chuyenDe,
       tienTrinh,
+      selectedKienThucName,
+      selectedExerciseName,
       contentHtml: editorRef.current ? editorRef.current.innerHTML : '<p>Chưa có nội dung</p>',
       textContent: editorRef.current ? editorRef.current.innerText : '',
       selectedClasses,
@@ -243,27 +306,170 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     load();
   }, []);
 
-  // Khi mở cửa sổ soạn thảo Word: nạp dữ liệu nếu có, nếu chưa có thì là 1 trang trắng sẵn sàng để soạn thảo trực tiếp
-  useEffect(() => {
-    if (!editorRef.current) return;
-    const matchedDoc = documents.find(d => 
-      d.title === title && 
-      (!chuyenDe || d.chuyenDe === chuyenDe) &&
-      (!bai || d.bai === bai)
-    );
-    if (matchedDoc) {
-      const htmlContent = (matchedDoc as any).contentHtml || (matchedDoc as any).content;
-      if (htmlContent) {
-        editorRef.current.innerHTML = renderLatexInHtml(htmlContent);
-      } else if (matchedDoc.contentSnippet) {
-        editorRef.current.innerHTML = renderLatexInHtml(`<p>${matchedDoc.contentSnippet}</p>`);
-      } else {
-        editorRef.current.innerHTML = '';
-      }
-    } else {
+  // Trạng thái tự động nạp dữ liệu từ Google Drive vào cửa sổ soạn thảo Word
+  const [isLoadingFromDrive, setIsLoadingFromDrive] = useState<boolean>(false);
+  const [driveLoadStatus, setDriveLoadStatus] = useState<string>('');
+  const activeLoadIdRef = useRef<number>(0);
+  const lastLoadedKeyRef = useRef<string>('');
+
+  // Hàm tự động nạp dữ liệu từ Google Drive cho chuyên đề đang chọn
+  const handleLoadFromDrive = useCallback(async (force: boolean = false) => {
+    if (!chuyenDe || !chuyenDe.trim()) return;
+    const currentKey = `${title}__${chuong}__${bai}__${vanDe}__${chuyenDe}__${tienTrinh}__${selectedKienThucName}__${selectedExerciseName}`;
+    if (!force && lastLoadedKeyRef.current === currentKey) return;
+
+    const loadId = ++activeLoadIdRef.current;
+    setIsLoadingFromDrive(true);
+    setDriveLoadStatus(`Đang kết nối Google Drive và tải nội dung cho "${chuyenDe}"...`);
+
+    // PHA 1: Khóa chặt cửa sổ Word và làm sạch nội dung văn bản cũ ngay lập tức
+    if (editorRef.current) {
       editorRef.current.innerHTML = '';
     }
-  }, [title, chuyenDe, documents]);
+
+    try {
+      const firstDropdownItem = 
+        tienTrinh === 'Kiến thức' ? (selectedKienThucName || customKienThucList[0] || 'Lý thuyết trọng tâm') :
+        tienTrinh === 'Luyện tập' ? (selectedExerciseName || customLuyenTapList[0] || 'Bài luyện tập 1') :
+        tienTrinh === 'KTDG' ? (selectedExerciseName || customKtdgList[0] || 'Đề kiểm tra 15 phút') : '';
+
+      const res = await loadChuyenDeContentFromDrive({
+        title,
+        subject,
+        grade,
+        chuong,
+        bai,
+        vanDe,
+        chuyenDe,
+        tienTrinh,
+        selectedKienThucName: selectedKienThucName || customKienThucList[0] || 'Lý thuyết trọng tâm',
+        selectedExerciseName: selectedExerciseName || (tienTrinh === 'Luyện tập' ? (customLuyenTapList[0] || 'Bài luyện tập 1') : (customKtdgList[0] || 'Đề kiểm tra 15 phút')),
+        firstDropdownItemName: firstDropdownItem,
+      });
+
+      // Nếu đã có thao tác chọn mới hơn thì dừng
+      if (loadId !== activeLoadIdRef.current) return;
+      lastLoadedKeyRef.current = currentKey;
+
+      // Cập nhật danh sách các bài kiến thức từ Drive nếu có
+      if (res.kienThucFiles && res.kienThucFiles.length > 0) {
+        setCustomKienThucList(prev => {
+          const merged = Array.from(new Set([...res.kienThucFiles, ...prev]));
+          localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      // Cập nhật danh sách bài luyện tập từ Drive nếu có
+      if (res.luyenTapFiles && res.luyenTapFiles.length > 0) {
+        setCustomLuyenTapList(prev => {
+          const merged = Array.from(new Set([...res.luyenTapFiles, ...prev]));
+          localStorage.setItem('lopu_custom_luyentap_list', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      // Cập nhật danh sách đề KTDG từ Drive nếu có
+      if (res.ktdgFiles && res.ktdgFiles.length > 0) {
+        setCustomKtdgList(prev => {
+          const merged = Array.from(new Set([...res.ktdgFiles, ...prev]));
+          localStorage.setItem('lopu_custom_ktdg_list', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      // PHA 2: Nếu có file trên Drive -> nạp file đầu tiên; Nếu không có file -> giữ trang trắng
+      if (res.loadedFile && res.contentHtml !== undefined) {
+        // Nạp nội dung tệp vào cửa sổ Word và render ngay công thức toán
+        if (editorRef.current) {
+          editorRef.current.innerHTML = renderLatexInHtml(res.contentHtml);
+        }
+
+        // Tự động đồng bộ mục đang chọn trên dropdown theo file Drive được nạp
+        const loadedFileName = res.loadedFile.name;
+        if (loadedFileName.toLowerCase().startsWith('kienthuc_') && loadedFileName.toLowerCase().endsWith('.html')) {
+          const rawSlug = removeVietnameseTones(loadedFileName.replace(/^kienthuc_/i, '').replace(/\.html$/i, ''))
+            .toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchedItem = customKienThucList.find(item => {
+            const itemSlug = removeVietnameseTones(item).toLowerCase().replace(/[^a-z0-9]/g, '');
+            return rawSlug === itemSlug || rawSlug.includes(itemSlug) || itemSlug.includes(rawSlug);
+          });
+          if (matchedItem) {
+            setSelectedKienThucName(matchedItem);
+          } else {
+            const rawName = loadedFileName.slice('KienThuc_'.length, -'.html'.length);
+            setSelectedKienThucName(rawName);
+            setCustomKienThucList(prev => prev.includes(rawName) ? prev : [rawName, ...prev]);
+          }
+        } else if (loadedFileName.toLowerCase().startsWith('luyentap_') && loadedFileName.toLowerCase().endsWith('.json')) {
+          const rawSlug = removeVietnameseTones(loadedFileName.replace(/^luyentap_/i, '').replace(/\.json$/i, ''))
+            .toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchedItem = customLuyenTapList.find(item => {
+            const itemSlug = removeVietnameseTones(item).toLowerCase().replace(/[^a-z0-9]/g, '');
+            return rawSlug === itemSlug || rawSlug.includes(itemSlug) || itemSlug.includes(rawSlug);
+          });
+          if (matchedItem) {
+            setSelectedExerciseName(matchedItem);
+          } else {
+            const rawName = loadedFileName.slice('luyentap_'.length, -'.json'.length);
+            setSelectedExerciseName(rawName);
+            setCustomLuyenTapList(prev => prev.includes(rawName) ? prev : [rawName, ...prev]);
+          }
+        } else if (loadedFileName.toLowerCase().startsWith('ktdg_') && loadedFileName.toLowerCase().endsWith('.json')) {
+          const rawSlug = removeVietnameseTones(loadedFileName.replace(/^ktdg_/i, '').replace(/\.json$/i, ''))
+            .toLowerCase().replace(/[^a-z0-9]/g, '');
+          const matchedItem = customKtdgList.find(item => {
+            const itemSlug = removeVietnameseTones(item).toLowerCase().replace(/[^a-z0-9]/g, '');
+            return rawSlug === itemSlug || rawSlug.includes(itemSlug) || itemSlug.includes(rawSlug);
+          });
+          if (matchedItem) {
+            setSelectedExerciseName(matchedItem);
+          } else {
+            const rawName = loadedFileName.slice('ktdg_'.length, -'.json'.length);
+            setSelectedExerciseName(rawName);
+            setCustomKtdgList(prev => prev.includes(rawName) ? prev : [rawName, ...prev]);
+          }
+        }
+
+        setNotification({
+          text: `Đã nạp thành công nội dung tệp "${res.loadedFile.name}" từ Google Drive!`,
+          type: 'success',
+        });
+        setTimeout(() => setNotification(null), 3000);
+      } else {
+        // Khi không có file nào trong chuyên đề trên Drive -> làm sạch trang, sẵn sàng soạn bài mới
+        if (editorRef.current) {
+          editorRef.current.innerHTML = '';
+        }
+        setNotification({
+          text: `Chuyên đề "${chuyenDe}" chưa có file trên Drive. Cửa sổ đã mở khóa sẵn sàng soạn bài mới!`,
+          type: 'info',
+        });
+        setTimeout(() => setNotification(null), 3000);
+      }
+    } catch (err: any) {
+      console.warn('Lỗi khi tự động nạp từ Drive:', err);
+      if (editorRef.current) {
+        editorRef.current.innerHTML = '';
+      }
+    } finally {
+      // Dù có file hay không có file nào: Luôn luôn tắt chữ "Đang đồng bộ" màu đỏ và mở khóa Word
+      if (loadId === activeLoadIdRef.current) {
+        setIsLoadingFromDrive(false);
+        setDriveLoadStatus('');
+      }
+    }
+  }, [title, subject, grade, chuong, bai, vanDe, chuyenDe, tienTrinh, selectedKienThucName, selectedExerciseName]);
+
+  // Tự động tải từ Drive ngay khi giáo viên vào chuyên đề đó
+  useEffect(() => {
+    if (chuyenDe && chuyenDe.trim()) {
+      handleLoadFromDrive();
+    } else {
+      lastLoadedKeyRef.current = '';
+      if (editorRef.current) editorRef.current.innerHTML = '';
+    }
+  }, [title, chuyenDe, chuong, bai, vanDe, tienTrinh, selectedKienThucName, selectedExerciseName, handleLoadFromDrive]);
 
   // Các nút công cụ định dạng Word
   const savedRangeRef = useRef<Range | null>(null);
@@ -863,7 +1069,16 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
               vanDe={vanDe}
               onChangeVanDe={setVanDe}
               chuyenDe={chuyenDe}
-              onChangeChuyenDe={setChuyenDe}
+              onChangeChuyenDe={(cd) => {
+                setChuyenDe(cd);
+                if (cd && cd.trim()) {
+                  setIsLoadingFromDrive(true);
+                  setDriveLoadStatus(`Đang kết nối Google Drive và nạp nội dung cho "${cd}"...`);
+                  if (editorRef.current) {
+                    editorRef.current.innerHTML = '';
+                  }
+                }
+              }}
               subject={subject}
               onChangeSubject={setSubject}
               grade={grade}
@@ -912,6 +1127,18 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                     {chuyenDe}
                   </span>
                 </div>
+
+                {/* DÒNG CHỮ 'ĐANG ĐỒNG BỘ' MÀU ĐỎ KHI CHỌN CHUYÊN ĐỀ */}
+                {isLoadingFromDrive && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-50 border border-red-300 text-red-600 font-black text-xs shadow-2xs animate-pulse shrink-0">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-600"></span>
+                    </span>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-red-600 shrink-0" />
+                    <span>Đang đồng bộ</span>
+                  </div>
+                )}
 
                 {/* Dropdown chọn tên bài luyện tập / đề KTDG tương ứng với tiến trình */}
                 {tienTrinh === 'Kiến thức' ? (() => {
@@ -994,8 +1221,8 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                     </div>
                   );
                 })() : tienTrinh === 'Luyện tập' ? (() => {
-                  const list = customLuyenTapList.length > 0 ? customLuyenTapList : ['Bài luyện tập 1'];
-                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : list[0];
+                  const list = customLuyenTapList;
+                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : (list[0] || '');
                   return (
                     <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                       <span className="text-[11px] font-bold text-slate-500">Bài:</span>
@@ -1003,6 +1230,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         value={curVal}
                         onChange={(e) => {
                           const val = e.target.value;
+                          if (!val) return;
                           setSelectedExerciseName(val);
                           setNotification({
                             text: `Đã chọn: ${val} (Lưu thành luyentap_${val.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json)`,
@@ -1013,22 +1241,25 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         className="text-xs font-bold bg-white border border-indigo-200 rounded-lg px-2.5 py-1 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 hover:bg-indigo-50/60 transition-colors max-w-xs truncate"
                         title="Chọn bài luyện tập"
                       >
-                        {list.map((ex, idx) => (
-                          <option key={`${ex}-${idx}`} value={ex}>
-                            ✍️ {ex}
-                          </option>
-                        ))}
+                        {list.length === 0 ? (
+                          <option value="">-- (Chưa có bài - Bấm "+ Thêm bài") --</option>
+                        ) : (
+                          list.map((ex, idx) => (
+                            <option key={`${ex}-${idx}`} value={ex}>
+                              ✍️ {ex}
+                            </option>
+                          ))
+                        )}
                       </select>
 
                       <button
                         type="button"
                         onClick={() => {
-                          const newName = `Luyện tập ${list.length + 1}`;
                           setItemActionModal({
                             type: 'rename',
                             category: 'luyenTap',
                             item: '',
-                            newName,
+                            newName: '',
                           });
                         }}
                         className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
@@ -1037,23 +1268,25 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         + Thêm bài
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItemActionModal({
-                            type: 'rename',
-                            category: 'luyenTap',
-                            item: curVal,
-                            newName: curVal,
-                          });
-                        }}
-                        className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
-                        title="Đổi tên bài luyện tập này"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
+                      {curVal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'rename',
+                              category: 'luyenTap',
+                              item: curVal,
+                              newName: curVal,
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Đổi tên bài luyện tập này"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
-                      {list.length > 1 && (
+                      {curVal && list.length > 0 && (
                         <button
                           type="button"
                           onClick={() => {
@@ -1073,8 +1306,8 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                     </div>
                   );
                 })() : tienTrinh === 'KTDG' ? (() => {
-                  const list = customKtdgList.length > 0 ? customKtdgList : ['Đề kiểm tra 15 phút'];
-                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : list[0];
+                  const list = customKtdgList;
+                  const curVal = selectedExerciseName && list.includes(selectedExerciseName) ? selectedExerciseName : (list[0] || '');
                   return (
                     <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                       <span className="text-[11px] font-bold text-slate-500">Đề:</span>
@@ -1082,6 +1315,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         value={curVal}
                         onChange={(e) => {
                           const val = e.target.value;
+                          if (!val) return;
                           setSelectedExerciseName(val);
                           setNotification({
                             text: `Đã chọn bài KTDG: ${val} (Lưu thành KTDG_${val.toLowerCase().replace(/[^a-zA-Z0-9_-]+/g, '_')}.json)`,
@@ -1092,22 +1326,25 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         className="text-xs font-bold bg-white border border-rose-200 rounded-lg px-2.5 py-1 text-rose-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-rose-500 hover:bg-rose-50/60 transition-colors max-w-xs truncate"
                         title="Chọn bài kiểm tra đánh giá"
                       >
-                        {list.map((ex, idx) => (
-                          <option key={`${ex}-${idx}`} value={ex}>
-                            🎯 {ex}
-                          </option>
-                        ))}
+                        {list.length === 0 ? (
+                          <option value="">-- (Chưa có đề - Bấm "+ Thêm đề") --</option>
+                        ) : (
+                          list.map((ex, idx) => (
+                            <option key={`${ex}-${idx}`} value={ex}>
+                              🎯 {ex}
+                            </option>
+                          ))
+                        )}
                       </select>
 
                       <button
                         type="button"
                         onClick={() => {
-                          const newName = `KTDG ${list.length + 1}`;
                           setItemActionModal({
                             type: 'rename',
                             category: 'ktdg',
                             item: '',
-                            newName,
+                            newName: '',
                           });
                         }}
                         className="px-2 py-1 rounded-lg text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-2xs"
@@ -1116,23 +1353,25 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         + Thêm đề
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItemActionModal({
-                            type: 'rename',
-                            category: 'ktdg',
-                            item: curVal,
-                            newName: curVal,
-                          });
-                        }}
-                        className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
-                        title="Đổi tên bài KTDG này"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
+                      {curVal && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemActionModal({
+                              type: 'rename',
+                              category: 'ktdg',
+                              item: curVal,
+                              newName: curVal,
+                            });
+                          }}
+                          className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                          title="Đổi tên bài KTDG này"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
 
-                      {list.length > 1 && (
+                      {curVal && list.length > 0 && (
                         <button
                           type="button"
                           onClick={() => {
@@ -1159,6 +1398,16 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  disabled={isLoadingFromDrive}
+                  onClick={() => handleLoadFromDrive(true)}
+                  className="px-2.5 py-1.5 rounded-xl border border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-colors disabled:opacity-50"
+                  title="Tải lại nội dung mới nhất của chuyên đề từ Google Drive"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingFromDrive ? 'animate-spin text-indigo-600' : ''}`} />
+                  <span className="hidden sm:inline">Tải lại Drive</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => setIsHierarchyExpanded(!isHierarchyExpanded)}
@@ -1192,7 +1441,16 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   vanDe={vanDe}
                   onChangeVanDe={setVanDe}
                   chuyenDe={chuyenDe}
-                  onChangeChuyenDe={setChuyenDe}
+                  onChangeChuyenDe={(cd) => {
+                    setChuyenDe(cd);
+                    if (cd && cd.trim()) {
+                      setIsLoadingFromDrive(true);
+                      setDriveLoadStatus(`Đang kết nối Google Drive và nạp nội dung cho "${cd}"...`);
+                      if (editorRef.current) {
+                        editorRef.current.innerHTML = '';
+                      }
+                    }
+                  }}
                   subject={subject}
                   onChangeSubject={setSubject}
                   grade={grade}
@@ -1204,7 +1462,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
             {/* Cửa sổ Soạn thảo Word chiếm toàn bộ giao diện */}
             <div className="space-y-5">
               {/* Interactive Word Toolbar */}
-              <div className="bg-slate-100/95 backdrop-blur-xs p-2.5 rounded-t-2xl border border-slate-300 border-b-0 flex flex-wrap items-center gap-1.5 shadow-sm sticky top-0 z-30">
+              <div className={`bg-slate-100/95 backdrop-blur-xs p-2.5 rounded-t-2xl border border-slate-300 border-b-0 flex flex-wrap items-center gap-1.5 shadow-sm sticky top-0 z-30 transition-opacity ${isLoadingFromDrive ? 'opacity-60 pointer-events-none' : ''}`}>
                 {/* NÚT SOẠN BÀI ▾ (Chỉ dành cho tài khoản Giáo viên trở lên - Giải pháp 1: Tự động đóng khung khi bôi đen hoặc chèn mới) */}
                 {isTeacherOrHigher && (
                   <div className="relative">
@@ -1452,44 +1710,85 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
               {/* Simulated A4 Editable Canvas - 1 trang trắng sẵn sàng để soạn thảo trực tiếp */}
               <div
                 onDoubleClick={handleDoubleClickToInsertRow}
-                className="bg-slate-50 p-6 border border-slate-300 border-t-0 rounded-b-2xl shadow-inner min-h-[550px] cursor-text"
+                className="bg-slate-50 p-6 border border-slate-300 border-t-0 rounded-b-2xl shadow-inner min-h-[550px] cursor-text relative"
                 title="Kích đôi chuột vào vị trí bên dưới hoặc ngoài khối để chèn thêm 1 hàng mới toanh"
               >
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onInput={(e) => {
-                    markDirty();
-                    if (editorRef.current) {
-                      autoRenderLatexInDom(editorRef.current);
-                    }
-                  }}
-                  onKeyUp={(e) => {
-                    if (e.key === '$' || e.key === ' ' || e.key === 'Enter') {
+                {/* Lớp khóa và hiển thị trạng thái khi đang nạp tự động từ Google Drive - Khi nào lấy được nội dung mới ẩn dòng chữ này và mở khóa cửa sổ soạn thảo */}
+                {isLoadingFromDrive && (
+                  <div className="absolute inset-0 z-30 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center select-none rounded-b-2xl animate-fade-in pointer-events-auto">
+                    <div className="p-4 bg-red-50 text-red-600 rounded-2xl mb-3 shadow-xs border border-red-200">
+                      <Loader2 className="w-10 h-10 animate-spin text-red-600" />
+                    </div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className="relative flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-red-600"></span>
+                      </span>
+                      <h4 className="text-base font-black text-red-600 uppercase tracking-wider">
+                        Đang đồng bộ
+                      </h4>
+                    </div>
+                    <p className="text-xs text-red-500 mt-1 max-w-md font-semibold">
+                      {driveLoadStatus || 'Đang kết nối thư mục chuyên đề trên Google Drive và nạp nội dung tệp vào cửa sổ soạn thảo...'}
+                    </p>
+                    <div className="mt-3.5 flex items-center gap-2 text-xs font-bold text-red-700 bg-red-50/90 px-4 py-1.5 rounded-full border border-red-200 shadow-2xs">
+                      <Cloud className="w-4 h-4 text-red-600" />
+                      <span>{chuyenDe} ➔ {tienTrinh} ({selectedKienThucName || customKienThucList[0] || 'Tài liệu'})</span>
+                    </div>
+                  </div>
+                )}
+
+                {isLoadingFromDrive && (
+                  <div className="w-full max-w-4xl min-h-[480px] bg-white rounded-2xl border-2 border-red-300 shadow-2xl flex flex-col items-center justify-center p-8 text-center space-y-4 my-4 mx-auto z-30 animate-pulse">
+                    <div className="w-14 h-14 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center shadow-xs">
+                      <RefreshCw className="w-7 h-7 text-red-600 animate-spin" />
+                    </div>
+                    <div className="text-red-600 font-black text-xl tracking-wide flex items-center gap-2">
+                      <span>Đang đồng bộ</span>
+                    </div>
+                    <p className="text-slate-600 text-xs sm:text-sm font-medium italic max-w-md">
+                      {driveLoadStatus || 'Đang kết nối Google Drive và nạp nội dung bài giảng. Cửa sổ Word đang ẩn và khóa tạm thời cho đến khi nạp hoàn tất...'}
+                    </p>
+                  </div>
+                )}
+
+                <div style={{ display: isLoadingFromDrive ? 'none' : 'block' }}>
+                  <div
+                    ref={editorRef}
+                    contentEditable={!isLoadingFromDrive && isTeacherOrHigher}
+                    suppressContentEditableWarning
+                    onInput={(e) => {
+                      markDirty();
                       if (editorRef.current) {
                         autoRenderLatexInDom(editorRef.current);
                       }
-                    }
-                  }}
-                  onPaste={(e) => {
-                    setTimeout(() => {
-                      if (editorRef.current) {
-                        autoRenderLatexInDom(editorRef.current);
-                        markDirty();
+                    }}
+                    onKeyUp={(e) => {
+                      if (e.key === '$' || e.key === ' ' || e.key === 'Enter') {
+                        if (editorRef.current) {
+                          autoRenderLatexInDom(editorRef.current);
+                        }
                       }
-                    }, 50);
-                  }}
-                  onDoubleClick={handleDoubleClickToInsertRow}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.shiftKey) {
-                      e.preventDefault();
-                      handleBreakoutOfBlock();
-                    }
-                  }}
-                  className="bg-white p-10 rounded-xl shadow-md border border-slate-200 min-h-[480px] focus:outline-none focus:ring-1 focus:ring-indigo-500 overflow-y-auto prose max-w-none text-slate-800"
-                  style={{ fontSize: fontSize, lineHeight: '1.6' }}
-                />
+                    }}
+                    onPaste={(e) => {
+                      setTimeout(() => {
+                        if (editorRef.current) {
+                          autoRenderLatexInDom(editorRef.current);
+                          markDirty();
+                        }
+                      }, 50);
+                    }}
+                    onDoubleClick={handleDoubleClickToInsertRow}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && e.shiftKey) {
+                        e.preventDefault();
+                        handleBreakoutOfBlock();
+                      }
+                    }}
+                    className="bg-white p-10 rounded-xl shadow-md border border-slate-200 min-h-[480px] focus:outline-none focus:ring-1 focus:ring-indigo-500 overflow-y-auto prose max-w-none text-slate-800"
+                    style={{ fontSize: fontSize, lineHeight: '1.6' }}
+                  />
+                </div>
               </div>
 
               {/* Publishing & Commercial Setup Panel */}
@@ -1563,10 +1862,20 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                       type="button"
                       disabled={isSaving}
                       onClick={() => handleSaveDocument(false)}
-                      className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                      className={`px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-xs transition-colors flex items-center gap-2 cursor-pointer disabled:opacity-50 ${
+                        syncStatus === 'saved' || (lastSavedTime && syncStatus === 'idle')
+                          ? 'bg-emerald-600 hover:bg-emerald-700'
+                          : 'bg-indigo-600 hover:bg-indigo-700'
+                      }`}
                     >
                       <Save className="w-4 h-4" />
-                      <span>{isSaving ? 'Đang lưu...' : 'Lưu tài liệu & Đồng bộ Drive'}</span>
+                      <span>
+                        {isSaving
+                          ? 'Đang lưu...'
+                          : syncStatus === 'saved' || (lastSavedTime && syncStatus === 'idle')
+                          ? `Đã lưu Drive (${lastSavedTime || 'vừa xong'})`
+                          : 'Lưu tài liệu & Đồng bộ Drive'}
+                      </span>
                     </button>
 
                     <button

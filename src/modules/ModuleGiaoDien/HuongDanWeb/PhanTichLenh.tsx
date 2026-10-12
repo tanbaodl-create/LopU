@@ -7,7 +7,7 @@ import {
   Trash2,
   CheckCircle2,
 } from 'lucide-react';
-import { ViewId } from '../Navigation';
+import { ViewId } from '../Navigation/menuConfig';
 
 export interface ModuleOption {
   id: string;

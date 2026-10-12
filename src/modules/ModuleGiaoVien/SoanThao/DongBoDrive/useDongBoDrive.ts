@@ -41,16 +41,29 @@ export function useDongBoDrive({
         return { success: false, error: 'Chưa có tiêu đề bài giảng' };
       }
 
-      setIsSaving(true);
-      setSyncStatus('saving');
+      let result: DongBoDriveResult;
+      try {
+        setIsSaving(true);
+        setSyncStatus('saving');
 
-      if (!isAuto && onNotification) {
-        onNotification({ text: 'Đang xử lý biên dịch & đồng bộ Drive...', type: 'info' });
+        if (!isAuto && onNotification) {
+          onNotification({ text: 'Đang bắt đầu lưu Drive...', type: 'info' });
+        }
+
+        result = await saveDocumentToDriveAndDatabase(docData, (stepText) => {
+          if (!isAuto && onNotification) {
+            onNotification({ text: stepText, type: 'info' });
+          }
+        });
+      } catch (err: any) {
+        result = {
+          success: false,
+          error: err?.message || 'Có lỗi xảy ra trong quá trình đồng bộ Drive.',
+        };
+      } finally {
+        setIsSaving(false);
       }
 
-      const result = await saveDocumentToDriveAndDatabase(docData);
-
-      setIsSaving(false);
       if (result.success) {
         setSyncStatus('saved');
         const timeStr = result.savedAt || new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
@@ -66,12 +79,12 @@ export function useDongBoDrive({
           });
         }
 
-        // Sau 4 giây chuyển về trạng thái 'idle' nhưng giữ lastSavedTime
+        // Sau 1.5 giây lập tức trở lại 'idle' để nhãn nút quay về "Lưu Drive" dứt khoát
         setTimeout(() => {
           setSyncStatus('idle');
-        }, 4000);
+        }, 1500);
       } else {
-        setSyncStatus('error');
+        setSyncStatus('idle');
         if (onNotification) {
           onNotification({
             text: result.error || 'Có lỗi xảy ra trong quá trình đồng bộ Drive.',

@@ -191,13 +191,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'SoanThao',
-        name: 'SoanThao / Tài liệu (Soạn Thảo Word, Module Con MenuHamSo, MenuChen & DongBoDrive)',
+        name: 'SoanThao / Tài liệu (Soạn Thảo Word, Header Đánh Số Trang Trang Lẻ Góc Phải / Chẵn Góc Trái, Footer Tên Giáo Viên)',
         folderPath: 'src/modules/ModuleGiaoVien/SoanThao',
-        description: 'Trình soạn thảo văn bản Word & Cấu hình phân cấp tài liệu: 1) Tách phần hàm số trên menu word thành module con độc lập MenuHamSo; 2) Tách nút Chèn trên menu word thành module con độc lập MenuChen; 3) Tách chức năng Lưu Drive thành module con độc lập DongBoDrive; 4) Áp dụng Giải pháp 1 Kiểu B: Chuẩn hóa tên bài không dấu PascalCase ("Kiến thức trọng tâm" -> "KienThucTrongtam") bằng formatSafeSlug cho cả giao diện lẫn tên tệp KienThuc_KienThucTrongtam.html; 5) Mục 1. Kiến thức hỗ trợ nhiều file dạng KienThuc_{tên}.html; Giáo viên có thể Đặt tên/Sửa tên/Xóa bài cho cả 3 mục: Kiến thức, Luyện tập (luyentap_{tên}.json) và KTĐG (KTDG_{tên}.json); 6) Tự động lưu tệp đính kèm HinhAnh/AmThanh/Video gợi ý nội dung; 7) Đổi tên "Quản lý API" chìa khóa Xanh/Đỏ/Ẩn chuẩn xác; 8) Chuyển nút "Phân tích mốc tự động" từ menu word sang đầu thanh mốc PPT (dùng biểu tượng Wand2 🪄), ưu tiên mỗi câu hỏi (đề+lời giải), mỗi mục lý thuyết, mỗi ví dụ (đề+lời giải) là 1 slide; 9) Bổ sung dấu + tại mỗi đầu dòng mới trên Thanh Mốc PPT để chèn Mốc Slide/Hiệu ứng; 10) Tự động kích hoạt cửa sổ đăng nhập Google Drive khi hết hạn phiên và đảm bảo chỉ ẩn chữ "Đang đồng bộ" màu đỏ khi tùy chọn đã cập nhật hoàn tất vào dropdown; 11) Chèn file (MenuChen): Tự động trích xuất nội dung văn bản/định dạng của tệp (Docx, TXT, HTML, MD, JSON, CSV...) đưa trực tiếp vào cửa sổ soạn thảo Word; 12) Tự động render công thức toán dạng $ mã latex $ và $$ mã latex $$ ngay lập tức trong cửa sổ Word & khi chèn file (dấu $ nhập dạng \\$ giữ nguyên làm dấu $ thuần túy).',
-        purpose: 'Soạn thảo Word, Tự động render công thức toán $ mã latex $, Trích xuất nội dung tệp vào cửa sổ Word, Dấu + đầu dòng trên Thanh Mốc PPT, Tự động đăng nhập lại Google Drive',
+        description: 'Trình soạn thảo văn bản Word & Xuất bản PDF A4: 1) Footer tự động đính kèm "tài liệu được biên soạn bởi {Tên giáo viên}" lấy từ tài khoản app hoặc Google; 2) Đánh số trang chuyển lên header (trang lẻ góc phải, trang chẵn góc trái); 3) Tiêu đề phụ "Tài liệu... của... lớp..."; 4) Xuất PDF A4 chuẩn lề.',
+        purpose: 'Đánh số trang Header, Footer tên giáo viên soạn bài, Xuất PDF A4 chuẩn lề',
         viewId: 'teaching-soanthao',
         icon: FileText,
-        tags: ['Render công thức toán $ mã latex $', 'Tự động render KaTeX', 'Dấu $ nhập dạng \\$', 'Trích xuất nội dung tệp vào Word', 'Chèn file lấy nội dung', 'Docx sang HTML (Mammoth)', 'Dấu + đầu dòng Thanh Mốc PPT', 'Tự động đăng nhập lại Drive', 'Hiển thị Đang đồng bộ màu đỏ chuẩn xác', 'Phân tích mốc tự động 🪄', 'Thanh mốc PPT', '1 slide/Câu hỏi (đề+lời giải)', '1 slide/Ví dụ (đề+lời giải)', '1 slide/Mục lý thuyết', 'Chuẩn hóa formatSafeSlug Kiểu B', 'KienThucTrongtam', 'PascalCase không dấu', 'Quản lý API', 'KienThuc_*.html', 'Thêm/Sửa/Xóa bài dạy', 'Lưu đa phương tiện /HinhAnh /AmThanh /Video', 'Tên file gợi ý nội dung', 'Module Con DongBoDrive', 'Module Con MenuChen', 'Module Con MenuHamSo'],
+        tags: ['Header đánh số trang (Lẻ phải / Chẵn trái)', 'Footer: tài liệu được biên soạn bởi GV', 'Menu View: In đề & File HS', 'PDF A4 chuẩn Lề'],
       },
       {
         id: 'ThuongMaiTaiLieu',

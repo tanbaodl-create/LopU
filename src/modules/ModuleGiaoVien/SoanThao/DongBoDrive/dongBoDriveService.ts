@@ -12,7 +12,11 @@ import {
   findFileInDriveFolder,
   getDriveConnectionState,
   formatDocumentTitle,
+  loadChuyenDeContentFromDrive,
+  LoadChuyenDeResult,
 } from '../../../ConnectData/ConnectDrive/googleDriveService';
+export { loadChuyenDeContentFromDrive };
+export type { LoadChuyenDeResult };
 import {
   DongBoDriveDocData,
   DongBoDriveResult,
@@ -355,7 +359,8 @@ async function syncMediaToDriveSubfolders(
  * 3. Lưu nội dung vào file tương ứng.
  */
 export async function saveDocumentToDriveAndDatabase(
-  data: DongBoDriveDocData
+  data: DongBoDriveDocData,
+  onProgress?: (step: string) => void
 ): Promise<DongBoDriveResult> {
   const {
     id,
@@ -431,12 +436,21 @@ export async function saveDocumentToDriveAndDatabase(
     isForSale,
     priceDiamonds: isForSale ? priceDiamonds : 0,
     purchasedUserIds: [],
+    ...({ contentHtml, content: contentHtml }),
   };
+
+  // Luôn lưu cache cục bộ cho tệp soạn thảo
+  try {
+    localStorage.setItem(`lopu_kienthuc_${safeChuyenDe}`, contentHtml);
+    localStorage.setItem(`lopu_kienthuc_${physicalFolders.join('_')}`, contentHtml);
+    localStorage.setItem(`lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html`, contentHtml);
+  } catch {}
 
   const syncedFiles: SyncedFileInfo[] = [];
 
   try {
-    const token = await ensureValidDriveToken();
+    if (onProgress) onProgress('1/4. Đang kiểm tra phiên kết nối Google Drive...');
+    const token = await ensureValidDriveToken(onProgress);
 
     let targetFolderId = 'local_virtual_folder';
     if (token) {
@@ -445,27 +459,26 @@ export async function saveDocumentToDriveAndDatabase(
       // Đã lấy folderID về bộ nhớ trình duyệt (localStorage cache)
       // Nếu chưa có thì tạo thư mục với tên tương ứng trên Drive.
       // ─────────────────────────────────────────────────────────────
+      if (onProgress) onProgress(`2/4. Đang xác định thư mục chuyên đề trên Drive...`);
       targetFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
 
       // ─────────────────────────────────────────────────────────────
-      // BƯỚC 2 & 3: KIỂM TRA TÊN FILE VÀ LƯU NỘI DUNG VÀO FILE TƯƠNG ỨNG
+      // BƯỚC 2 & 3: CHỈ LƯU DUY NHẤT FILE HIỆN TẠI ĐANG MỞ VÀ SOẠN THẢO TRÊN CỬA SỔ WORD
       // ─────────────────────────────────────────────────────────────
+      const currentTienTrinh = data.tienTrinh || 'Kiến thức';
 
-      // 1. Mục 1. Kiến thức: Có thể có nhiều file -> đặt tên chuẩn KienThuc_{tên kiến thức}.html
-      const kienThucFilesToSync = (data.kienThucList && data.kienThucList.length > 0)
-        ? data.kienThucList
-        : [{ name: data.kienThucName || 'ly_thuyet_trong_tam', title: data.kienThucName || 'Lý thuyết trọng tâm', contentHtml }];
-
-      for (const ktItem of kienThucFilesToSync) {
-        const rawName = ktItem.name || 'ly_thuyet';
+      if (currentTienTrinh === 'Kiến thức') {
+        // Chỉ lưu 1 file bài học Kiến thức đang mở: KienThuc_{tên kiến thức đang chọn}.html
+        const rawName = data.selectedKienThucName || data.kienThucName || 'ly_thuyet_trong_tam';
         const cleanName = formatSafeSlug(rawName);
         const kienThucFileName = `KienThuc_${cleanName}.html`;
-        const htmlToSave = ktItem.contentHtml || contentHtml;
+        if (onProgress) onProgress(`3/4. Đang lưu file hiện tại: ${kienThucFileName}...`);
+
         const kienThucRes = await saveOrUpdateDriveFile(
           token,
           targetFolderId,
           kienThucFileName,
-          htmlToSave,
+          contentHtml,
           'text/html'
         );
         syncedFiles.push({
@@ -475,23 +488,40 @@ export async function saveDocumentToDriveAndDatabase(
           status: kienThucRes.isCreated ? 'created' : 'updated',
         });
 
+        try {
+          localStorage.setItem(`lopu_kienthuc_file_${kienThucFileName}_${safeChuyenDe}`, contentHtml);
+          localStorage.setItem(`lopu_drive_file_content_name_${kienThucFileName}`, contentHtml);
+        } catch {}
+
         // Đa phương tiện đính kèm trong Kiến thức
-        const ktMedia = extractMediaFromHtml(htmlToSave, `Kienthuc_${cleanName}`);
+        const ktMedia = extractMediaFromHtml(contentHtml, `Kienthuc_${cleanName}`);
         if (ktMedia.length > 0) {
-          const syncedMedia = await syncMediaToDriveSubfolders(token, physicalFolders, 'Kienthuc', cleanName, ktMedia);
-          syncedFiles.push(...syncedMedia);
+          try {
+            const syncedMedia = await syncMediaToDriveSubfolders(token, physicalFolders, 'Kienthuc', cleanName, ktMedia);
+            syncedFiles.push(...syncedMedia);
+          } catch (mErr) {
+            console.warn('Lưu media đính kèm không thành công nhưng tệp chính đã lưu tốt:', mErr);
+          }
         }
-      }
-
-      // 2. Mục 2. Luyện tập: Có thể có nhiều bài -> các file luyentap_{tên bài luyện tập}.json
-      const exercisesToSync: ExerciseItemData[] = (luyenTapList && luyenTapList.length > 0)
-        ? luyenTapList
-        : [createDefaultExerciseItem(safeChuyenDe, title.trim(), 1)];
-
-      for (const ex of exercisesToSync) {
-        const slug = formatSafeSlug(ex.name);
+      } else if (currentTienTrinh === 'Luyện tập') {
+        // Chỉ lưu 1 file bài tập Luyện tập đang mở: luyentap_{tên bài luyện tập đang chọn}.json
+        const rawName = data.selectedExerciseName || 'co_ban';
+        const slug = formatSafeSlug(rawName);
         const exFileName = `luyentap_${slug}.json`;
-        const exDataObj = ex.data || createDefaultExerciseItem(safeChuyenDe, title.trim()).data;
+        if (onProgress) onProgress(`3/4. Đang lưu file hiện tại: ${exFileName}...`);
+
+        // Tìm data có sẵn trong luyenTapList hoặc tạo cấu trúc lưu trữ dựa trên nội dung soạn thảo
+        const matchedItem = (luyenTapList || []).find(x => x.name === rawName || formatSafeSlug(x.name) === slug);
+        let exDataObj = matchedItem?.data;
+        if (!exDataObj) {
+          const defaultObj = createDefaultExerciseItem(safeChuyenDe, title.trim());
+          defaultObj.data.tieuDe = rawName;
+          exDataObj = defaultObj.data;
+        }
+        if (contentHtml && contentHtml !== '<p>Chưa có nội dung</p>') {
+          exDataObj.htmlSnippet = contentHtml;
+        }
+
         const exContent = JSON.stringify(exDataObj, null, 2);
         const exRes = await saveOrUpdateDriveFile(
           token,
@@ -511,21 +541,32 @@ export async function saveDocumentToDriveAndDatabase(
         if (exDataObj && Array.isArray(exDataObj.questions)) {
           const ltMedia = extractMediaFromQuestions(exDataObj.questions);
           if (ltMedia.length > 0) {
-            const syncedMedia = await syncMediaToDriveSubfolders(token, physicalFolders, 'LuyenTap', slug, ltMedia);
-            syncedFiles.push(...syncedMedia);
+            try {
+              const syncedMedia = await syncMediaToDriveSubfolders(token, physicalFolders, 'LuyenTap', slug, ltMedia);
+              syncedFiles.push(...syncedMedia);
+            } catch (mErr) {
+              console.warn('Lưu media Luyện tập không thành công nhưng tệp chính đã lưu tốt:', mErr);
+            }
           }
         }
-      }
-
-      // 3. Mục 3. KTDG: Có thể có nhiều bài -> các file KTDG_{Tên bài kiểm tra đánh giá}.json
-      const ktdgListToSync: KtdgItemData[] = (ktdgList && ktdgList.length > 0)
-        ? ktdgList
-        : [createDefaultKtdgItem(safeChuyenDe, title.trim(), 1)];
-
-      for (const kt of ktdgListToSync) {
-        const slug = formatSafeSlug(kt.name);
+      } else if (currentTienTrinh === 'KTDG') {
+        // Chỉ lưu 1 file đề Kiểm tra đánh giá đang mở: KTDG_{tên đề KTĐG đang chọn}.json
+        const rawName = data.selectedExerciseName || 'danh_gia_nang_luc';
+        const slug = formatSafeSlug(rawName);
         const ktdgFileName = `KTDG_${slug}.json`;
-        const ktdgDataObj = kt.data || createDefaultKtdgItem(safeChuyenDe, title.trim()).data;
+        if (onProgress) onProgress(`3/4. Đang lưu file hiện tại: ${ktdgFileName}...`);
+
+        const matchedItem = (ktdgList || []).find(x => x.name === rawName || formatSafeSlug(x.name) === slug);
+        let ktdgDataObj = matchedItem?.data;
+        if (!ktdgDataObj) {
+          const defaultObj = createDefaultKtdgItem(safeChuyenDe, title.trim());
+          defaultObj.data.tieuDe = rawName;
+          ktdgDataObj = defaultObj.data;
+        }
+        if (contentHtml && contentHtml !== '<p>Chưa có nội dung</p>') {
+          ktdgDataObj.htmlSnippet = contentHtml;
+        }
+
         const ktdgContent = JSON.stringify(ktdgDataObj, null, 2);
         const ktRes = await saveOrUpdateDriveFile(
           token,
@@ -545,62 +586,80 @@ export async function saveDocumentToDriveAndDatabase(
         if (ktdgDataObj && Array.isArray(ktdgDataObj.questions)) {
           const ktdgMedia = extractMediaFromQuestions(ktdgDataObj.questions);
           if (ktdgMedia.length > 0) {
-            const syncedMedia = await syncMediaToDriveSubfolders(token, physicalFolders, 'KTDG', slug, ktdgMedia);
-            syncedFiles.push(...syncedMedia);
+            try {
+              const syncedMedia = await syncMediaToDriveSubfolders(token, physicalFolders, 'KTDG', slug, ktdgMedia);
+              syncedFiles.push(...syncedMedia);
+            } catch (mErr) {
+              console.warn('Lưu media KTDG không thành công nhưng tệp chính đã lưu tốt:', mErr);
+            }
           }
         }
+      } else if (currentTienTrinh === 'Cải thiện') {
+        // Chỉ lưu file Cải thiện: CaiThien.json
+        const caiThienFileName = 'CaiThien.json';
+        if (onProgress) onProgress(`3/4. Đang lưu file hiện tại: ${caiThienFileName}...`);
+        const effectiveCaiThienData: CaiThienData = caiThienData || createDefaultCaiThienData(safeChuyenDe, selectedClasses[0] || '10A1');
+        const caiThienContent = JSON.stringify(effectiveCaiThienData, null, 2);
+        const ctRes = await saveOrUpdateDriveFile(
+          token,
+          targetFolderId,
+          caiThienFileName,
+          caiThienContent,
+          'application/json'
+        );
+        syncedFiles.push({
+          name: caiThienFileName,
+          fileId: ctRes.fileId,
+          isCreated: ctRes.isCreated,
+          status: ctRes.isCreated ? 'created' : 'updated',
+        });
       }
 
-      // 4. Mục 4. Cải thiện: Lưu nội dung làm tốt; chưa tốt của các học sinh; đề xuất cần cải thiện gì; cách học
-      // Định dạng đề xuất tối ưu: CaiThien.json
-      const caiThienFileName = 'CaiThien.json';
-      const effectiveCaiThienData: CaiThienData = caiThienData || createDefaultCaiThienData(safeChuyenDe, selectedClasses[0] || '10A1');
-      const caiThienContent = JSON.stringify(effectiveCaiThienData, null, 2);
-      const ctRes = await saveOrUpdateDriveFile(
-        token,
-        targetFolderId,
-        caiThienFileName,
-        caiThienContent,
-        'application/json'
-      );
-      syncedFiles.push({
-        name: caiThienFileName,
-        fileId: ctRes.fileId,
-        isCreated: ctRes.isCreated,
-        status: ctRes.isCreated ? 'created' : 'updated',
-      });
-    }
+      // Lưu vào Firestore cơ sở dữ liệu hệ thống (phụ trợ, không để lỗi làm fail kết quả Drive)
+      if (onProgress) onProgress('4/4. Đang cập nhật cơ sở dữ liệu hệ thống...');
+      try {
+        await saveTeacherDocument(docItem);
+      } catch (dbErr) {
+        console.warn('Lưu Firestore không thành công nhưng Drive đã lưu tốt:', dbErr);
+      }
 
-    // Lưu vào Firestore cơ sở dữ liệu hệ thống
-    await saveTeacherDocument(docItem);
+      const conn = getDriveConnectionState();
+      const savedFileName = syncedFiles[0]?.name || title.trim();
 
-    const conn = getDriveConnectionState();
-    const cleanFileName = `[${safeChuyenDe}]_${title.trim().replace(/[\s:/\\?*]+/g, '_')}`;
+      let successMsg = '';
+      if (conn.isConnected && token) {
+        successMsg = `Đã lưu thành công file hiện tại "${savedFileName}" lên Google Drive! (${driveFolderPath})`;
+      } else {
+        successMsg = `Đã lưu tài liệu vào hệ thống: ${savedFileName}`;
+      }
 
-    let successMsg = '';
-    if (conn.isConnected && token) {
-      const createdCount = syncedFiles.filter(f => f.status === 'created').length;
-      const updatedCount = syncedFiles.filter(f => f.status === 'updated').length;
-      successMsg = `Đã đồng bộ Drive thành công 4 mục (${syncedFiles.length} tệp: kienthuc.html, luyentap_*.json, KTDG_*.json, CaiThien.json - tạo mới: ${createdCount}, cập nhật: ${updatedCount}) tại ${driveFolderPath}`;
+      if (selectedClasses.length > 0) {
+        successMsg += ` và phát hành tới ${selectedClasses.length} lớp học.`;
+      }
+
+      const savedAt = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+
+      return {
+        success: true,
+        drivePath: driveFolderPath,
+        folderId: targetFolderId,
+        cleanFileName: savedFileName,
+        message: successMsg,
+        savedAt,
+        syncedFiles,
+      };
     } else {
-      successMsg = `Đã lưu tài liệu vào hệ thống: ${cleanFileName}`;
+      // Khi không có kết nối Drive, chỉ lưu vào Firestore
+      if (onProgress) onProgress('Đang lưu vào bộ nhớ hệ thống...');
+      await saveTeacherDocument(docItem);
+      return {
+        success: true,
+        cleanFileName: title.trim(),
+        message: `Đã lưu tài liệu vào cơ sở dữ liệu hệ thống: ${title.trim()}`,
+        savedAt: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+        syncedFiles: [],
+      };
     }
-
-    if (selectedClasses.length > 0) {
-      successMsg += ` và phát hành tới ${selectedClasses.length} lớp học.`;
-    }
-
-    const savedAt = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-
-    return {
-      success: true,
-      drivePath: driveFolderPath,
-      folderId: targetFolderId,
-      cleanFileName,
-      message: successMsg,
-      savedAt,
-      syncedFiles,
-    };
   } catch (err: any) {
     return {
       success: false,

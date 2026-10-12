@@ -30,7 +30,7 @@ import { saveAssessmentJsonToChuyenDeDrive } from '../../ConnectData/ConnectDriv
 import { MathTypeEditorModal } from './MathTypeEditorModal';
 import { MathFormulaRenderer } from './MathFormulaRenderer';
 
-export type QuestionViewMode = 'split' | 'full' | 'ppt';
+export type QuestionViewMode = 'split' | 'full' | 'ppt' | 'inde' | 'filehs';
 
 export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
 

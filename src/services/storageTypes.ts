@@ -10,6 +10,20 @@ export type UserRole =
 
 export const SUPERADMIN_EMAILS = ['tanbaobg@gmail.com', 'tanbaodl@gmail.com'] as const;
 
+/**
+ * Kiểm tra vai trò từ Giáo viên trở lên (Superadmin, Admin, Manager, Teacher, Assistant)
+ */
+export function isTeacherOrHigher(role?: UserRole): boolean {
+  if (!role) return false;
+  return (
+    role === 'superadmin' ||
+    role === 'admin' ||
+    role === 'manager' ||
+    role === 'teacher' ||
+    role === 'assistant'
+  );
+}
+
 export interface TeachingMaterialFolderHierarchy {
   chuong: string; // Chương (Ví dụ: Chương 1: Hàm số và Đồ thị)
   bai: string; // Bài (Ví dụ: Bài 1: Tính đơn điệu của hàm số)

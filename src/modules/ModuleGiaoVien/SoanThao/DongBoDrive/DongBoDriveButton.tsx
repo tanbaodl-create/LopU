@@ -20,19 +20,21 @@ export const DongBoDriveButton: React.FC<DongBoDriveButtonProps> = ({
   disabled = false,
   title = 'Lưu tài liệu hiện tại lên Google Drive (Tự động đồng bộ hoặc bấm để lưu ngay)',
 }) => {
+  const isSavedState = syncStatus === 'saved' || (Boolean(lastSavedTime) && syncStatus === 'idle');
+
   const getButtonText = () => {
-    if (isSaving) return 'Đang lưu...';
-    if (syncStatus === 'saved' && lastSavedTime) {
-      return `Đã lưu Drive (${lastSavedTime})`;
+    if (isSaving || syncStatus === 'saving') return 'Đang lưu...';
+    if (isSavedState) {
+      return lastSavedTime ? `Đã lưu Drive (${lastSavedTime})` : 'Đã lưu Drive';
     }
     return 'Lưu Drive';
   };
 
   const renderIcon = () => {
-    if (isSaving) {
+    if (isSaving || syncStatus === 'saving') {
       return <Loader2 className="w-3.5 h-3.5 animate-spin" />;
     }
-    if (syncStatus === 'saved') {
+    if (isSavedState) {
       return <Check className="w-3.5 h-3.5 text-emerald-300" />;
     }
     return <Cloud className="w-3.5 h-3.5" />;
@@ -41,12 +43,12 @@ export const DongBoDriveButton: React.FC<DongBoDriveButtonProps> = ({
   return (
     <button
       type="button"
-      disabled={disabled || isSaving}
+      disabled={disabled || isSaving || syncStatus === 'saving'}
       onClick={onClick}
       className={
         className ||
         `px-3.5 py-1.5 rounded-xl font-bold text-white text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer disabled:opacity-50 ${
-          syncStatus === 'saved'
+          isSavedState
             ? 'bg-emerald-600 hover:bg-emerald-700'
             : 'bg-indigo-600 hover:bg-indigo-700'
         }`
