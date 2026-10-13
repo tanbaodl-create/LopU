@@ -378,26 +378,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </button>
                 </div>
 
-                {/* 3.5. Nút Cấu hình & Đồng bộ Firebase LopU */}
-                <div className="pt-0.5">
-                  <button
-                    id="btn-header-dropdown-firebase"
-                    onClick={() => {
-                      setShowAccountDropdown(false);
-                      if (onOpenFirebaseModal) onOpenFirebaseModal();
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-amber-50/80 hover:bg-amber-100 text-amber-950 border border-amber-200/90 transition-colors cursor-pointer"
-                    title="Cấu hình kết nối Firebase LopU và đồng bộ dữ liệu đám mây"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Database className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                      <span>Firebase LopU</span>
-                    </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-200 text-amber-900">
-                      lopu-ddf22
-                    </span>
-                  </button>
-                </div>
+
 
                 {/* 4. Nút Đăng nhập / Đăng xuất */}
                 <div className="pt-0.5">

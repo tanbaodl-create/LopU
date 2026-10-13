@@ -43,6 +43,7 @@ export const ModalFirebaseLopU: React.FC<ModalFirebaseLopUProps> = ({ isOpen, on
   } | null>(null);
 
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [copiedRules, setCopiedRules] = useState(false);
 
   if (!isOpen) return null;
 
@@ -232,7 +233,17 @@ export const ModalFirebaseLopU: React.FC<ModalFirebaseLopUProps> = ({ isOpen, on
                   ? 'bg-emerald-100/80 text-emerald-950 border border-emerald-300'
                   : 'bg-red-100/80 text-red-950 border border-red-300'
               }`}>
-                {syncResult.message}
+                <div className="font-bold">{syncResult.message}</div>
+                {!syncResult.success && syncResult.message.includes('permission') && (
+                  <div className="mt-2 pt-2 border-t border-red-200 text-red-900 space-y-1.5">
+                    <p className="font-semibold text-amber-900">
+                      ⚠️ Nguyên nhân: Tab <strong>Rules</strong> của Firestore trên Firebase Console đang chặn quyền ghi (mặc định sau 30 ngày hoặc chế độ đóng).
+                    </p>
+                    <p>
+                      👉 Hãy xem mục <strong>"Cấu hình Rules mở quyền ghi cho LopU"</strong> ngay bên dưới để dán đoạn mã Rules chuẩn và bấm Publish.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -253,6 +264,53 @@ export const ModalFirebaseLopU: React.FC<ModalFirebaseLopUProps> = ({ isOpen, on
                 </>
               )}
             </button>
+          </div>
+
+          {/* Hướng dẫn sửa lỗi Rules Missing or insufficient permissions */}
+          <div className="p-4 bg-amber-50/80 rounded-xl border border-amber-300 text-xs text-amber-950 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
+                <ShieldCheck className="w-4 h-4 text-amber-700" />
+                Cấu hình Rules mở quyền ghi cho Firestore LopU:
+              </span>
+              <a
+                href="https://console.firebase.google.com/project/lopu-ddf22/firestore/rules"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-amber-800 hover:text-amber-950 font-bold inline-flex items-center gap-1 hover:underline"
+              >
+                <span>Mở tab Rules trên Firebase</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+            <p className="text-slate-700 leading-relaxed">
+              Nếu gặp lỗi <strong>Missing or insufficient permissions</strong>, mở tab Rules của Firestore trên Firebase Console, thay toàn bộ nội dung bằng đoạn mã dưới đây rồi nhấn <strong>Publish</strong>:
+            </p>
+            <div className="relative bg-slate-900 text-slate-100 p-2.5 rounded-lg font-mono text-[11px] overflow-x-auto select-all">
+              <pre>{`rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}`}</pre>
+              <button
+                type="button"
+                onClick={() => {
+                  const rulesText = `rules_version = '2';\nservice cloud.firestore {\n  match /databases/{database}/documents {\n    match /{document=**} {\n      allow read, write: if true;\n    }\n  }\n}`;
+                  navigator.clipboard.writeText(rulesText);
+                  setCopiedRules(true);
+                  setTimeout(() => setCopiedRules(false), 2500);
+                }}
+                className="absolute top-2 right-2 px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded text-[10px] cursor-pointer transition-colors shadow-2xs"
+              >
+                {copiedRules ? '✓ Đã chép' : 'Sao chép Rules'}
+              </button>
+            </div>
+            <p className="text-[11px] text-amber-800 italic">
+              Sau khi bấm Publish trên Firebase, quay lại đây và bấm nút màu cam "Đẩy toàn bộ dữ liệu vào LopU ngay" để hoàn tất.
+            </p>
           </div>
 
           {/* Hướng dẫn cấp phép tên miền Vercel trên Firebase LopU */}
