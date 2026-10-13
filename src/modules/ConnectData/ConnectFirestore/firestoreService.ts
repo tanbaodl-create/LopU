@@ -1086,4 +1086,97 @@ export async function clearAllAppCacheAndRedundantData(options?: { reload?: bool
   }
 }
 
+/**
+ * Đẩy toàn bộ dữ liệu từ bộ nhớ nội bộ lên Firebase Firestore của dự án LopU
+ */
+export async function pushAllLocalDataToFirestore(): Promise<{
+  success: boolean;
+  message: string;
+  stats?: {
+    users: number;
+    classes: number;
+    documents: number;
+    progress: number;
+    seating: number;
+  };
+}> {
+  if (!isFirebaseConfigured || !db) {
+    return {
+      success: false,
+      message: 'Firebase LopU chưa được cấu hình đầy đủ API Key và App ID. Vui lòng nhập thông tin cấu hình của dự án LopU để đồng bộ.',
+    };
+  }
+
+  try {
+    let usersCount = 0;
+    let classesCount = 0;
+    let docsCount = 0;
+    let progressCount = 0;
+    let seatingCount = 0;
+
+    // 1. Đẩy danh sách Người dùng (Users)
+    const users = getLocalItem<UserProfile[]>(STORAGE_KEYS.USERS, INITIAL_USERS);
+    for (const u of users) {
+      if (u.id) {
+        await setDoc(doc(db, 'users', u.id), u, { merge: true });
+        usersCount++;
+      }
+    }
+
+    // 2. Đẩy danh sách Lớp học (Classes)
+    const classes = getLocalItem<ClassItem[]>(STORAGE_KEYS.CLASSES, INITIAL_CLASSES);
+    for (const c of classes) {
+      if (c.id) {
+        await setDoc(doc(db, 'classes', c.id), c, { merge: true });
+        classesCount++;
+      }
+    }
+
+    // 3. Đẩy danh sách Tài liệu Giáo viên (Documents)
+    const documents = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, INITIAL_TEACHER_DOCS);
+    for (const d of documents) {
+      if (d.id) {
+        await setDoc(doc(db, 'documents', d.id), d, { merge: true });
+        docsCount++;
+      }
+    }
+
+    // 4. Đẩy danh sách Tiến độ học sinh (Progress)
+    const progressList = getLocalItem<StudentProgress[]>(STORAGE_KEYS.PROGRESS, INITIAL_PROGRESS);
+    for (const p of progressList) {
+      if (p.id) {
+        await setDoc(doc(db, 'progress', p.id), p, { merge: true });
+        progressCount++;
+      }
+    }
+
+    // 5. Đẩy danh sách Sơ đồ lớp (Seating Plans)
+    const seatingPlans = getLocalItem<Record<string, ClassSeatingPlan>>(STORAGE_KEYS.SEATING, INITIAL_SEATING_PLANS);
+    for (const [classId, s] of Object.entries(seatingPlans)) {
+      if (classId && s) {
+        await setDoc(doc(db, 'seating_plans', classId), s, { merge: true });
+        seatingCount++;
+      }
+    }
+
+    return {
+      success: true,
+      message: `Đã đẩy thành công toàn bộ dữ liệu lên Firebase Firestore dự án LopU! (${usersCount} người dùng, ${classesCount} lớp học, ${docsCount} tài liệu).`,
+      stats: {
+        users: usersCount,
+        classes: classesCount,
+        documents: docsCount,
+        progress: progressCount,
+        seating: seatingCount,
+      },
+    };
+  } catch (error: any) {
+    console.error('Lỗi khi đẩy dữ liệu lên Firebase LopU:', error);
+    return {
+      success: false,
+      message: `Lỗi đồng bộ dữ liệu lên Firebase LopU: ${error?.message || 'Không thể ghi vào Firestore'}. Vui lòng kiểm tra Rules và mạng kết nối.`,
+    };
+  }
+}
+
 

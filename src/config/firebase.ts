@@ -7,23 +7,37 @@ import appletConfig from '../../firebase-applet-config.json';
 // Suppress Firestore connection warnings in offline/sandbox preview
 setLogLevel('silent');
 
+// Kiểm tra cấu hình LopU được lưu tùy chỉnh trong localStorage
+let localLopUConfig: Partial<typeof appletConfig> | null = null;
+if (typeof window !== 'undefined') {
+  try {
+    const raw = localStorage.getItem('lopu_custom_firebase_config');
+    if (raw) {
+      localLopUConfig = JSON.parse(raw);
+    }
+  } catch (e) {
+    // Ignore JSON parse error
+  }
+}
+
+// Cấu hình duy nhất của dự án LopU
 export const firebaseConfig = {
-  apiKey: appletConfig.apiKey || import.meta.env.VITE_FIREBASE_API_KEY || '',
-  authDomain: appletConfig.authDomain || import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'gen-lang-client-0465436218.firebaseapp.com',
-  projectId: appletConfig.projectId || import.meta.env.VITE_FIREBASE_PROJECT_ID || 'gen-lang-client-0465436218',
-  storageBucket: appletConfig.storageBucket || import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'gen-lang-client-0465436218.firebasestorage.app',
-  messagingSenderId: appletConfig.messagingSenderId || import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '999770107772',
-  appId: appletConfig.appId || import.meta.env.VITE_FIREBASE_APP_ID || '1:999770107772:web:3cc0f1b3ce7391931d3ef9',
-  measurementId: appletConfig.measurementId || import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
+  apiKey: localLopUConfig?.apiKey || import.meta.env.VITE_FIREBASE_API_KEY || appletConfig.apiKey || '',
+  authDomain: localLopUConfig?.authDomain || import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || appletConfig.authDomain || 'lopu-ddf22.firebaseapp.com',
+  projectId: localLopUConfig?.projectId || import.meta.env.VITE_FIREBASE_PROJECT_ID || appletConfig.projectId || 'lopu-ddf22',
+  storageBucket: localLopUConfig?.storageBucket || import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || appletConfig.storageBucket || 'lopu-ddf22.firebasestorage.app',
+  messagingSenderId: localLopUConfig?.messagingSenderId || import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || appletConfig.messagingSenderId || '895470500244',
+  appId: localLopUConfig?.appId || import.meta.env.VITE_FIREBASE_APP_ID || appletConfig.appId || '',
+  measurementId: localLopUConfig?.measurementId || import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || appletConfig.measurementId || '',
 };
 
 export const googleClientConfig = {
-  clientId: appletConfig.oAuthClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || '999770107772-bprimeadqahj7etfdsel6oi5frci04s4.apps.googleusercontent.com',
+  clientId: localLopUConfig?.oAuthClientId || import.meta.env.VITE_GOOGLE_CLIENT_ID || appletConfig.oAuthClientId || '',
   clientSecret: import.meta.env.VITE_GOOGLE_CLIENT_SECRET || '',
   scope: 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive',
 };
 
-// Check whether real credentials are present
+// Kiểm tra trạng thái cấu hình của Firebase LopU
 export const isFirebaseConfigured = Boolean(
   firebaseConfig.apiKey &&
   !firebaseConfig.apiKey.includes('THAY_API_KEY') &&

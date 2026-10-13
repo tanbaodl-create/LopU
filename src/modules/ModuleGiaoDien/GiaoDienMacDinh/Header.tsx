@@ -43,6 +43,7 @@ interface HeaderProps {
   firebaseUser?: any;
   onSignInGoogle?: () => void;
   onSignOut?: () => void;
+  onOpenFirebaseModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -58,6 +59,7 @@ export const Header: React.FC<HeaderProps> = ({
   firebaseUser,
   onSignInGoogle,
   onSignOut,
+  onOpenFirebaseModal,
 }) => {
   const [showAccountDropdown, setShowAccountDropdown] = useState<boolean>(false);
   const accountDropdownRef = useRef<HTMLDivElement>(null);
@@ -215,16 +217,17 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right: Cụm gôm các nút: Drive [tài khoản kết nối], Kim cương, Tim, Dropdown vai trò, Đăng xuất */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Firestore indicator */}
-          <div
+          {/* Firestore indicator: Bấm để mở Cấu hình & Đồng bộ Firebase LopU */}
+          <button
             id="badge-firestore-status"
-            title={isFirestoreLive ? 'Firestore: Đang đồng bộ thời gian thực' : 'Firestore: Chế độ offline-first'}
-            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-900 border border-amber-200"
+            onClick={onOpenFirebaseModal}
+            title={isFirestoreLive ? 'Firebase LopU: Đang kết nối thời gian thực. Bấm để quản lý cấu hình & đồng bộ dữ liệu' : 'Firebase LopU: Chế độ offline-first. Bấm để cấu hình & đồng bộ'}
+            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors cursor-pointer"
           >
             <Database className="w-3.5 h-3.5 text-amber-600" />
-            <span>Firestore</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          </div>
+            <span>Firebase LopU</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${isFirestoreLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+          </button>
 
           {/* Nút Đăng nhập Google Drive nhanh khi chưa kết nối */}
           {!isConnected && (
@@ -372,6 +375,27 @@ export const Header: React.FC<HeaderProps> = ({
                         Chưa có
                       </span>
                     )}
+                  </button>
+                </div>
+
+                {/* 3.5. Nút Cấu hình & Đồng bộ Firebase LopU */}
+                <div className="pt-0.5">
+                  <button
+                    id="btn-header-dropdown-firebase"
+                    onClick={() => {
+                      setShowAccountDropdown(false);
+                      if (onOpenFirebaseModal) onOpenFirebaseModal();
+                    }}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold bg-amber-50/80 hover:bg-amber-100 text-amber-950 border border-amber-200/90 transition-colors cursor-pointer"
+                    title="Cấu hình kết nối Firebase LopU và đồng bộ dữ liệu đám mây"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Database className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                      <span>Firebase LopU</span>
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-200 text-amber-900">
+                      lopu-ddf22
+                    </span>
                   </button>
                 </div>
 

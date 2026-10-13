@@ -4,9 +4,9 @@ import { SidebarDrawer } from './SidebarDrawer';
 import { Footer } from './Footer';
 import { DynamicViewContainer, ViewId } from '../Navigation';
 import { UserRole, UserProfile } from '../../../services/storageTypes';
-import { auth, isFirebaseConfigured } from '../../../config/firebase';
+import { auth, isFirebaseConfigured, firebaseConfig } from '../../../config/firebase';
 import { onAuthStateChanged, signOut, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { syncGoogleAuthUserToFirestore, getUsers } from '../../ConnectData/ConnectFirestore';
+import { syncGoogleAuthUserToFirestore, getUsers, ModalFirebaseLopU } from '../../ConnectData/ConnectFirestore';
 import {
   connectGoogleDrive,
   disconnectGoogleDrive,
@@ -17,7 +17,7 @@ import {
   clearAppTrashFilesFromDrive,
   DriveStoredFile,
 } from '../../ConnectData/ConnectDrive';
-import { Cloud, X, CheckCircle2, Download, Trash2, RotateCcw } from 'lucide-react';
+import { Cloud, X, CheckCircle2, Download, Trash2, RotateCcw, ExternalLink } from 'lucide-react';
 
 interface AppLayoutProps {
   initialView?: ViewId;
@@ -42,6 +42,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const [showDriveModal, setShowDriveModal] = useState<boolean>(false);
   const [driveFiles, setDriveFiles] = useState<DriveStoredFile[]>([]);
   const [driveModalMessage, setDriveModalMessage] = useState<string | null>(null);
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState<boolean>(false);
 
   // Subscribe to real Google Auth state changed
   useEffect(() => {
@@ -268,6 +269,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         firebaseUser={firebaseUser}
         onSignInGoogle={handleSignInGoogle}
         onSignOut={handleSignOut}
+        onOpenFirebaseModal={() => setIsFirebaseModalOpen(true)}
       />
 
       {/* 2. Sidebar Drawer (Left edge slide-in, backdrop, 2-level accordion menu) */}
@@ -498,11 +500,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
                 <div className="space-y-2">
                   <h4 className="font-bold text-slate-800 text-[13px]">Các bước cấp phép tên miền trong Firebase:</h4>
-                  <ol className="list-decimal pl-4 space-y-1.5 leading-relaxed text-slate-600">
-                    <li>Truy cập vào <strong>Firebase Console</strong> dự án của bạn (<em>lopu-8a032</em> hoặc project tương ứng).</li>
+                  <ol className="list-decimal pl-4 space-y-2 leading-relaxed text-slate-600">
+                    <li>
+                      Truy cập vào <strong>Firebase Console</strong> dự án của bạn (Project ID hiện tại: <code className="bg-slate-100 text-purple-700 font-bold px-1 py-0.5 rounded">{firebaseConfig.projectId || 'Dự án của bạn'}</code>):
+                      <div className="mt-1">
+                        <a
+                          href={`https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-[11px] shadow-2xs transition-colors"
+                        >
+                          <span>Mở Cài đặt Firebase Authentication</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </li>
                     <li>Vào mục <strong>Authentication</strong> ➔ Tab <strong>Settings</strong> (Cài đặt).</li>
                     <li>Ở danh sách cột trái, chọn <strong>Authorized domains</strong> (Tên miền được ủy quyền).</li>
-                    <li>Bấm nút <strong>Add domain</strong> (Thêm tên miền), dán chính xác <strong>Tên miền hiện tại</strong> bên dưới vào rồi bấm Save (Lưu):</li>
+                    <li>Bấm nút <strong>Add domain</strong> (Thêm tên miền), dán chính xác <strong>Tên miền hiện tại</strong> bên dưới vào rồi bấm <strong>Save</strong>:</li>
                   </ol>
                 </div>
 
@@ -531,7 +546,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
                       </button>
                     </div>
                     <span className="text-[10px] text-slate-500 block mt-1.5 italic">
-                      Lưu ý: Sau khi bấm "Add domain" trong Firebase, có thể mất 30 giây - 1 phút để hệ thống Google cập nhật có hiệu lực.
+                      Lưu ý: Sau khi bấm "Add domain" trong Firebase Console, hệ thống của Google sẽ có hiệu lực trong khoảng 30 giây đến 1 phút. Sau đó hãy quay lại trang và bấm "Thử đăng nhập lại".
                     </span>
                   </div>
 
@@ -583,6 +598,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           </div>
         </div>
       )}
+
+      {/* Modal Cấu hình & Đồng bộ dữ liệu Firebase LopU */}
+      <ModalFirebaseLopU
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+      />
     </div>
   );
 };
