@@ -1,16 +1,62 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { ArrowLeftRight, Pause, Play, Shuffle } from 'lucide-react';
-import { FOOTER_QUOTES_1000 } from './footerQuotesData';
 
-/**
- * DANH SÁCH 1000 CÂU DANH NGÔN ĐỘNG VIÊN HỌC TẬP & Ý CHÍ KIÊN TRÌ
- * - Toàn bộ 1000 câu được định nghĩa tại file footerQuotesData.ts (mỗi câu 1 dòng duy nhất).
- * - Hỗ trợ đầy đủ mã HTML (<b>, <i>, <span class="...">, <cite>, v.v.) để định dạng chữ.
- * - Đã bỏ hoàn toàn các chữ "Buổi sáng/buổi trưa/..." đầu dòng.
- * - Đầy đủ trích dẫn tác giả / nguồn gốc của câu nói ở cuối câu.
- */
-export { FOOTER_QUOTES_1000 };
-export const FOOTER_QUOTES: string[] = FOOTER_QUOTES_1000;
+const TODAY_KEY = 'lopu_daily_quotes_date';
+const QUOTES_KEY = 'lopu_daily_quotes';
+
+const INITIAL_FALLBACK_QUOTES = [
+  '<span>«<b>Học và suy ngẫm</b>: Học mà không suy nghĩ thì mờ tối, suy nghĩ mà không học thì nguy hại.» — <cite class="font-bold text-indigo-700 not-italic">Khổng Tử</cite></span>',
+  '<span>«<b>Hành trình vạn dặm</b>: Cây cổ thụ bắt đầu từ mầm non bé nhỏ, hành trình vạn dặm khởi từ bước chân đầu tiên.» — <cite class="font-bold text-indigo-700 not-italic">Lão Tử</cite></span>',
+  '<span>«<b>Kiên trì mài sắt</b>: Có công mài sắt, có ngày nên kim; kiên tâm bền chí, đá sỏi hóa vàng.» — <cite class="font-bold text-indigo-700 not-italic">Tục ngữ Việt Nam</cite></span>',
+  '<span>«<b>Biển học vô bờ</b>, lấy sự chuyên cần làm bến đỗ; mây trời cao rộng, lấy chí tiến thủ làm cánh bay.» — <cite class="font-bold text-indigo-700 not-italic">Ngạn ngữ phương Đông</cite></span>',
+  '<span>«<b>Tự thắng chính mình</b>: Thắng được người khác chỉ là người có sức, thắng được chính mình mới là kẻ thực sự mạnh mẽ.» — <cite class="font-bold text-indigo-700 not-italic">Lão Tử</cite></span>',
+];
+
+export const FOOTER_QUOTES: string[] = INITIAL_FALLBACK_QUOTES;
+
+function getTodayDateString(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+export function getCachedDailyQuotes(): string[] | null {
+  try {
+    const today = getTodayDateString();
+    const savedDate = localStorage.getItem(TODAY_KEY);
+    const savedQuotes = localStorage.getItem(QUOTES_KEY);
+    if (savedDate === today && savedQuotes) {
+      const parsed = JSON.parse(savedQuotes);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+export async function loadAndCacheDailyQuotes(count = 35): Promise<string[]> {
+  const today = getTodayDateString();
+  try {
+    const module = await import('./footerQuotesData');
+    const allQuotes = module.FOOTER_QUOTES_1000;
+    if (allQuotes && allQuotes.length > 0) {
+      const dateNum = parseInt(today.replace(/-/g, ''), 10) || Date.now();
+      const startIdx = (dateNum * 13 + Math.floor(Math.random() * 50)) % allQuotes.length;
+
+      const selected: string[] = [];
+      for (let i = 0; i < Math.min(count, allQuotes.length); i++) {
+        selected.push(allQuotes[(startIdx + i * 7) % allQuotes.length]);
+      }
+
+      localStorage.setItem(TODAY_KEY, today);
+      localStorage.setItem(QUOTES_KEY, JSON.stringify(selected));
+      return selected;
+    }
+  } catch (err) {
+    console.warn('Lazy loading quotes chunk failed:', err);
+  }
+  return INITIAL_FALLBACK_QUOTES;
+}
 
 interface FooterProps {
   quotes?: string[];
@@ -19,33 +65,38 @@ interface FooterProps {
 }
 
 export const Footer: React.FC<FooterProps> = ({
-  quotes = FOOTER_QUOTES_1000,
+  quotes: customQuotes,
   className = '',
   defaultDirection = 'rtl',
 }) => {
-  // Hướng chạy: mặc định 'rtl' (từ phải qua trái) theo yêu cầu người dùng
   const [direction, setDirection] = useState<'ltr' | 'rtl'>(defaultDirection);
   const [isPaused, setIsPaused] = useState<boolean>(false);
-  const [batchIndex, setBatchIndex] = useState<number>(0);
+  const [quotesList, setQuotesList] = useState<string[]>(() => {
+    if (customQuotes && customQuotes.length > 0) return customQuotes;
+    const cached = getCachedDailyQuotes();
+    return cached && cached.length > 0 ? cached : INITIAL_FALLBACK_QUOTES;
+  });
 
-  // Lấy nhóm 50 câu danh ngôn từ kho 1000 câu để trình duyệt render siêu mượt mà 60fps
-  const displayQuotes = useMemo(() => {
-    const batchSize = 50;
-    const start = (batchIndex * batchSize) % quotes.length;
-    const slice = quotes.slice(start, start + batchSize);
-    return slice.length > 0 ? slice : quotes.slice(0, 50);
-  }, [quotes, batchIndex]);
+  useEffect(() => {
+    if (customQuotes && customQuotes.length > 0) return;
+    const cached = getCachedDailyQuotes();
+    if (!cached || cached.length === 0) {
+      loadAndCacheDailyQuotes(35).then(loaded => {
+        if (loaded && loaded.length > 0) setQuotesList(loaded);
+      });
+    }
+  }, [customQuotes]);
 
-  // Thời gian chạy được kéo dài (~16 giây mỗi câu) để chữ di chuyển chậm rãi, êm ái, dễ đọc
-  const duration = Math.max(120, displayQuotes.length * 16);
+  const duration = Math.max(120, quotesList.length * 16);
 
-  const handleShuffle = () => {
-    setBatchIndex(prev => prev + 1);
+  const handleShuffle = async () => {
+    const loaded = await loadAndCacheDailyQuotes(35);
+    setQuotesList(loaded);
   };
 
   const renderQuotesGroup = (groupId: string) => (
     <div key={groupId} className="flex items-center shrink-0">
-      {displayQuotes.map((quoteHtml, idx) => (
+      {quotesList.map((quoteHtml, idx) => (
         <span key={`${groupId}-${idx}`} className="inline-flex items-center">
           <span
             dangerouslySetInnerHTML={{ __html: quoteHtml }}
@@ -62,7 +113,6 @@ export const Footer: React.FC<FooterProps> = ({
       id="app-footer"
       className={`sticky bottom-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 py-2 px-3 sm:px-4 select-none shadow-xs flex items-center gap-3 transition-colors ${className}`}
     >
-      {/* Dải chữ chạy liên tục tuần hoàn không độ trễ, hiện ngay lập tức */}
       <div className="flex-1 overflow-hidden relative">
         <div
           className={`flex w-max ${
@@ -78,13 +128,12 @@ export const Footer: React.FC<FooterProps> = ({
         </div>
       </div>
 
-      {/* Các nút điều khiển tiện ích: Đổi câu khác trong 1000 câu, Đổi hướng chạy & Tạm dừng/Tiếp tục */}
       <div className="shrink-0 flex items-center gap-1">
         <button
           type="button"
           onClick={handleShuffle}
           className="p-1.5 rounded-lg border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 transition-colors cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
-          title="Bấm để đổi 50 câu ngẫu nhiên mới từ kho 1000 câu danh ngôn"
+          title="Bấm để nạp 35 câu danh ngôn ngẫu nhiên mới"
         >
           <Shuffle className="w-3.5 h-3.5" />
           <span className="hidden md:inline">Đổi câu khác</span>

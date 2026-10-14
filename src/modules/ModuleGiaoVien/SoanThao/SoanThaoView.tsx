@@ -253,9 +253,9 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // Editor styling states: bổ sung thêm cỡ chữ 12px và 22px (mặc định 22px)
+  // Editor styling states: mặc định 14px cho nội dung (Normal: 14px, H1: 22px, H2: 20px, H3: 18px, H4: 16px)
   const editorRef = useRef<HTMLDivElement>(null);
-  const [fontSize, setFontSize] = useState<string>('22px');
+  const [fontSize, setFontSize] = useState<string>('14px');
   const [textColor, setTextColor] = useState<string>('#0f172a');
   const [highlightColor, setHighlightColor] = useState<string>('transparent');
 
@@ -1651,6 +1651,41 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   <ListOrdered className="w-4 h-4" />
                 </button>
 
+                {/* Nút chọn Kiểu Chữ (Style) như Microsoft Word */}
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (!val) return;
+                    if (val === 'p') {
+                      execCommand('formatBlock', '<p>');
+                      setFontSize('14px');
+                    } else if (val === 'h1') {
+                      execCommand('formatBlock', '<h1>');
+                      setFontSize('22px');
+                    } else if (val === 'h2') {
+                      execCommand('formatBlock', '<h2>');
+                      setFontSize('20px');
+                    } else if (val === 'h3') {
+                      execCommand('formatBlock', '<h3>');
+                      setFontSize('18px');
+                    } else if (val === 'h4') {
+                      execCommand('formatBlock', '<h4>');
+                      setFontSize('16px');
+                    }
+                    e.target.value = '';
+                  }}
+                  className="text-[11px] font-bold bg-white border border-slate-300 hover:border-indigo-400 rounded px-2 py-0.5 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 transition-colors"
+                  title="Chọn Kiểu Chữ Style (Normal: 14px, Heading 1: 22px, Heading 2: 20px, Heading 3: 18px, Heading 4: 16px)"
+                >
+                  <option value="" disabled>Style (Kiểu chữ)...</option>
+                  <option value="p">Normal (Nội dung - 14px)</option>
+                  <option value="h1">Heading 1 (Tiêu đề 1 - 22px)</option>
+                  <option value="h2">Heading 2 (Tiêu đề 2 - 20px)</option>
+                  <option value="h3">Heading 3 (Tiêu đề 3 - 18px)</option>
+                  <option value="h4">Heading 4 (Tiêu đề 4 - 16px)</option>
+                </select>
+
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
                 {/* Module Con Độc Lập: MENU CHÈN (Chèn bảng, Chèn hình ảnh, Chèn File, Chèn Thư mục E-Learning) */}
@@ -1680,7 +1715,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-                {/* Font settings: bổ sung thêm 12px và 22px (mặc định 22px) */}
+                {/* Font settings: Mặc định 14px cho nội dung */}
                 <select
                   value={fontSize}
                   onChange={(e) => {
@@ -1688,13 +1723,14 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                     execCommand('fontSize', '4');
                   }}
                   className="text-[11px] font-bold bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700"
+                  title="Chọn cỡ chữ hiển thị"
                 >
                   <option value="12px">Cỡ chữ 12px</option>
-                  <option value="14px">Cỡ chữ 14px</option>
-                  <option value="16px">Cỡ chữ 16px</option>
-                  <option value="18px">Cỡ chữ 18px</option>
-                  <option value="20px">Cỡ chữ 20px</option>
-                  <option value="22px">Cỡ chữ 22px (Mặc định)</option>
+                  <option value="14px">Cỡ chữ 14px (Mặc định)</option>
+                  <option value="16px">Cỡ chữ 16px (Heading 4)</option>
+                  <option value="18px">Cỡ chữ 18px (Heading 3)</option>
+                  <option value="20px">Cỡ chữ 20px (Heading 2)</option>
+                  <option value="22px">Cỡ chữ 22px (Heading 1)</option>
                 </select>
 
                 {/* NÚT LƯU DRIVE CÓ SẴN (ĐÓNG GÓI HOÀN CHỈNH BỞI MODULE CON DONGBODRIVE) */}

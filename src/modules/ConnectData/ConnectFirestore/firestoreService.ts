@@ -29,6 +29,7 @@ import {
 import {
   buildHierarchyFromDocuments,
   saveStoredHierarchy,
+  getStoredHierarchy,
   getDeletedFoldersBlacklist,
   addDeletedFolderToBlacklist,
 } from '../../ModuleGiaoVien/TaiLieuCaNhan/hierarchyData';
@@ -832,9 +833,10 @@ export async function getTeacherDocuments(): Promise<TeacherDocument[]> {
       // Overwrite local storage cache completely with Firestore authoritative data
       setLocalItem(STORAGE_KEYS.DOCUMENTS, remote);
 
-      // Rebuild and sanitize hierarchy tree based on Firestore data
+      // Rebuild and sanitize hierarchy tree based on Firestore data (preserving Drive folders)
+      const existingHierarchy = getStoredHierarchy();
       const updatedHierarchy = buildHierarchyFromDocuments(remote);
-      saveStoredHierarchy(updatedHierarchy);
+      saveStoredHierarchy({ ...existingHierarchy, ...updatedHierarchy });
 
       return remote;
     } catch (err) {
@@ -845,9 +847,10 @@ export async function getTeacherDocuments(): Promise<TeacherDocument[]> {
   const local = getLocalItem<TeacherDocument[]>(STORAGE_KEYS.DOCUMENTS, INITIAL_TEACHER_DOCS)
     .filter(d => d.title && !deletedList.includes(d.title.trim()));
   
-  // Re-sync local hierarchy
+  // Re-sync local hierarchy preserving existing Drive folders
+  const existingHierarchy = getStoredHierarchy();
   const updatedHierarchy = buildHierarchyFromDocuments(local);
-  saveStoredHierarchy(updatedHierarchy);
+  saveStoredHierarchy({ ...existingHierarchy, ...updatedHierarchy });
 
   return local;
 }

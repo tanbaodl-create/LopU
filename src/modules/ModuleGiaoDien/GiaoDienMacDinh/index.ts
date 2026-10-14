@@ -1,4 +1,4 @@
 export { AppLayout } from './AppLayout';
 export { Header } from './Header';
 export { SidebarDrawer } from './SidebarDrawer';
-export { Footer, FOOTER_QUOTES, FOOTER_QUOTES_1000 } from './Footer';
+export { Footer, FOOTER_QUOTES } from './Footer';

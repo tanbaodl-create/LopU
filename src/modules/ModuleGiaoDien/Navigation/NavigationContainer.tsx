@@ -4,17 +4,7 @@ import katex from 'katex';
 import { ViewId, getViewMeta } from './menuConfig';
 import { UserRole, UserProfile, TeacherDocument, ClassItem } from '../../../services/storageTypes';
 import {
-  LopHocView,
-  SoDoLopView,
-  ThoiKhoaBieuView,
-  DangKyLopView,
-} from '../../ModuleHocSinh';
-import {
-  QuanLyLopDayView,
   TaiLieuCaNhanView,
-  TheoDoiHocSinhView,
-  ThuongMaiTaiLieuView,
-  QuanLyDriveView,
   createByPath,
   deleteByPath,
   getNestedDriveTree,
@@ -24,12 +14,32 @@ import {
   saveDocumentToDriveAndDatabase,
   formatSafeSlug,
 } from '../../ModuleGiaoVien';
-import {
-  BaoCaoGiamSatView,
-  QuanLyNguoiDungView,
-  PhanQuyenLopHocView,
-} from '../../ModuleQuanTri';
-import { HuongDanWebView, PhanTichLenh, LuuPromptChuanView } from '../HuongDanWeb';
+
+// Tải chậm (Lazy load) các module phụ trợ, ưu tiên tài liệu tải trước
+const LopHocView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.LopHocView })));
+const SoDoLopView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.SoDoLopView })));
+const ThoiKhoaBieuView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.ThoiKhoaBieuView })));
+const DangKyLopView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.DangKyLopView })));
+
+const QuanLyLopDayView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.QuanLyLopDayView })));
+const TheoDoiHocSinhView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.TheoDoiHocSinhView })));
+const ThuongMaiTaiLieuView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.ThuongMaiTaiLieuView })));
+const QuanLyDriveView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.QuanLyDriveView })));
+
+const BaoCaoGiamSatView = React.lazy(() => import('../../ModuleQuanTri').then(m => ({ default: m.BaoCaoGiamSatView })));
+const QuanLyNguoiDungView = React.lazy(() => import('../../ModuleQuanTri').then(m => ({ default: m.QuanLyNguoiDungView })));
+const PhanQuyenLopHocView = React.lazy(() => import('../../ModuleQuanTri').then(m => ({ default: m.PhanQuyenLopHocView })));
+
+const HuongDanWebView = React.lazy(() => import('../HuongDanWeb').then(m => ({ default: m.HuongDanWebView })));
+const PhanTichLenh = React.lazy(() => import('../HuongDanWeb').then(m => ({ default: m.PhanTichLenh })));
+const LuuPromptChuanView = React.lazy(() => import('../HuongDanWeb').then(m => ({ default: m.LuuPromptChuanView })));
+
+const ModuleLoadingFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center p-12 text-slate-500 space-y-3 min-h-[300px]">
+    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+    <p className="text-xs font-semibold text-slate-600">Đang tải phân hệ...</p>
+  </div>
+);
 import { MathTypeEditorModal } from '../../ModuleGiaoVien/TaiLieuCaNhan/MathTypeEditorModal';
 import { QuestionEditorWord, QuestionViewMode } from '../../ModuleGiaoVien/TaiLieuCaNhan/QuestionEditorWord';
 import { convertMathExprToJs } from '../../ModuleGiaoVien/TaiLieuCaNhan/TikZVisualRenderer';
@@ -43,6 +53,7 @@ import {
   formatDocumentTitle,
   matchesSubjectAndGrade,
   saveStoredHierarchy,
+  getGradeNumber,
   HierarchyStore,
 } from '../../ModuleGiaoVien/TaiLieuCaNhan/hierarchyData';
 import {
@@ -125,8 +136,20 @@ export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData };
  * - ĐỀ XUẤT 2: Thước lề trái quản lý Mốc Slide (🎬) & Mốc Hiệu ứng (✨) mượt mà, hỗ trợ kéo thả và trình chiếu PPT từng bước
  */
 const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole }) => {
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [documents, setDocuments] = useState<TeacherDocument[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_classes');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
+  const [documents, setDocuments] = useState<TeacherDocument[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_documents');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
   
   // Trạng thái gợi ý mặc định là rỗng
   const [title, setTitle] = useState<string>('');
@@ -3707,43 +3730,48 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
   const [syncingLevel, setSyncingLevel] = useState<'title' | 'chuong' | 'bai' | 'vanDe' | 'chuyenDe' | null>(null);
 
   useEffect(() => {
-    async function load() {
-      const cls = await getClasses();
-      setClasses(cls);
-      const docs = await getTeacherDocuments();
-      setDocuments(docs);
-      
-      const docTitlesFromStore = docs.map(d => d.title).filter(Boolean);
-      setTitleList(prev => Array.from(new Set([...prev, ...docTitlesFromStore])));
-
-      // Tự động quét và đồng bộ trực tiếp danh mục từ Google Drive ngay khi vừa vào Word Soạn Thảo
+    let isMounted = true;
+    const timer = setTimeout(async () => {
       try {
-        const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']);
-        if (res.success && res.tree && res.tree.children) {
-          const titles: string[] = [];
-          const chuongs: string[] = [];
-          const bais: string[] = [];
-          const vanDes: string[] = [];
-          const chuyenDes: string[] = [];
+        const cls = await getClasses();
+        if (isMounted) setClasses(cls);
+        const docs = await getTeacherDocuments();
+        if (isMounted) {
+          setDocuments(docs);
+          const docTitlesFromStore = docs.map(d => d.title).filter(Boolean);
+          setTitleList(prev => Array.from(new Set([...prev, ...docTitlesFromStore])));
+        }
 
-          for (const docNode of res.tree.children) {
-            if (docNode.type === 'folder') {
-              titles.push(docNode.name);
-              if (docNode.children) {
-                for (const chNode of docNode.children) {
-                  if (chNode.type === 'folder') {
-                    chuongs.push(chNode.name);
-                    if (chNode.children) {
-                      for (const bNode of chNode.children) {
-                        if (bNode.type === 'folder') {
-                          bais.push(bNode.name);
-                          if (bNode.children) {
-                            for (const vNode of bNode.children) {
-                              if (vNode.type === 'folder') {
-                                vanDes.push(vNode.name);
-                                if (vNode.children) {
-                                  for (const cdNode of vNode.children) {
-                                    chuyenDes.push(cdNode.name);
+        // Tự động quét và đồng bộ trực tiếp danh mục từ Google Drive nếu đã kết nối
+        const { isConnected } = getDriveConnectionState();
+        if (isConnected) {
+          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { maxDepth: 2 }).catch(() => null);
+          if (isMounted && res && res.success && res.tree && res.tree.children) {
+            const titles: string[] = [];
+            const chuongs: string[] = [];
+            const bais: string[] = [];
+            const vanDes: string[] = [];
+            const chuyenDes: string[] = [];
+
+            for (const docNode of res.tree.children) {
+              if (docNode.type === 'folder') {
+                titles.push(docNode.name);
+                if (docNode.children) {
+                  for (const chNode of docNode.children) {
+                    if (chNode.type === 'folder') {
+                      chuongs.push(chNode.name);
+                      if (chNode.children) {
+                        for (const bNode of chNode.children) {
+                          if (bNode.type === 'folder') {
+                            bais.push(bNode.name);
+                            if (bNode.children) {
+                              for (const vNode of bNode.children) {
+                                if (vNode.type === 'folder') {
+                                  vanDes.push(vNode.name);
+                                  if (vNode.children) {
+                                    for (const cdNode of vNode.children) {
+                                      chuyenDes.push(cdNode.name);
+                                    }
                                   }
                                 }
                               }
@@ -3756,18 +3784,22 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 }
               }
             }
+            setTitleList(prev => Array.from(new Set([...prev, ...titles])));
+            setChuongList(prev => Array.from(new Set([...prev, ...chuongs])));
+            setBaiList(prev => Array.from(new Set([...prev, ...bais])));
+            setVanDeList(prev => Array.from(new Set([...prev, ...vanDes])));
+            setChuyenDeList(prev => Array.from(new Set([...prev, ...chuyenDes])));
           }
-          setTitleList(prev => Array.from(new Set([...prev, ...titles])));
-          setChuongList(prev => Array.from(new Set([...prev, ...chuongs])));
-          setBaiList(prev => Array.from(new Set([...prev, ...bais])));
-          setVanDeList(prev => Array.from(new Set([...prev, ...vanDes])));
-          setChuyenDeList(prev => Array.from(new Set([...prev, ...chuyenDes])));
         }
       } catch (err) {
         console.warn('NavigationContainer auto drive sync error:', err);
       }
-    }
-    load();
+    }, 50);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const lastLoadedDocKeyRef = useRef<string>('');
@@ -4604,7 +4636,22 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       ...documents.map(d => d.title).filter((x): x is string => Boolean(x))
     ])).filter(t => !delList.includes(t));
 
-    return allTitles.filter(t => matchesSubjectAndGrade(t, subject, grade));
+    const matched = allTitles.filter(t => {
+      if (matchesSubjectAndGrade(t, subject, grade)) return true;
+      const matchedDoc = documents.find(d => d.title === t);
+      if (matchedDoc) {
+        const sMatch = !matchedDoc.subject || matchesSubjectAndGrade(matchedDoc.subject, subject);
+        const gMatch = !matchedDoc.grade || getGradeNumber(matchedDoc.grade) === getGradeNumber(grade);
+        if (sMatch && gMatch) return true;
+      }
+      return false;
+    });
+
+    if (matched.length === 0) {
+      return [];
+    }
+
+    return matched;
   }, [titleList, documents, subject, grade]);
 
   // Khi chọn Môn học và Khối lớp: Chỉ khi CẢ HAI đều khác rỗng mới tiến hành đồng bộ
@@ -4630,26 +4677,36 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       (async () => {
         try {
-          // 1. Kiểm tra / Tự động kết nối Google Drive nếu token chưa có hoặc hết hạn
-          let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-          if (!isRealGoogleOAuthToken(token)) {
-            const connRes = await connectGoogleDrive();
-            if (connRes.success) {
-              token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+          // 1. Tải mới danh sách tài liệu từ Firestore
+          const freshDocs = await getTeacherDocuments().catch(() => []);
+          if (freshDocs && freshDocs.length > 0) {
+            setDocuments(freshDocs);
+            const docTitles = freshDocs.map(d => d.title).filter(Boolean);
+            if (docTitles.length > 0) {
+              setTitleList(prev => Array.from(new Set([...prev, ...docTitles])));
             }
           }
 
-          // 2. Quét cây thư mục từ Google Drive
-          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { overrideToken: token || undefined });
-          if (res.success && res.tree && res.tree.children) {
-            const driveTitles: string[] = [];
-            for (const docNode of res.tree.children) {
-              if (docNode.type === 'folder') {
-                driveTitles.push(docNode.name);
+          // 2. Quét cây thư mục từ Google Drive nếu đã kết nối
+          const { isConnected } = getDriveConnectionState();
+          if (isConnected) {
+            let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+            const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { overrideToken: token || undefined });
+            if (res.success && res.tree && res.tree.children) {
+              const driveTitles: string[] = [];
+              const currentStore = getStoredHierarchy();
+              for (const docNode of res.tree.children) {
+                if (docNode.type === 'folder') {
+                  driveTitles.push(docNode.name);
+                  if (!currentStore[docNode.name]) {
+                    currentStore[docNode.name] = {};
+                  }
+                }
               }
-            }
-            if (driveTitles.length > 0) {
-              setTitleList(prev => Array.from(new Set([...prev, ...driveTitles])));
+              saveStoredHierarchy(currentStore);
+              if (driveTitles.length > 0) {
+                setTitleList(prev => Array.from(new Set([...prev, ...driveTitles])));
+              }
             }
           }
         } catch (err) {
@@ -4657,7 +4714,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         } finally {
           setTimeout(() => {
             setSyncingLevel(null);
-          }, 600);
+          }, 300);
         }
       })();
     } else {
@@ -4667,15 +4724,11 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
   }, [subject, grade]);
 
-  // Quy tắc tự động chọn Tên tài liệu: Nếu có duy nhất 1 tùy chọn thì tự động chọn; nếu > 1 tùy chọn thì rỗng
+  // Quy tắc tự động chọn Tên tài liệu: Luôn tự động chọn tùy chọn đầu tiên để dropdown luôn hiển thị tên tài liệu
   useEffect(() => {
-    if (filteredTitleList.length === 1) {
-      if (title !== filteredTitleList[0]) {
+    if (filteredTitleList.length > 0) {
+      if (!title || !filteredTitleList.includes(title)) {
         setTitle(filteredTitleList[0]);
-      }
-    } else if (filteredTitleList.length > 1) {
-      if (title && !filteredTitleList.includes(title)) {
-        setTitle('');
       }
     } else {
       if (title) setTitle('');
@@ -5036,10 +5089,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     const currentStore = getStoredHierarchy();
 
     if (addingLevel === 'title') {
-      setTitleList(prev => Array.from(new Set([...prev, val])));
+      const formattedTitle = (subject && grade) ? formatDocumentTitle(subject, grade, val) : val;
+      setTitleList(prev => Array.from(new Set([...prev, formattedTitle, val])));
+      if (!currentStore[formattedTitle]) currentStore[formattedTitle] = {};
       if (!currentStore[val]) currentStore[val] = {};
       saveStoredHierarchy(currentStore);
-      setTitle(val);
+      setTitle(formattedTitle);
       if (addModalType === 'danhGia') {
         setChuong('');
         setBai('');
@@ -8567,72 +8622,80 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
     );
   }
 
-  // Render view khi đã được phép
-  switch (activeView) {
-    // Module 4: Giao diện & Hướng dẫn Web (ModuleGiaoDien) -> Sơ đồ cây module & Trợ lý phân tích lệnh (Chỉ Superadmin)
-    case 'guide-tree':
-      return <HuongDanWebView currentRole={currentRole} onNavigateToView={onNavigateToView} />;
-    case 'guide-prompt-assistant':
-      return <PhanTichLenh onNavigateToView={onNavigateToView} />;
-    case 'guide-prompts-saved': {
-      if (currentRole !== 'superadmin') {
-        return (
-          <div className="p-8 text-center bg-rose-50 text-rose-700 font-bold border border-rose-200 rounded-2xl max-w-md mx-auto mt-10 shadow-xs">
-            Quyền truy cập bị từ chối! Phân hệ này chỉ dành riêng cho Superadmin.
-          </div>
-        );
+  // Render view khi đã được phép (Bọc React.Suspense để tải các module con mượt mà, ưu tiên tài liệu)
+  const renderActiveView = () => {
+    switch (activeView) {
+      // Module 4: Giao diện & Hướng dẫn Web (ModuleGiaoDien) -> Sơ đồ cây module & Trợ lý phân tích lệnh (Chỉ Superadmin)
+      case 'guide-tree':
+        return <HuongDanWebView currentRole={currentRole} onNavigateToView={onNavigateToView} />;
+      case 'guide-prompt-assistant':
+        return <PhanTichLenh onNavigateToView={onNavigateToView} />;
+      case 'guide-prompts-saved': {
+        if (currentRole !== 'superadmin') {
+          return (
+            <div className="p-8 text-center bg-rose-50 text-rose-700 font-bold border border-rose-200 rounded-2xl max-w-md mx-auto mt-10 shadow-xs">
+              Quyền truy cập bị từ chối! Phân hệ này chỉ dành riêng cho Superadmin.
+            </div>
+          );
+        }
+        return <LuuPromptChuanView />;
       }
-      return <LuuPromptChuanView />;
+
+      // Module 1: Không gian Học tập (ModuleHocSinh)
+      case 'learning-classes':
+        return <LopHocView />;
+      case 'learning-seating':
+        return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
+      case 'learning-schedule':
+        return <ThoiKhoaBieuView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
+      case 'learning-join':
+        return <DangKyLopView />;
+
+      // Module 2: Nghiệp vụ Giảng dạy & Lớp học (ModuleGiaoVien)
+      case 'teaching-soanthao':
+        return <WordSoanThaoView currentRole={currentRole} />;
+      case 'teaching-management':
+        return <QuanLyLopDayView currentRole={currentRole} />;
+      case 'teaching-documents':
+        return (
+          <TaiLieuCaNhanView
+            currentRole={currentRole}
+            onChangeRole={onChangeRole}
+            driveEmail={driveEmail}
+            onOpenDriveConnect={onOpenDriveConnect}
+          />
+        );
+      case 'teaching-drive':
+        return <QuanLyDriveView />;
+      case 'teaching-monetization':
+        return <ThuongMaiTaiLieuView />;
+      case 'teaching-students':
+        return <TheoDoiHocSinhView />;
+
+      // Module 3: Quản trị & Báo cáo Giám sát (ModuleQuanTri)
+      case 'reports-progress':
+        return <BaoCaoGiamSatView />;
+      case 'settings-users':
+        return (
+          <QuanLyNguoiDungView
+            currentRole={currentRole}
+            onNavigateToView={onNavigateToView}
+            driveEmail={driveEmail}
+            onOpenDriveConnect={onOpenDriveConnect}
+            onChangeRole={onChangeRole}
+          />
+        );
+      case 'settings-permissions':
+        return <PhanQuyenLopHocView currentRole={currentRole} />;
+
+      default:
+        return <LopHocView />;
     }
+  };
 
-    // Module 1: Không gian Học tập (ModuleHocSinh)
-    case 'learning-classes':
-      return <LopHocView />;
-    case 'learning-seating':
-      return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
-    case 'learning-schedule':
-      return <ThoiKhoaBieuView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
-    case 'learning-join':
-      return <DangKyLopView />;
-
-    // Module 2: Nghiệp vụ Giảng dạy & Lớp học (ModuleGiaoVien)
-    case 'teaching-soanthao':
-      return <WordSoanThaoView currentRole={currentRole} />;
-    case 'teaching-management':
-      return <QuanLyLopDayView currentRole={currentRole} />;
-    case 'teaching-documents':
-      return (
-        <TaiLieuCaNhanView
-          currentRole={currentRole}
-          onChangeRole={onChangeRole}
-          driveEmail={driveEmail}
-          onOpenDriveConnect={onOpenDriveConnect}
-        />
-      );
-    case 'teaching-drive':
-      return <QuanLyDriveView />;
-    case 'teaching-monetization':
-      return <ThuongMaiTaiLieuView />;
-    case 'teaching-students':
-      return <TheoDoiHocSinhView />;
-
-    // Module 3: Quản trị & Báo cáo Giám sát (ModuleQuanTri)
-    case 'reports-progress':
-      return <BaoCaoGiamSatView />;
-    case 'settings-users':
-      return (
-        <QuanLyNguoiDungView
-          currentRole={currentRole}
-          onNavigateToView={onNavigateToView}
-          driveEmail={driveEmail}
-          onOpenDriveConnect={onOpenDriveConnect}
-          onChangeRole={onChangeRole}
-        />
-      );
-    case 'settings-permissions':
-      return <PhanQuyenLopHocView currentRole={currentRole} />;
-
-    default:
-      return <LopHocView />;
-  }
+  return (
+    <React.Suspense fallback={<ModuleLoadingFallback />}>
+      {renderActiveView()}
+    </React.Suspense>
+  );
 };

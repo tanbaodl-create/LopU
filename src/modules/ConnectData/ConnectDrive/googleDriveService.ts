@@ -54,7 +54,7 @@ export async function findFolderOnDrive(token: string, name: string, parentId?: 
     const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,parents,trashed)&pageSize=10`;
     const res = await fetchWithTimeout(url, {
       headers: { Authorization: `Bearer ${token}` }
-    }, 8000);
+    }, 15000);
     if (res.status === 401) {
       localStorage.removeItem('lopu_google_drive_token_v1');
       localStorage.removeItem('lopu_gdrive_token');
@@ -75,7 +75,7 @@ export async function findFolderOnDrive(token: string, name: string, parentId?: 
     if (err.message && err.message.includes('401')) {
       throw err;
     }
-    console.error(`Error finding folder ${name}:`, err);
+    console.warn(`Thông báo khi tìm thư mục "${name}" trên Drive:`, err?.message || err);
     return null;
   }
 }
@@ -297,10 +297,16 @@ export async function findFlexibleFolderInDrive(token: string, name: string, par
 // Helper function to find a folder ID by exact hierarchy path
 export async function findFolderPathIdOnDrive(token: string, pathSegments: string[]): Promise<string | null> {
   let currentParentId: string | undefined = 'root';
-  for (const segment of pathSegments) {
-    const cleanSegment = segment.trim();
+  for (let i = 0; i < pathSegments.length; i++) {
+    const cleanSegment = pathSegments[i].trim();
     if (!cleanSegment) continue;
-    const folderId = await findFolderOnDrive(token, cleanSegment, currentParentId);
+    let folderId = await findFolderOnDrive(token, cleanSegment, currentParentId);
+    if (!folderId && i === 0) {
+      folderId = await findFlexibleFolderInDrive(token, cleanSegment, undefined);
+    }
+    if (!folderId) {
+      folderId = await findFlexibleFolderInDrive(token, cleanSegment, currentParentId);
+    }
     if (!folderId) return null;
     currentParentId = folderId;
   }
@@ -978,7 +984,7 @@ export function isRealGoogleOAuthToken(token?: string | null): boolean {
 /**
  * Helper gọi fetch có Timeout để chống treo mãi mãi khi mạng lag hoặc Google API chậm
  */
-export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 8000): Promise<Response> {
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 15000): Promise<Response> {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -999,11 +1005,12 @@ export async function fetchWithTimeout(url: string, options: RequestInit = {}, t
 
 /**
  * Kiểm tra mã Token Google Drive có tồn tại và còn hiệu lực hay không.
- * Có cơ chế Timeout 8s chống treo. Nếu chưa kết nối hoặc token hết hạn (401/403),
- * sẽ kích hoạt đăng nhập lại.
+ * Có cơ chế Timeout chống treo. Nếu chưa kết nối hoặc token hết hạn (401/403),
+ * chỉ kích hoạt popup đăng nhập nếu allowInteractivePopup = true.
  */
 export async function ensureValidDriveToken(
-  onProgress?: (step: string) => void
+  onProgress?: (step: string) => void,
+  allowInteractivePopup: boolean = false
 ): Promise<string | null> {
   let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
   
@@ -1011,10 +1018,10 @@ export async function ensureValidDriveToken(
   if (isRealGoogleOAuthToken(token)) {
     try {
       if (onProgress) onProgress('Kiểm tra phiên kết nối Google Drive...');
-      // Test nhanh quyền truy cập API Google Drive với Timeout 5s
+      // Test nhanh quyền truy cập API Google Drive với Timeout 6s
       const res = await fetchWithTimeout('https://www.googleapis.com/drive/v3/about?fields=user', {
         headers: { Authorization: `Bearer ${token}` }
-      }, 5000);
+      }, 6000);
       if (res.ok) {
         isValid = true;
       } else if (res.status === 401 || res.status === 403) {
@@ -1024,15 +1031,15 @@ export async function ensureValidDriveToken(
         token = null;
       }
     } catch (err: any) {
-      console.warn('Lỗi kiểm tra tính hợp lệ của Token Google Drive:', err);
-      // Nếu timeout hoặc lỗi mạng nhưng token có sẵn dạng ya29, vẫn cho dùng thử để upload
-      if (token && token.startsWith('ya29.')) {
-        isValid = true;
-      }
+      console.warn('Thông báo kiểm tra token Drive:', err?.message || err);
+      isValid = false;
     }
   }
 
   if (!isValid) {
+    if (!allowInteractivePopup) {
+      return null;
+    }
     if (onProgress) onProgress('Đang mở cửa sổ xác thực tài khoản Google Drive...');
     console.log('Mở cửa sổ đăng nhập Google Drive để kết nối lại...');
     
@@ -1071,10 +1078,11 @@ export async function ensureValidDriveToken(
  * - Nếu không thành công: báo tạo thất bại và không thêm vào App.
  */
 export async function createDriveFolderIfNotExists(
-  pathSegments: string[]
+  pathSegments: string[],
+  options?: { interactiveAuth?: boolean }
 ): Promise<{ success: boolean; created: boolean; alreadyExists: boolean; isRealDrive: boolean; folderId?: string; error?: string }> {
-  // Đảm bảo token hợp lệ; nếu hết hạn hoặc chưa kết nối thì tự động bật cửa sổ đăng nhập
-  const token = await ensureValidDriveToken();
+  // Đảm bảo token hợp lệ; chỉ mở popup khi có yêu cầu tương tác trực tiếp
+  const token = await ensureValidDriveToken(undefined, options?.interactiveAuth ?? false);
   if (!token) {
     return {
       success: false,
@@ -1170,7 +1178,24 @@ export async function scanAndSyncDriveHierarchy(
   try {
     const deletedList = getDeletedFoldersBlacklist();
 
-    const taiLieuId = await findFolderPathIdOnDrive(token, ['myApp', 'LopU', 'TaiLieu']);
+    let taiLieuId = await findFolderPathIdOnDrive(token, ['myApp', 'LopU', 'TaiLieu']);
+    if (!taiLieuId) {
+      taiLieuId = await findFolderPathIdOnDrive(token, ['LopU', 'TaiLieu']);
+    }
+    if (!taiLieuId) {
+      taiLieuId = await findFlexibleFolderInDrive(token, 'TaiLieu');
+    }
+    if (!taiLieuId) {
+      taiLieuId = await findFlexibleFolderInDrive(token, 'TailLieu');
+    }
+    if (!taiLieuId) {
+      const matches1 = await findFoldersByNameOnDrive(token, 'TaiLieu');
+      if (matches1 && matches1.length > 0) taiLieuId = matches1[0];
+    }
+    if (!taiLieuId) {
+      const matches2 = await findFoldersByNameOnDrive(token, 'TailLieu');
+      if (matches2 && matches2.length > 0) taiLieuId = matches2[0];
+    }
     if (!taiLieuId) {
       return {};
     }

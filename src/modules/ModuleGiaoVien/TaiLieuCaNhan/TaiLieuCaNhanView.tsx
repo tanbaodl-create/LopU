@@ -65,6 +65,7 @@ import {
   HierarchyStore,
   matchesSubjectAndGrade,
   getGradeNumber,
+  formatDocumentTitle,
 } from './hierarchyData';
 import { HierarchySelector } from './HierarchySelector';
 import { TrangKienThucChuyenDe } from './TrangKienThucChuyenDe';
@@ -271,9 +272,27 @@ export const TaiLieuCaNhanView: React.FC<TaiLieuCaNhanViewProps> = ({
   driveEmail,
   onOpenDriveConnect,
 }) => {
-  const [documents, setDocuments] = useState<TeacherDocument[]>([]);
-  const [classes, setClasses] = useState<ClassItem[]>([]);
-  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [documents, setDocuments] = useState<TeacherDocument[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_documents');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
+  const [classes, setClasses] = useState<ClassItem[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_classes');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
+  const [users, setUsers] = useState<UserProfile[]>(() => {
+    try {
+      const raw = localStorage.getItem('lopu_users');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [filterSubject, setFilterSubject] = useState<string>('');
@@ -2002,65 +2021,69 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
   };
 
   useEffect(() => {
-    async function load() {
-      const cls = await getClasses();
-      setClasses(cls);
-      
-      // Lấy dữ liệu tài liệu chuẩn từ Firestore (SSOT - Single Source of Truth)
-      const docs = await getTeacherDocuments();
-      setDocuments(docs);
-      
-      const uList = await getUsers();
-      setUsers(uList);
-
-      // 1. Nạp và duy trì Cây phân cấp từ LocalStorage hợp nhất với Firestore docs
-      const storedHierarchy = getStoredHierarchy();
-      const freshHierarchy = buildHierarchyFromDocuments(docs);
-      const baseHierarchy: HierarchyStore = { ...storedHierarchy, ...freshHierarchy };
-      saveStoredHierarchy(baseHierarchy);
-      setHierarchyStore(baseHierarchy);
-
-      // 2. Tự động quét và đồng bộ dữ liệu thực tế từ Google Drive ngay khi vừa vào app
+    let isMounted = true;
+    const timer = setTimeout(async () => {
       try {
-        const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']);
-        if (res.success && res.tree && res.tree.children) {
-          const newHierarchy: HierarchyStore = { ...baseHierarchy };
-          const blacklist = getDeletedFoldersBlacklist();
+        const cls = await getClasses();
+        if (isMounted) setClasses(cls);
+        
+        // Lấy dữ liệu tài liệu chuẩn từ Firestore (SSOT - Single Source of Truth)
+        const docs = await getTeacherDocuments();
+        if (isMounted) setDocuments(docs);
+        
+        const uList = await getUsers();
+        if (isMounted) setUsers(uList);
 
-          for (const docNode of res.tree.children) {
-            if (docNode.type === 'folder') {
-              const docTitle = docNode.name;
-              if (blacklist.includes(docTitle)) continue;
-              if (!newHierarchy[docTitle]) newHierarchy[docTitle] = {};
+        // 1. Nạp và duy trì Cây phân cấp từ LocalStorage hợp nhất với Firestore docs
+        const storedHierarchy = getStoredHierarchy();
+        const freshHierarchy = buildHierarchyFromDocuments(docs);
+        const baseHierarchy: HierarchyStore = { ...storedHierarchy, ...freshHierarchy };
+        saveStoredHierarchy(baseHierarchy);
+        if (isMounted) setHierarchyStore(baseHierarchy);
 
-              if (docNode.children) {
-                for (const chNode of docNode.children) {
-                  if (chNode.type === 'folder') {
-                    const chName = chNode.name;
-                    if (blacklist.includes(chName)) continue;
-                    if (!newHierarchy[docTitle][chName]) newHierarchy[docTitle][chName] = {};
+        // 2. Tự động quét và đồng bộ dữ liệu thực tế từ Google Drive nếu ĐÃ KẾT NỐI
+        const { isConnected } = getDriveConnectionState();
+        if (isConnected) {
+          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { maxDepth: 2 }).catch(() => null);
+          if (isMounted && res && res.success && res.tree && res.tree.children) {
+            const newHierarchy: HierarchyStore = { ...baseHierarchy };
+            const blacklist = getDeletedFoldersBlacklist();
 
-                    if (chNode.children) {
-                      for (const baiNode of chNode.children) {
-                        if (baiNode.type === 'folder') {
-                          const baiName = baiNode.name;
-                          if (blacklist.includes(baiName)) continue;
-                          if (!newHierarchy[docTitle][chName][baiName]) newHierarchy[docTitle][chName][baiName] = {};
+            for (const docNode of res.tree.children) {
+              if (docNode.type === 'folder') {
+                const docTitle = docNode.name;
+                if (blacklist.includes(docTitle)) continue;
+                if (!newHierarchy[docTitle]) newHierarchy[docTitle] = {};
 
-                          if (baiNode.children) {
-                            for (const vdNode of baiNode.children) {
-                              if (vdNode.type === 'folder') {
-                                const vdName = vdNode.name;
-                                if (blacklist.includes(vdName)) continue;
-                                if (!newHierarchy[docTitle][chName][baiName][vdName]) newHierarchy[docTitle][chName][baiName][vdName] = [];
+                if (docNode.children) {
+                  for (const chNode of docNode.children) {
+                    if (chNode.type === 'folder') {
+                      const chName = chNode.name;
+                      if (blacklist.includes(chName)) continue;
+                      if (!newHierarchy[docTitle][chName]) newHierarchy[docTitle][chName] = {};
 
-                                if (vdNode.children) {
-                                  for (const cdNode of vdNode.children) {
-                                    if (
-                                      cdNode.type === 'folder' || cdNode.type === 'file'
-                                    ) {
-                                      if (!blacklist.includes(cdNode.name) && !newHierarchy[docTitle][chName][baiName][vdName].includes(cdNode.name)) {
-                                        newHierarchy[docTitle][chName][baiName][vdName].push(cdNode.name);
+                      if (chNode.children) {
+                        for (const baiNode of chNode.children) {
+                          if (baiNode.type === 'folder') {
+                            const baiName = baiNode.name;
+                            if (blacklist.includes(baiName)) continue;
+                            if (!newHierarchy[docTitle][chName][baiName]) newHierarchy[docTitle][chName][baiName] = {};
+
+                            if (baiNode.children) {
+                              for (const vdNode of baiNode.children) {
+                                if (vdNode.type === 'folder') {
+                                  const vdName = vdNode.name;
+                                  if (blacklist.includes(vdName)) continue;
+                                  if (!newHierarchy[docTitle][chName][baiName][vdName]) newHierarchy[docTitle][chName][baiName][vdName] = [];
+
+                                  if (vdNode.children) {
+                                    for (const cdNode of vdNode.children) {
+                                      if (
+                                        cdNode.type === 'folder' || cdNode.type === 'file'
+                                      ) {
+                                        if (!blacklist.includes(cdNode.name) && !newHierarchy[docTitle][chName][baiName][vdName].includes(cdNode.name)) {
+                                          newHierarchy[docTitle][chName][baiName][vdName].push(cdNode.name);
+                                        }
                                       }
                                     }
                                   }
@@ -2075,15 +2098,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 }
               }
             }
+            saveStoredHierarchy(newHierarchy);
+            if (isMounted) setHierarchyStore(newHierarchy);
           }
-          saveStoredHierarchy(newHierarchy);
-          setHierarchyStore(newHierarchy);
         }
       } catch (err) {
-        console.warn('Auto drive sync on mount error:', err);
+        console.warn('Deferred auto drive sync on mount error:', err);
       }
-    }
-    load();
+    }, 50);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
   }, []);
 
   const handleSaveToDrive = async (docItem: TeacherDocument) => {
@@ -2320,7 +2347,22 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   const titleFilterOptions = (!filterSubject || !filterGrade)
     ? []
-    : allDirectDocFolders.filter(t => matchesSubjectAndGrade(t, filterSubject, filterGrade));
+    : (() => {
+        const matched = allDirectDocFolders.filter(t => {
+          if (matchesSubjectAndGrade(t, filterSubject, filterGrade)) return true;
+          const matchedDoc = documents.find(d => d.title === t);
+          if (matchedDoc) {
+            const sMatch = !matchedDoc.subject || matchesSubjectAndGrade(matchedDoc.subject, filterSubject);
+            const gMatch = !matchedDoc.grade || getGradeNumber(matchedDoc.grade) === getGradeNumber(filterGrade);
+            if (sMatch && gMatch) return true;
+          }
+          return false;
+        });
+        if (matched.length === 0) {
+          return [];
+        }
+        return matched;
+      })();
 
   // 2. CHƯƠNG: lồng theo TÀI LIỆU đã chọn (CHỈ lấy thư mục con của tài liệu đang chọn, KHÔNG lấy của tài liệu khác)
   const currentFilterDocObj = (filterTitle && hierarchyStore[filterTitle]) ? hierarchyStore[filterTitle] : {};
@@ -2534,17 +2576,18 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       const doSync = async () => {
         try {
-          // Đảm bảo thư mục myApp/LopU/TaiLieu sẵn sàng trên Drive
-          await createByPath(['myApp', 'LopU', 'TaiLieu']);
+          const { isConnected } = getDriveConnectionState();
 
-          // Quét đồng bộ nhanh với độ sâu maxDepth: 2, đồng thời tải Firestore docs
+          // Quét đồng bộ nhanh với độ sâu maxDepth: 2 nếu Drive kết nối, đồng thời tải Firestore docs
           const [firestoreDocs, driveRes] = await Promise.all([
             getTeacherDocuments().catch(() => []),
-            getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { maxDepth: 2 }).catch(err => ({
-              success: false,
-              tree: null,
-              message: String(err),
-            }))
+            isConnected
+              ? getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { maxDepth: 2 }).catch(err => ({
+                  success: false,
+                  tree: null,
+                  message: String(err),
+                }))
+              : Promise.resolve({ success: false, tree: null, message: 'Drive chưa kết nối' })
           ]);
 
           if (!isMounted) return;
@@ -2602,6 +2645,11 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   }
                 }
               }
+            }
+
+            // 3. Nếu chưa có thư mục con nào trong TaiLieu, giữ danh sách tên tài liệu rỗng
+            if (matchedCount === 0) {
+              // Tuyệt đối không gán mặc định
             }
 
             docFolderIdsRef.current = folderIds;
@@ -2816,7 +2864,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     prevFilterGradeRef.current = filterGrade;
 
     if (subjChanged || gradeChanged) {
-      if (titleFilterOptions.length === 1) {
+      if (titleFilterOptions.length > 0) {
         setFilterTitle(titleFilterOptions[0]);
       } else {
         setFilterTitle('');
@@ -2826,10 +2874,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       setFilterVanDe('');
       setFilterChuyenDe('');
     } else {
-      if (titleFilterOptions.length === 1) {
-        if (filterTitle !== titleFilterOptions[0]) setFilterTitle(titleFilterOptions[0]);
-      } else if (titleFilterOptions.length > 1) {
-        if (filterTitle && !titleFilterOptions.includes(filterTitle)) setFilterTitle('');
+      if (titleFilterOptions.length > 0) {
+        if (!filterTitle || !titleFilterOptions.includes(filterTitle)) {
+          setFilterTitle(titleFilterOptions[0]);
+        }
       } else {
         if (filterTitle) setFilterTitle('');
       }

@@ -97,20 +97,44 @@ export function matchesSubjectAndGrade(title: string, subject?: string, grade?: 
   const gNum = getGradeNumber(grade);
   if (!s && !gNum) return true;
 
-  const lowerTitle = title.toLowerCase().trim();
+  const lowerTitle = title.toLowerCase().replace(/[\u2010-\u2015]/g, '-').trim();
+  const unaccentedTitle = lowerTitle
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'd');
 
-  // Tạo danh sách các biến thể tên môn (ví dụ: Toán <-> Toán Học, Lý <-> Vật Lý, Tin <-> Tin Học, Anh <-> Tiếng Anh, Sinh <-> Sinh Học, Hóa <-> Hóa Học)
+  // Tạo danh sách các biến thể tên môn (bao gồm cả có dấu, không dấu và các phân môn đặc thù)
   const getSubjVariants = (rawSubj: string): string[] => {
     const raw = rawSubj.toLowerCase().trim();
     if (!raw) return [];
     const set = new Set<string>([raw]);
-    if (raw === 'toán' || raw === 'toán học') { set.add('toán'); set.add('toán học'); }
-    if (raw === 'lý' || raw === 'vật lý' || raw === 'vật lí') { set.add('lý'); set.add('vật lý'); set.add('vật lí'); }
-    if (raw === 'hóa' || raw === 'hóa học') { set.add('hóa'); set.add('hóa học'); }
-    if (raw === 'sinh' || raw === 'sinh học') { set.add('sinh'); set.add('sinh học'); }
-    if (raw === 'tin' || raw === 'tin học') { set.add('tin'); set.add('tin học'); }
-    if (raw === 'anh' || raw === 'tiếng anh') { set.add('anh'); set.add('tiếng anh'); }
-    if (raw === 'văn' || raw === 'ngữ văn') { set.add('văn'); set.add('ngữ văn'); }
+    const rawUnaccent = raw.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+    set.add(rawUnaccent);
+
+    if (raw.includes('toán') || rawUnaccent.includes('toan')) {
+      set.add('toán'); set.add('toán học'); set.add('toan'); set.add('toan hoc');
+      set.add('đại số'); set.add('dai so'); set.add('hình học'); set.add('hinh hoc');
+      set.add('giải tích'); set.add('giai tich');
+    }
+    if (raw.includes('lý') || raw.includes('lí') || rawUnaccent.includes('ly') || rawUnaccent.includes('li')) {
+      set.add('lý'); set.add('vật lý'); set.add('vật lí'); set.add('ly'); set.add('vat ly'); set.add('vat li');
+    }
+    if (raw.includes('hóa') || rawUnaccent.includes('hoa')) {
+      set.add('hóa'); set.add('hóa học'); set.add('hoa'); set.add('hoa hoc');
+    }
+    if (raw.includes('sinh') || rawUnaccent.includes('sinh')) {
+      set.add('sinh'); set.add('sinh học'); set.add('sinh hoc');
+    }
+    if (raw.includes('tin') || rawUnaccent.includes('tin')) {
+      set.add('tin'); set.add('tin học'); set.add('tin hoc');
+    }
+    if (raw.includes('anh') || rawUnaccent.includes('anh')) {
+      set.add('anh'); set.add('tiếng anh'); set.add('tieng anh'); set.add('english');
+    }
+    if (raw.includes('văn') || rawUnaccent.includes('van')) {
+      set.add('văn'); set.add('ngữ văn'); set.add('van'); set.add('ngu van');
+    }
     return Array.from(set);
   };
 
@@ -118,11 +142,17 @@ export function matchesSubjectAndGrade(title: string, subject?: string, grade?: 
 
   if (s && gNum) {
     for (const v of variants) {
+      const vUnaccent = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
       if (
         lowerTitle.startsWith(`${v} ${gNum} -`) ||
         lowerTitle.startsWith(`${v} ${gNum}-`) ||
         lowerTitle.startsWith(`${v}${gNum} -`) ||
-        (lowerTitle.includes(v) && lowerTitle.includes(gNum))
+        lowerTitle.startsWith(`${v} ${gNum}:`) ||
+        unaccentedTitle.startsWith(`${vUnaccent} ${gNum} -`) ||
+        unaccentedTitle.startsWith(`${vUnaccent} ${gNum}-`) ||
+        unaccentedTitle.startsWith(`${vUnaccent}${gNum} -`) ||
+        (lowerTitle.includes(v) && lowerTitle.includes(gNum)) ||
+        (unaccentedTitle.includes(vUnaccent) && unaccentedTitle.includes(gNum))
       ) {
         return true;
       }
@@ -132,14 +162,15 @@ export function matchesSubjectAndGrade(title: string, subject?: string, grade?: 
 
   if (s) {
     for (const v of variants) {
-      if (lowerTitle.includes(v)) return true;
+      const vUnaccent = v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd');
+      if (lowerTitle.includes(v) || unaccentedTitle.includes(vUnaccent)) return true;
     }
     return false;
   }
 
   if (gNum) {
     const reg = new RegExp(`(^|\\s|-)(${gNum}|khối\\s*${gNum})(\\s|-|$)`, 'i');
-    return reg.test(lowerTitle) || lowerTitle.includes(` ${gNum} `) || lowerTitle.includes(` ${gNum}-`) || lowerTitle.includes(` ${gNum} -`);
+    return reg.test(lowerTitle) || lowerTitle.includes(` ${gNum} `) || lowerTitle.includes(` ${gNum}-`) || lowerTitle.includes(` ${gNum} -`) || unaccentedTitle.includes(gNum);
   }
 
   return true;
@@ -237,6 +268,16 @@ export function sanitizeHierarchyStore(rawStore: any, validDocs?: TeacherDocumen
   for (const [title, chuongs] of Object.entries(rawStore)) {
     const cleanTitle = title.trim();
     if (!cleanTitle || deletedList.includes(cleanTitle)) continue;
+
+    const lower = cleanTitle.toLowerCase();
+    if (
+      lower.includes('tài liệu cơ bản') ||
+      lower.includes('tai lieu co ban') ||
+      lower.includes('tài liệu mới') ||
+      lower.includes('tai lieu moi')
+    ) {
+      continue;
+    }
 
     // Nếu có danh sách validDocs và title không khớp doc nào và không có chuong con
     if (validDocs && validDocs.length > 0) {

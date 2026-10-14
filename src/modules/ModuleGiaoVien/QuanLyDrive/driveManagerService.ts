@@ -8,6 +8,7 @@
  */
 
 import { getDriveConnectionState, connectGoogleDrive } from '../../ConnectData/ConnectDrive/driveService';
+export { getDriveConnectionState, connectGoogleDrive };
 import { createDriveFolderIfNotExists, ensureValidDriveToken } from '../../ConnectData/ConnectDrive/googleDriveService';
 
 export interface PathToIdResult {
@@ -817,16 +818,8 @@ export async function getNestedDriveTree(
     rootPath = pathArray.join('/');
     const targetName = pathArray[pathArray.length - 1];
 
-    // Tự động đảm bảo thư mục duy nhất myApp/LopU/TaiLieu được khởi tạo trên Google Drive
+    // Kiểm tra cây thư mục theo đường dẫn
     if (pathArray.length > 0) {
-      if (pathArray.join('/').includes('TaiLieu') || pathArray[0] === 'myApp') {
-        try {
-          await createDriveFolderIfNotExists(['myApp', 'LopU', 'TaiLieu']);
-        } catch (err) {
-          console.warn('Lỗi khi tự động khởi tạo thư mục mặc định myApp/LopU/TaiLieu:', err);
-        }
-      }
-
       // 0. TẬN DỤNG FOLDER ID ĐÃ LƯU TẠI MÁY ĐỂ ĐỒNG BỘ SIÊU TỐC
       const cachedRootId = getCachedDriveFolderId(rootPath);
       if (cachedRootId) {
@@ -835,10 +828,14 @@ export async function getNestedDriveTree(
 
       // 1. Giải mã bằng path chuẩn từ root nếu chưa có trong bộ nhớ máy
       if (rootFolderIdsSet.size === 0) {
-        const check = await resolvePathToDriveId(pathArray, token);
-        if (check.found && check.id) {
-          rootFolderIdsSet.add(check.id);
-          setCachedDriveFolderId(rootPath, check.id);
+        try {
+          const check = await resolvePathToDriveId(pathArray, token);
+          if (check.found && check.id) {
+            rootFolderIdsSet.add(check.id);
+            setCachedDriveFolderId(rootPath, check.id);
+          }
+        } catch (resolveErr) {
+          console.warn('Lỗi phân giải đường dẫn cây Drive:', resolveErr);
         }
       }
     }

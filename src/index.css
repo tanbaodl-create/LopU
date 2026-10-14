@@ -43,3 +43,39 @@
 .animate-marquee:hover {
   animation-play-state: paused;
 }
+
+/* Typography styles for Word Editor (Normal 14px, H1 22px, H2 20px, H3 18px, H4 16px) */
+.prose h1 {
+  font-size: 22px !important;
+  font-weight: 700;
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+  color: #0f172a;
+}
+.prose h2 {
+  font-size: 20px !important;
+  font-weight: 700;
+  margin-top: 0.7em;
+  margin-bottom: 0.35em;
+  color: #1e293b;
+}
+.prose h3 {
+  font-size: 18px !important;
+  font-weight: 600;
+  margin-top: 0.6em;
+  margin-bottom: 0.3em;
+  color: #334155;
+}
+.prose h4 {
+  font-size: 16px !important;
+  font-weight: 600;
+  margin-top: 0.5em;
+  margin-bottom: 0.25em;
+  color: #475569;
+}
+.prose p {
+  font-size: 14px;
+  margin-top: 0.4em;
+  margin-bottom: 0.4em;
+}
+

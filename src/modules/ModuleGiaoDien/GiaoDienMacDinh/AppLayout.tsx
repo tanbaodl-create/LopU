@@ -24,12 +24,18 @@ interface AppLayoutProps {
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
-  initialView = 'learning-classes',
+  initialView = 'teaching-documents',
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ViewId>(initialView);
   const [currentRole, setCurrentRole] = useState<UserRole>('student');
   const [currentUserProfile, setCurrentUserProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('lopu_active_view', activeView);
+    } catch {}
+  }, [activeView]);
 
   // Real Google Auth states
   const [firebaseUser, setFirebaseUser] = useState<any>(null);

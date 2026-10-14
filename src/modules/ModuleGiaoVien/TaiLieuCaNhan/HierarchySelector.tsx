@@ -18,6 +18,7 @@ import {
 } from './TaiLieuCaNhanView';
 import {
   createDriveFolderIfNotExists,
+  subscribeDriveStatus,
   getDriveConnectionState,
   connectGoogleDrive,
   scanAndSyncDriveHierarchy,
@@ -86,15 +87,23 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   // Tự động đồng bộ cây thư mục thực tế từ Google Drive khi nạp module
   useEffect(() => {
     async function syncFromDrive() {
-      const conn = getDriveConnectionState();
-      if (conn.isConnected) {
+      const driveStore = await scanAndSyncDriveHierarchy();
+      if (driveStore) {
+        setStore(driveStore);
+      }
+    }
+    syncFromDrive();
+
+    const unsubscribe = subscribeDriveStatus(async (connected) => {
+      if (connected) {
         const driveStore = await scanAndSyncDriveHierarchy();
         if (driveStore) {
           setStore(driveStore);
         }
       }
-    }
-    syncFromDrive();
+    });
+
+    return () => unsubscribe();
   }, []);
 
   const handleManualSyncFromDrive = async () => {
@@ -134,7 +143,13 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   // 1. Danh sách TÀI LIỆU (thư mục trực tiếp trong thư mục gốc) - Chỉ đồng bộ khi cả Môn học và Khối lớp đều khác rỗng
   const allDocTitles = Object.keys(store).filter(t => !deletedList.includes(t));
   const docTitles = (subject && subject.trim() !== '' && grade && grade.trim() !== '')
-    ? allDocTitles.filter(t => matchesSubjectAndGrade(t, subject, grade))
+    ? (() => {
+        const matched = allDocTitles.filter(t => matchesSubjectAndGrade(t, subject, grade));
+        if (matched.length === 0) {
+          return [];
+        }
+        return matched;
+      })()
     : [];
 
   // 2. Danh sách Cấp 1: Chương (lồng theo TÀI LIỆU) - Chỉ lấy thư mục con của tài liệu đang chọn
@@ -757,8 +772,20 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
               </div>
 
               {options.length === 0 ? (
-                <div className="px-3 py-2 text-[11px] text-slate-400 italic text-center">
-                  Chưa có tùy chọn nào. Hãy bấm "Thêm" bên dưới!
+                <div className="px-3 py-2 text-[11px] text-slate-400 italic text-center space-y-1.5">
+                  <div>Chưa tìm thấy thư mục nào.</div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleManualSyncFromDrive();
+                    }}
+                    className="px-2.5 py-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 cursor-pointer inline-flex items-center gap-1 shadow-2xs"
+                    title="Bấm để quét lại các thư mục thực tế từ Google Drive"
+                  >
+                    <RotateCcw className="w-3 h-3 text-indigo-600" />
+                    <span>Quét lại Drive</span>
+                  </button>
                 </div>
               ) : (
                 options.map((opt) => (
