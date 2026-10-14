@@ -37,6 +37,10 @@ import {
   Trash2,
   Loader2,
   RefreshCw,
+  Undo,
+  Redo,
+  Baseline,
+  Highlighter,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { TeacherDocument, ClassItem, UserRole } from '../../../services/storageTypes';
@@ -44,7 +48,9 @@ import { getClasses, getTeacherDocuments } from '../../ConnectData/ConnectFirest
 import { HierarchySelector } from '../TaiLieuCaNhan/HierarchySelector';
 import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
-import { DongBoDriveButton, useDongBoDrive, loadChuyenDeContentFromDrive, removeVietnameseTones } from './DongBoDrive';
+import { DongBoDriveButton, useDongBoDrive, loadChuyenDeContentFromDrive, removeVietnameseTones, ensureValidDriveToken } from './DongBoDrive';
+import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker';
+import { WordStyleMenu } from './WordStyleMenu';
 import { renderLatexInHtml, autoRenderLatexInDom } from './latexUtils';
 
 export interface SoanThaoViewProps {
@@ -253,11 +259,20 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
 
-  // Editor styling states: mặc định 14px cho nội dung (Normal: 14px, H1: 22px, H2: 20px, H3: 18px, H4: 16px)
+  // Editor styling states: mặc định nội dung 14px; H1 22px; H2 20px; H3 18px; H4 16px
   const editorRef = useRef<HTMLDivElement>(null);
   const [fontSize, setFontSize] = useState<string>('14px');
   const [textColor, setTextColor] = useState<string>('#0f172a');
   const [highlightColor, setHighlightColor] = useState<string>('transparent');
+  const [selectedStyle, setSelectedStyle] = useState<string>('p');
+  const [isBold, setIsBold] = useState<boolean>(false);
+  const [isItalic, setIsItalic] = useState<boolean>(false);
+  const [isUnderline, setIsUnderline] = useState<boolean>(false);
+  const [currentAlignment, setCurrentAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
+  const [openAlignMenu, setOpenAlignMenu] = useState<boolean>(false);
+  const [openTextColorMenu, setOpenTextColorMenu] = useState<boolean>(false);
+  const [openHighlightColorMenu, setOpenHighlightColorMenu] = useState<boolean>(false);
+  const [openStyleMenu, setOpenStyleMenu] = useState<boolean>(false);
 
   // Module con DongBoDrive: Quản lý tự động đồng bộ & lưu đơn lẻ lên Drive theo phân cấp chuẩn
   const {
@@ -308,9 +323,32 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
 
   // Trạng thái tự động nạp dữ liệu từ Google Drive vào cửa sổ soạn thảo Word
   const [isLoadingFromDrive, setIsLoadingFromDrive] = useState<boolean>(false);
+  const [isReauthenticating, setIsReauthenticating] = useState<boolean>(false);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState<boolean>(false);
   const [driveLoadStatus, setDriveLoadStatus] = useState<string>('');
   const activeLoadIdRef = useRef<number>(0);
   const lastLoadedKeyRef = useRef<string>('');
+
+  // Lắng nghe sự kiện xác thực lại nền Google Drive để đồng bộ giao diện khóa/mở khóa
+  useEffect(() => {
+    const handleAuthChange = (e: any) => {
+      setIsReauthenticating(Boolean(e.detail?.isAuthenticating));
+    };
+    const handleTokenExpired = () => {
+      if (isTeacherOrHigher) {
+        setIsReauthenticating(true);
+        ensureValidDriveToken(undefined, true).finally(() => {
+          setIsReauthenticating(false);
+        });
+      }
+    };
+    window.addEventListener('lopu_drive_auth_change', handleAuthChange);
+    window.addEventListener('lopu_drive_token_expired', handleTokenExpired);
+    return () => {
+      window.removeEventListener('lopu_drive_auth_change', handleAuthChange);
+      window.removeEventListener('lopu_drive_token_expired', handleTokenExpired);
+    };
+  }, [isTeacherOrHigher]);
 
   // Hàm tự động nạp dữ liệu từ Google Drive cho chuyên đề đang chọn
   const handleLoadFromDrive = useCallback(async (force: boolean = false) => {
@@ -318,6 +356,58 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     const currentKey = `${title}__${chuong}__${bai}__${vanDe}__${chuyenDe}__${tienTrinh}__${selectedKienThucName}__${selectedExerciseName}`;
     if (!force && lastLoadedKeyRef.current === currentKey) return;
 
+    const rawCd = chuyenDe.trim();
+    const cleanCd = rawCd.replace(/^(?:Chuyên\s*đề|Chuyen\s*de)\s*:?\s*/i, '').trim();
+    const cachedContent = (selectedKienThucName && localStorage.getItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${rawCd}`))
+      || (selectedKienThucName && localStorage.getItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${cleanCd}`))
+      || localStorage.getItem(`lopu_kienthuc_${rawCd}`)
+      || localStorage.getItem(`lopu_kienthuc_${cleanCd}`)
+      || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${rawCd}`)
+      || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${cleanCd}`)
+      || localStorage.getItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html');
+
+    // 1. VỚI HỌC SINH: Không có soạn bài nên xem ngay từ cache (0ms delay) để học ngay,
+    // không khóa cửa sổ Word và cập nhật nền vào sau!
+    if (!isTeacherOrHigher && cachedContent && cachedContent.trim()) {
+      if (editorRef.current) {
+        editorRef.current.innerHTML = renderLatexInHtml(cachedContent);
+      }
+      setIsLoadingFromDrive(false);
+      lastLoadedKeyRef.current = currentKey;
+
+      setIsBackgroundSyncing(true);
+      (async () => {
+        try {
+          const res = await loadChuyenDeContentFromDrive({
+            title,
+            subject,
+            grade,
+            chuong,
+            bai,
+            vanDe,
+            chuyenDe,
+            tienTrinh,
+            selectedKienThucName: selectedKienThucName || customKienThucList[0] || 'Lý thuyết trọng tâm',
+            selectedExerciseName: selectedExerciseName || (tienTrinh === 'Luyện tập' ? (customLuyenTapList[0] || 'Bài luyện tập 1') : (customKtdgList[0] || 'Đề kiểm tra 15 phút')),
+            isStudent: true,
+            allowInteractivePopup: false,
+          });
+          if (res.loadedFile && res.contentHtml && res.contentHtml.trim() && res.contentHtml !== cachedContent) {
+            if (editorRef.current) {
+              editorRef.current.innerHTML = renderLatexInHtml(res.contentHtml);
+            }
+          }
+        } catch (bgErr) {
+          console.warn('Lỗi cập nhật nền cho học sinh:', bgErr);
+        } finally {
+          setIsBackgroundSyncing(false);
+        }
+      })();
+      return;
+    }
+
+    // 2. VỚI GIÁO VIÊN: BẮT BUỘC ĐẢM BẢO CẬP NHẬT MỚI NHẤT MỚI ĐƯỢC SOẠN BÀI
+    // Khi Xác thực lại nền chưa xong thì vẫn báo "Đang đồng bộ" và KHÓA cửa sổ Word!
     const loadId = ++activeLoadIdRef.current;
     setIsLoadingFromDrive(true);
     setDriveLoadStatus(`Đang kết nối Google Drive và tải nội dung cho "${chuyenDe}"...`);
@@ -345,6 +435,8 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
         selectedKienThucName: selectedKienThucName || customKienThucList[0] || 'Lý thuyết trọng tâm',
         selectedExerciseName: selectedExerciseName || (tienTrinh === 'Luyện tập' ? (customLuyenTapList[0] || 'Bài luyện tập 1') : (customKtdgList[0] || 'Đề kiểm tra 15 phút')),
         firstDropdownItemName: firstDropdownItem,
+        isStudent: !isTeacherOrHigher,
+        allowInteractivePopup: isTeacherOrHigher,
       });
 
       // Nếu đã có thao tác chọn mới hơn thì dừng
@@ -492,11 +584,245 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     saveCurrentSelection();
   };
 
+  // Định nghĩa chuẩn các Style văn bản theo yêu cầu Word
+  const WORD_STYLE_PRESETS: Record<string, {
+    tag: string;
+    fontSize: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    textColor?: string;
+    highlightColor?: string;
+    alignment?: 'left' | 'center' | 'right' | 'justify';
+  }> = {
+    p: {
+      tag: 'P',
+      fontSize: '14px',
+      bold: false,
+      italic: false,
+      underline: false,
+      textColor: '#0f172a',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h1: {
+      tag: 'H1',
+      fontSize: '22px',
+      bold: true,
+      italic: false,
+      underline: false,
+      textColor: '#1e40af',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h2: {
+      tag: 'H2',
+      fontSize: '20px',
+      bold: true,
+      italic: false,
+      underline: false,
+      textColor: '#1d4ed8',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h3: {
+      tag: 'H3',
+      fontSize: '18px',
+      bold: true,
+      italic: true,
+      underline: false,
+      textColor: '#047857',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h4: {
+      tag: 'H4',
+      fontSize: '16px',
+      bold: true,
+      italic: true,
+      underline: true,
+      textColor: '#b45309',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    title: {
+      tag: 'H1',
+      fontSize: '24px',
+      bold: true,
+      italic: false,
+      underline: false,
+      textColor: '#1e1b4b',
+      highlightColor: 'transparent',
+      alignment: 'center',
+    },
+    subtitle: {
+      tag: 'P',
+      fontSize: '16px',
+      bold: false,
+      italic: true,
+      underline: false,
+      textColor: '#475569',
+      highlightColor: 'transparent',
+      alignment: 'center',
+    },
+    highlight: {
+      tag: 'P',
+      fontSize: '14px',
+      bold: true,
+      italic: false,
+      underline: true,
+      textColor: '#9a3412',
+      highlightColor: '#fef08a',
+      alignment: 'left',
+    },
+    quote: {
+      tag: 'P',
+      fontSize: '14px',
+      bold: false,
+      italic: true,
+      underline: false,
+      textColor: '#0369a1',
+      highlightColor: '#e0f2fe',
+      alignment: 'justify',
+    },
+  };
+
+  const updateToolbarFormattingStates = () => {
+    try {
+      setIsBold(document.queryCommandState('bold'));
+      setIsItalic(document.queryCommandState('italic'));
+      setIsUnderline(document.queryCommandState('underline'));
+      if (document.queryCommandState('justifyCenter')) setCurrentAlignment('center');
+      else if (document.queryCommandState('justifyRight')) setCurrentAlignment('right');
+      else if (document.queryCommandState('justifyFull')) setCurrentAlignment('justify');
+      else if (document.queryCommandState('justifyLeft')) setCurrentAlignment('left');
+    } catch {}
+  };
+
   const execCommand = (command: string, value: string = '') => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
       editorRef.current.focus();
     }
+    updateToolbarFormattingStates();
+  };
+
+  // Áp dụng cỡ chữ trực tiếp vào vùng bôi đen hoặc thẻ khối hiện tại
+  const applyFontSizeToSelectionOrBlock = (size: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    if (!sel.isCollapsed) {
+      document.execCommand('styleWithCSS', false, 'true');
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontSize = size;
+      try {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        sel.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        sel.addRange(newRange);
+      } catch {
+        document.execCommand('fontSize', false, '4');
+      }
+    } else {
+      let node: Node | null = sel.anchorNode;
+      while (node && node !== editorRef.current) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          if (['P', 'H1', 'H2', 'H3', 'H4', 'DIV', 'LI', 'SPAN'].includes(el.tagName)) {
+            el.style.fontSize = size;
+            break;
+          }
+        }
+        node = node.parentNode;
+      }
+    }
+  };
+
+  const handleAlign = (type: 'left' | 'center' | 'right' | 'justify') => {
+    setCurrentAlignment(type);
+    if (type === 'left') execCommand('justifyLeft');
+    else if (type === 'center') execCommand('justifyCenter');
+    else if (type === 'right') execCommand('justifyRight');
+    else if (type === 'justify') execCommand('justifyFull');
+    setOpenAlignMenu(false);
+  };
+
+  // Hàm điều khiển cỡ chữ từ Dropdown cỡ chữ
+  const handleFontSizeChange = (newSize: string) => {
+    setFontSize(newSize);
+    applyFontSizeToSelectionOrBlock(newSize);
+  };
+
+  // Hàm chọn Style: tác động lên các chức năng tương ứng (cỡ chữ, in đậm B, in nghiêng I, gạch chân U, màu chữ, màu nền, canh lề)
+  const handleSelectStyle = (styleKey: string) => {
+    setSelectedStyle(styleKey);
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const preset = WORD_STYLE_PRESETS[styleKey] || WORD_STYLE_PRESETS.p;
+
+    // 1. Cỡ chữ: tác động lên chức năng cỡ chữ để điều khiển
+    setFontSize(preset.fontSize);
+    applyFontSizeToSelectionOrBlock(preset.fontSize);
+
+    // 2. Chuyển khối formatBlock (H1, H2, H3, H4, P)
+    document.execCommand('formatBlock', false, preset.tag);
+
+    // 3. Quy định In đậm (B): kích hoạt hoặc hủy kích hoạt biểu tượng chữ B
+    setIsBold(preset.bold);
+    const curBold = document.queryCommandState('bold');
+    if (preset.bold && !curBold) {
+      document.execCommand('bold', false);
+    } else if (!preset.bold && curBold) {
+      document.execCommand('bold', false);
+    }
+
+    // 4. Quy định In nghiêng (I): kích hoạt hoặc hủy kích hoạt biểu tượng chữ I
+    setIsItalic(preset.italic);
+    const curItalic = document.queryCommandState('italic');
+    if (preset.italic && !curItalic) {
+      document.execCommand('italic', false);
+    } else if (!preset.italic && curItalic) {
+      document.execCommand('italic', false);
+    }
+
+    // 5. Quy định Gạch chân (U): kích hoạt hoặc hủy kích hoạt biểu tượng chữ U
+    setIsUnderline(preset.underline);
+    const curUnderline = document.queryCommandState('underline');
+    if (preset.underline && !curUnderline) {
+      document.execCommand('underline', false);
+    } else if (!preset.underline && curUnderline) {
+      document.execCommand('underline', false);
+    }
+
+    // 6. Quy định Màu văn bản: chọn vào màu văn bản tương ứng
+    if (preset.textColor) {
+      setTextColor(preset.textColor);
+      document.execCommand('foreColor', false, preset.textColor);
+    }
+
+    // 7. Quy định Màu nền: chọn vào màu nền tương ứng
+    if (preset.highlightColor) {
+      setHighlightColor(preset.highlightColor);
+      if (preset.highlightColor === 'transparent') {
+        document.execCommand('hiliteColor', false, 'transparent');
+      } else {
+        document.execCommand('hiliteColor', false, preset.highlightColor);
+      }
+    }
+
+    // 8. Quy định Canh lề: chọn canh lề tương ứng trong nút canh lề
+    if (preset.alignment) {
+      handleAlign(preset.alignment);
+    }
+
+    setTimeout(updateToolbarFormattingStates, 50);
   };
 
   const handleInsertTable = () => {
@@ -1463,184 +1789,189 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
             <div className="space-y-5">
               {/* Interactive Word Toolbar */}
               <div className={`bg-slate-100/95 backdrop-blur-xs p-2.5 rounded-t-2xl border border-slate-300 border-b-0 flex flex-wrap items-center gap-1.5 shadow-sm sticky top-0 z-30 transition-opacity ${isLoadingFromDrive ? 'opacity-60 pointer-events-none' : ''}`}>
-                {/* NÚT SOẠN BÀI ▾ (Chỉ dành cho tài khoản Giáo viên trở lên - Giải pháp 1: Tự động đóng khung khi bôi đen hoặc chèn mới) */}
-                {isTeacherOrHigher && (
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => setOpenSoanBaiMenu(!openSoanBaiMenu)}
-                      className={`px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 border transition-colors cursor-pointer shadow-2xs ${
-                        openSoanBaiMenu
-                          ? 'bg-indigo-700 text-white border-indigo-800'
-                          : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
-                      }`}
-                      title="Giải pháp 1: Định dạng vùng bôi đen thành Khái niệm/Định lý/Trắc nghiệm hoặc chèn mới mẫu cấu trúc"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Soạn bài</span>
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    </button>
-
-                    {openSoanBaiMenu && (
-                      <div className="absolute z-50 left-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-2xl w-68 py-2 text-xs divide-y divide-slate-100 animate-scale-up">
-                        {/* Gợi ý Giải pháp 1 thông minh */}
-                        <div className="px-3.5 py-1.5 bg-indigo-50/80 text-[10px] text-indigo-800 font-semibold flex items-center gap-1">
-                          <span>✨</span>
-                          <span>Bôi đen chữ để đóng khung hoặc chèn mẫu mới</span>
-                        </div>
-
-                        {/* Giải pháp 3: Tùy chọn vị trí chèn (Tại con trỏ / Xuống cuối bài) */}
-                        <div className="px-3 py-1.5 bg-slate-50 flex items-center justify-between text-[11px] gap-2">
-                          <span className="text-slate-600 font-bold shrink-0">Vị trí chèn:</span>
-                          <div className="flex items-center gap-1 bg-white p-0.5 rounded-lg border border-slate-200 shadow-2xs">
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => setInsertPositionMode('cursor')}
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                                insertPositionMode === 'cursor'
-                                  ? 'bg-indigo-600 text-white shadow-xs'
-                                  : 'text-slate-600 hover:bg-slate-100'
-                              }`}
-                              title="Chèn tại vị trí con trỏ (tự động thoát ra nếu đang trong khối)"
-                            >
-                              📍 Con trỏ
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => setInsertPositionMode('bottom')}
-                              className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
-                                insertPositionMode === 'bottom'
-                                  ? 'bg-indigo-600 text-white shadow-xs'
-                                  : 'text-slate-600 hover:bg-slate-100'
-                              }`}
-                              title="Giải pháp 3: Luôn chèn khối mới xuống cuối văn bản độc lập"
-                            >
-                              ⬇️ Cuối bài
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* 1. NHÓM LÝ THUYẾT (Chỉ có khi tiến trình là Kiến thức) */}
-                        {tienTrinh === 'Kiến thức' && (
-                          <div className="py-1">
-                            <div className="px-3.5 py-1 text-[10px] font-black uppercase text-indigo-800 tracking-wider bg-indigo-50/60 select-none">
-                              ── LÝ THUYẾT ──
-                            </div>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleInsertLessonTemplate('khaiNiem')}
-                              className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <span>+</span> <span>Khái niệm / Định nghĩa</span>
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleInsertLessonTemplate('dinhLy')}
-                              className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <span>+</span> <span>Định lý / Tính chất</span>
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleInsertLessonTemplate('heQua')}
-                              className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <span>+</span> <span>Hệ quả / Chú ý</span>
-                            </button>
-                            <button
-                              type="button"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => handleInsertLessonTemplate('phuongPhap')}
-                              className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <span>+</span> <span>Phương pháp giải (Dạng toán)</span>
-                            </button>
-                          </div>
-                        )}
-
-                        {/* 2. NHÓM VÍ DỤ & BÀI TẬP (Có trong tất cả tiến trình: Kiến thức, Luyện tập, Kiểm tra) */}
-                        <div className="py-1">
-                          <div className="px-3.5 py-1 text-[10px] font-black uppercase text-amber-800 tracking-wider bg-amber-50/60 select-none">
-                            ── VÍ DỤ & BÀI TẬP ──
-                          </div>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('viDu')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Ví dụ minh họa</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('tuLuan')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Bài tập Tự luận</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('tracNghiem4')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Trắc nghiệm 4 lựa chọn (A, B, C, D)</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('dungSai')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Trắc nghiệm Đúng / Sai</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('traLoiNgan')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Trắc nghiệm Trả lời ngắn</span>
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Undo / Redo */}
+                <button onClick={() => execCommand('undo')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
+                  <Undo className="w-4 h-4" />
+                </button>
+                <button onClick={() => execCommand('redo')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
+                  <Redo className="w-4 h-4" />
+                </button>
 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-                <button onClick={() => execCommand('bold')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Chữ Đậm">
+                {/* Cỡ chữ (Mặc định 14px - điều khiển trực tiếp) */}
+                <select
+                  value={fontSize}
+                  onChange={(e) => handleFontSizeChange(e.target.value)}
+                  className="text-[11px] font-bold bg-white border border-slate-300 rounded px-1.5 py-0.5 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500"
+                  title="Chọn cỡ chữ (Mặc định 14px)"
+                >
+                  <option value="12px">12px</option>
+                  <option value="14px">14px (Mặc định)</option>
+                  <option value="16px">16px</option>
+                  <option value="18px">18px</option>
+                  <option value="20px">20px</option>
+                  <option value="22px">22px</option>
+                  <option value="24px">24px</option>
+                  <option value="28px">28px</option>
+                </select>
+
+                {/* 1. Đậm, Nghiêng, Gạch chân (kích hoạt biểu tượng chữ B, I, U tương ứng khi bật) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    execCommand('bold');
+                    setIsBold((prev) => !prev);
+                  }}
+                  className={`p-1.5 rounded transition-all ${
+                    isBold
+                      ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                      : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                  }`}
+                  title="Chữ Đậm (Ctrl+B)"
+                >
                   <Bold className="w-4 h-4" />
                 </button>
-                <button onClick={() => execCommand('italic')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Chữ Nghiêng">
+                <button
+                  type="button"
+                  onClick={() => {
+                    execCommand('italic');
+                    setIsItalic((prev) => !prev);
+                  }}
+                  className={`p-1.5 rounded transition-all ${
+                    isItalic
+                      ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                      : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                  }`}
+                  title="Chữ Nghiêng (Ctrl+I)"
+                >
                   <Italic className="w-4 h-4" />
                 </button>
-                <button onClick={() => execCommand('underline')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Gạch Chân">
+                <button
+                  type="button"
+                  onClick={() => {
+                    execCommand('underline');
+                    setIsUnderline((prev) => !prev);
+                  }}
+                  className={`p-1.5 rounded transition-all ${
+                    isUnderline
+                      ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                      : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                  }`}
+                  title="Gạch Chân (Ctrl+U)"
+                >
                   <Underline className="w-4 h-4" />
                 </button>
+
+                {/* Chọn màu chữ chuẩn mực Microsoft Word */}
+                <WordTextColorPicker
+                  color={textColor}
+                  onSelectColor={(val) => {
+                    setTextColor(val);
+                    execCommand('foreColor', val);
+                  }}
+                  isOpen={openTextColorMenu}
+                  onToggle={() => {
+                    setOpenTextColorMenu(!openTextColorMenu);
+                    setOpenHighlightColorMenu(false);
+                    setOpenAlignMenu(false);
+                    setOpenStyleMenu(false);
+                  }}
+                  onClose={() => setOpenTextColorMenu(false)}
+                />
+
+                {/* Chọn màu nền chữ / Highlight chuẩn mực Microsoft Word */}
+                <WordHighlightColorPicker
+                  color={highlightColor}
+                  onSelectColor={(val) => {
+                    setHighlightColor(val);
+                    execCommand('hiliteColor', val);
+                  }}
+                  isOpen={openHighlightColorMenu}
+                  onToggle={() => {
+                    setOpenHighlightColorMenu(!openHighlightColorMenu);
+                    setOpenTextColorMenu(false);
+                    setOpenAlignMenu(false);
+                    setOpenStyleMenu(false);
+                  }}
+                  onClose={() => setOpenHighlightColorMenu(false)}
+                />
                 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-                <button onClick={() => execCommand('justifyLeft')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Căn Trái">
-                  <AlignLeft className="w-4 h-4" />
-                </button>
-                <button onClick={() => execCommand('justifyCenter')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Căn Giữa">
-                  <AlignCenter className="w-4 h-4" />
-                </button>
-                <button onClick={() => execCommand('justifyRight')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Căn Phải">
-                  <AlignRight className="w-4 h-4" />
-                </button>
-                <button onClick={() => execCommand('justifyFull')} className="p-1.5 rounded hover:bg-slate-200 text-slate-700 transition-colors" title="Căn Đều">
-                  <AlignJustify className="w-4 h-4" />
-                </button>
+                {/* 3. MENU CANH LỀ (XỔ XUỐNG): Chọn canh lề tương ứng trong nút canh lề */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOpenAlignMenu(!openAlignMenu);
+                      setOpenTextColorMenu(false);
+                      setOpenHighlightColorMenu(false);
+                      setOpenStyleMenu(false);
+                    }}
+                    className={`px-2 py-1 rounded text-xs font-bold flex items-center gap-1 border transition-colors cursor-pointer ${
+                      openAlignMenu ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
+                    }`}
+                    title="Canh lề văn bản (Căn trái, Căn giữa, Căn phải, Căn đều)"
+                  >
+                    {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5 text-indigo-600" />}
+                    {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5 text-indigo-600" />}
+                    {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5 text-indigo-600" />}
+                    {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5 text-indigo-600" />}
+                    <span className="hidden sm:inline font-semibold">
+                      {currentAlignment === 'left' && 'Căn trái'}
+                      {currentAlignment === 'center' && 'Căn giữa'}
+                      {currentAlignment === 'right' && 'Căn phải'}
+                      {currentAlignment === 'justify' && 'Căn đều'}
+                    </span>
+                    <ChevronDown className="w-3 h-3 text-slate-400" />
+                  </button>
+
+                  {openAlignMenu && (
+                    <div className="absolute z-50 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl w-36 py-1 divide-y divide-slate-100 animate-fade-in">
+                      <button
+                        type="button"
+                        onClick={() => handleAlign('left')}
+                        className={`w-full px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                          currentAlignment === 'left' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                        }`}
+                      >
+                        <AlignLeft className="w-3.5 h-3.5" />
+                        <span>Canh trái</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAlign('center')}
+                        className={`w-full px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                          currentAlignment === 'center' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                        }`}
+                      >
+                        <AlignCenter className="w-3.5 h-3.5" />
+                        <span>Canh giữa</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAlign('right')}
+                        className={`w-full px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                          currentAlignment === 'right' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                        }`}
+                      >
+                        <AlignRight className="w-3.5 h-3.5" />
+                        <span>Canh phải</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleAlign('justify')}
+                        className={`w-full px-3 py-1.5 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                          currentAlignment === 'justify' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                        }`}
+                      >
+                        <AlignJustify className="w-3.5 h-3.5" />
+                        <span>Canh đều 2 bên</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
@@ -1651,40 +1982,24 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   <ListOrdered className="w-4 h-4" />
                 </button>
 
-                {/* Nút chọn Kiểu Chữ (Style) như Microsoft Word */}
-                <select
-                  defaultValue=""
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (!val) return;
-                    if (val === 'p') {
-                      execCommand('formatBlock', '<p>');
-                      setFontSize('14px');
-                    } else if (val === 'h1') {
-                      execCommand('formatBlock', '<h1>');
-                      setFontSize('22px');
-                    } else if (val === 'h2') {
-                      execCommand('formatBlock', '<h2>');
-                      setFontSize('20px');
-                    } else if (val === 'h3') {
-                      execCommand('formatBlock', '<h3>');
-                      setFontSize('18px');
-                    } else if (val === 'h4') {
-                      execCommand('formatBlock', '<h4>');
-                      setFontSize('16px');
-                    }
-                    e.target.value = '';
+                {/* STYLE & SOẠN BÀI HỢP NHẤT: Bố trí khoa học, các style chuẩn mực không giải thích dài dòng */}
+                <WordStyleMenu
+                  selectedStyle={selectedStyle}
+                  onSelectStyle={handleSelectStyle}
+                  isOpen={openStyleMenu}
+                  onToggle={() => {
+                    setOpenStyleMenu(!openStyleMenu);
+                    setOpenAlignMenu(false);
+                    setOpenTextColorMenu(false);
+                    setOpenHighlightColorMenu(false);
                   }}
-                  className="text-[11px] font-bold bg-white border border-slate-300 hover:border-indigo-400 rounded px-2 py-0.5 text-indigo-950 shadow-2xs cursor-pointer focus:ring-2 focus:ring-indigo-500 transition-colors"
-                  title="Chọn Kiểu Chữ Style (Normal: 14px, Heading 1: 22px, Heading 2: 20px, Heading 3: 18px, Heading 4: 16px)"
-                >
-                  <option value="" disabled>Style (Kiểu chữ)...</option>
-                  <option value="p">Normal (Nội dung - 14px)</option>
-                  <option value="h1">Heading 1 (Tiêu đề 1 - 22px)</option>
-                  <option value="h2">Heading 2 (Tiêu đề 2 - 20px)</option>
-                  <option value="h3">Heading 3 (Tiêu đề 3 - 18px)</option>
-                  <option value="h4">Heading 4 (Tiêu đề 4 - 16px)</option>
-                </select>
+                  onClose={() => setOpenStyleMenu(false)}
+                  canAuthor={isTeacherOrHigher}
+                  tienTrinh={tienTrinh}
+                  insertPositionMode={insertPositionMode}
+                  onSetInsertPositionMode={setInsertPositionMode}
+                  onInsertLessonTemplate={handleInsertLessonTemplate}
+                />
 
                 <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
@@ -1713,33 +2028,21 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   }}
                 />
 
-                <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-                {/* Font settings: Mặc định 14px cho nội dung */}
-                <select
-                  value={fontSize}
-                  onChange={(e) => {
-                    setFontSize(e.target.value);
-                    execCommand('fontSize', '4');
-                  }}
-                  className="text-[11px] font-bold bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700"
-                  title="Chọn cỡ chữ hiển thị"
-                >
-                  <option value="12px">Cỡ chữ 12px</option>
-                  <option value="14px">Cỡ chữ 14px (Mặc định)</option>
-                  <option value="16px">Cỡ chữ 16px (Heading 4)</option>
-                  <option value="18px">Cỡ chữ 18px (Heading 3)</option>
-                  <option value="20px">Cỡ chữ 20px (Heading 2)</option>
-                  <option value="22px">Cỡ chữ 22px (Heading 1)</option>
-                </select>
 
                 {/* NÚT LƯU DRIVE CÓ SẴN (ĐÓNG GÓI HOÀN CHỈNH BỞI MODULE CON DONGBODRIVE) */}
+                {isBackgroundSyncing && !isTeacherOrHigher && (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 text-xs font-bold animate-pulse ml-auto mr-2" title="Học sinh đang xem bài giảng ngay từ cache, hệ thống đang tự động đồng bộ bản mới nhất từ Google Drive ở nền">
+                    <RefreshCw className="w-3 h-3 animate-spin text-red-600" />
+                    <span>Đang đồng bộ</span>
+                  </div>
+                )}
                 <DongBoDriveButton
                   isSaving={isSaving}
                   syncStatus={syncStatus}
                   lastSavedTime={lastSavedTime}
                   onClick={() => handleSaveDocument(false)}
-                  className="ml-auto"
+                  className={!isBackgroundSyncing ? "ml-auto" : ""}
                 />
               </div>
 
@@ -1749,8 +2052,8 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                 className="bg-slate-50 p-6 border border-slate-300 border-t-0 rounded-b-2xl shadow-inner min-h-[550px] cursor-text relative"
                 title="Kích đôi chuột vào vị trí bên dưới hoặc ngoài khối để chèn thêm 1 hàng mới toanh"
               >
-                {/* Lớp khóa và hiển thị trạng thái khi đang nạp tự động từ Google Drive - Khi nào lấy được nội dung mới ẩn dòng chữ này và mở khóa cửa sổ soạn thảo */}
-                {isLoadingFromDrive && (
+                {/* Lớp khóa và hiển thị trạng thái khi đang nạp tự động từ Google Drive hoặc xác thực lại nền đối với Giáo viên */}
+                {(isLoadingFromDrive || (isTeacherOrHigher && isReauthenticating)) && (
                   <div className="absolute inset-0 z-30 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center select-none rounded-b-2xl animate-fade-in pointer-events-auto">
                     <div className="p-4 bg-red-50 text-red-600 rounded-2xl mb-3 shadow-xs border border-red-200">
                       <Loader2 className="w-10 h-10 animate-spin text-red-600" />
@@ -1765,7 +2068,9 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                       </h4>
                     </div>
                     <p className="text-xs text-red-500 mt-1 max-w-md font-semibold">
-                      {driveLoadStatus || 'Đang kết nối thư mục chuyên đề trên Google Drive và nạp nội dung tệp vào cửa sổ soạn thảo...'}
+                      {isReauthenticating
+                        ? 'Đang tự động xác thực lại tài khoản Google trong nền... Với tài khoản Giáo viên, cửa sổ Word đang khóa để đảm bảo bạn luôn cập nhật bản mới nhất trước khi soạn bài, cập nhật, chỉnh sửa.'
+                        : (driveLoadStatus || 'Đang kết nối thư mục chuyên đề trên Google Drive và nạp nội dung tệp vào cửa sổ soạn thảo...')}
                     </p>
                     <div className="mt-3.5 flex items-center gap-2 text-xs font-bold text-red-700 bg-red-50/90 px-4 py-1.5 rounded-full border border-red-200 shadow-2xs">
                       <Cloud className="w-4 h-4 text-red-600" />
@@ -1774,24 +2079,10 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                   </div>
                 )}
 
-                {isLoadingFromDrive && (
-                  <div className="w-full max-w-4xl min-h-[480px] bg-white rounded-2xl border-2 border-red-300 shadow-2xl flex flex-col items-center justify-center p-8 text-center space-y-4 my-4 mx-auto z-30 animate-pulse">
-                    <div className="w-14 h-14 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center shadow-xs">
-                      <RefreshCw className="w-7 h-7 text-red-600 animate-spin" />
-                    </div>
-                    <div className="text-red-600 font-black text-xl tracking-wide flex items-center gap-2">
-                      <span>Đang đồng bộ</span>
-                    </div>
-                    <p className="text-slate-600 text-xs sm:text-sm font-medium italic max-w-md">
-                      {driveLoadStatus || 'Đang kết nối Google Drive và nạp nội dung bài giảng. Cửa sổ Word đang ẩn và khóa tạm thời cho đến khi nạp hoàn tất...'}
-                    </p>
-                  </div>
-                )}
-
-                <div style={{ display: isLoadingFromDrive ? 'none' : 'block' }}>
+                <div style={{ display: (isLoadingFromDrive || (isTeacherOrHigher && isReauthenticating)) ? 'none' : 'block' }}>
                   <div
                     ref={editorRef}
-                    contentEditable={!isLoadingFromDrive && isTeacherOrHigher}
+                    contentEditable={!(isLoadingFromDrive || isReauthenticating) && isTeacherOrHigher}
                     suppressContentEditableWarning
                     onInput={(e) => {
                       markDirty();
@@ -1800,18 +2091,21 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                       }
                     }}
                     onKeyUp={(e) => {
+                      updateToolbarFormattingStates();
                       if (e.key === '$' || e.key === ' ' || e.key === 'Enter') {
                         if (editorRef.current) {
                           autoRenderLatexInDom(editorRef.current);
                         }
                       }
                     }}
+                    onMouseUp={updateToolbarFormattingStates}
                     onPaste={(e) => {
                       setTimeout(() => {
                         if (editorRef.current) {
                           autoRenderLatexInDom(editorRef.current);
                           markDirty();
                         }
+                        updateToolbarFormattingStates();
                       }, 50);
                     }}
                     onDoubleClick={handleDoubleClickToInsertRow}
@@ -1821,9 +2115,16 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
                         handleBreakoutOfBlock();
                       }
                     }}
-                    className="bg-white p-10 rounded-xl shadow-md border border-slate-200 min-h-[480px] focus:outline-none focus:ring-1 focus:ring-indigo-500 overflow-y-auto prose max-w-none text-slate-800"
+                    className="bg-white p-10 rounded-xl shadow-md border border-slate-200 min-h-[480px] focus:outline-none focus:ring-1 focus:ring-indigo-500 overflow-y-auto prose max-w-none text-slate-800 word-editor-canvas"
                     style={{ fontSize: fontSize, lineHeight: '1.6' }}
                   />
+                  <style>{`
+                    .word-editor-canvas h1 { font-size: 22px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; line-height: 1.3; color: #0f172a; }
+                    .word-editor-canvas h2 { font-size: 20px; font-weight: 700; margin-top: 12px; margin-bottom: 5px; line-height: 1.35; color: #1e293b; }
+                    .word-editor-canvas h3 { font-size: 18px; font-weight: 700; margin-top: 10px; margin-bottom: 4px; line-height: 1.4; color: #334155; }
+                    .word-editor-canvas h4 { font-size: 16px; font-weight: 700; margin-top: 8px; margin-bottom: 4px; line-height: 1.4; color: #475569; }
+                    .word-editor-canvas p { font-size: 14px; margin-top: 4px; margin-bottom: 4px; line-height: 1.6; }
+                  `}</style>
                 </div>
               </div>
 

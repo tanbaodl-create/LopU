@@ -14,8 +14,9 @@ import {
   formatDocumentTitle,
   loadChuyenDeContentFromDrive,
   LoadChuyenDeResult,
+  connectGoogleDrive,
 } from '../../../ConnectData/ConnectDrive/googleDriveService';
-export { loadChuyenDeContentFromDrive };
+export { loadChuyenDeContentFromDrive, ensureValidDriveToken, connectGoogleDrive };
 export type { LoadChuyenDeResult };
 import {
   DongBoDriveDocData,
@@ -661,6 +662,17 @@ export async function saveDocumentToDriveAndDatabase(
       };
     }
   } catch (err: any) {
+    if (err?.message?.includes('401') || err?.message?.includes('hết hạn') || err?.message?.includes('authentication credential')) {
+      localStorage.removeItem('lopu_google_drive_token_v1');
+      localStorage.removeItem('lopu_gdrive_token');
+      try {
+        if (onProgress) onProgress('Phiên kết nối đã hết hạn (401). Đang mở xác thực lại tài khoản Google...');
+        const reConn = await connectGoogleDrive();
+        if (reConn.success) {
+          return await saveDocumentToDriveAndDatabase(data, onProgress);
+        }
+      } catch {}
+    }
     return {
       success: false,
       error: err?.message || 'Có lỗi xảy ra trong quá trình đồng bộ Drive.',

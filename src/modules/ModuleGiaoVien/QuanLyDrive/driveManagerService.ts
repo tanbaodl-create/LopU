@@ -78,6 +78,17 @@ export function getAccessToken(): string | null {
   );
 }
 
+// Xử lý tự động khi Token Google Drive hết hạn (Lỗi 401 Unauthorized / Invalid Credentials)
+export function handleDriveAuth401(): void {
+  try {
+    localStorage.removeItem('lopu_google_drive_token_v1');
+    localStorage.removeItem('lopu_gdrive_token');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('lopu_drive_token_expired'));
+    }
+  } catch {}
+}
+
 // Chuẩn hóa input đường dẫn thành mảng các segment
 export function parsePathInput(pathInput: string | string[]): string[] {
   if (Array.isArray(pathInput)) {
@@ -208,6 +219,16 @@ export async function resolvePathToDriveId(
         `https://www.googleapis.com/drive/v3/files/${cachedId}?fields=id,name,mimeType,parents,trashed`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      if (chkRes.status === 401) {
+        handleDriveAuth401();
+        return {
+          found: false,
+          id: null,
+          type: 'not_found',
+          fullPath,
+          pathArray,
+        };
+      }
       if (chkRes.ok) {
         const chkData = await chkRes.json();
         if (!chkData.trashed) {
@@ -573,6 +594,17 @@ export async function createByPath(
 
         if (!createRes.ok) {
           const errData = await createRes.json().catch(() => ({}));
+          const is401 = createRes.status === 401 || errData.error?.code === 401 || String(errData.error?.message || '').toLowerCase().includes('authentication credential');
+          if (is401) {
+            handleDriveAuth401();
+            return {
+              success: false,
+              id: null,
+              path: fullPath,
+              status: 'failed',
+              message: 'Phiên kết nối Google Drive đã hết hạn hoặc chưa được cấp quyền (401). Vui lòng bấm nút "Kết nối Drive" để cấp lại quyền truy cập.',
+            };
+          }
           return {
             success: false,
             id: null,
@@ -645,6 +677,17 @@ export async function createByPath(
 
       if (!fileRes.ok) {
         const errData = await fileRes.json().catch(() => ({}));
+        const is401 = fileRes.status === 401 || errData.error?.code === 401 || String(errData.error?.message || '').toLowerCase().includes('authentication credential');
+        if (is401) {
+          handleDriveAuth401();
+          return {
+            success: false,
+            id: null,
+            path: fullPath,
+            status: 'failed',
+            message: 'Phiên kết nối Google Drive đã hết hạn hoặc chưa được cấp quyền (401). Vui lòng bấm nút "Kết nối Drive" để cấp lại quyền truy cập.',
+          };
+        }
         return {
           success: false,
           id: null,
@@ -759,6 +802,18 @@ export async function deleteByPath(
       };
     } else {
       const errData = await res.json().catch(() => ({}));
+      const is401 = res.status === 401 || errData.error?.code === 401 || String(errData.error?.message || '').toLowerCase().includes('authentication credential');
+      if (is401) {
+        handleDriveAuth401();
+        return {
+          success: false,
+          status: 'failed',
+          id: check.id,
+          path: fullPath,
+          message: 'Phiên kết nối Google Drive đã hết hạn hoặc chưa được cấp quyền (401). Vui lòng bấm nút "Kết nối Drive" để cấp lại quyền truy cập.',
+          error: 'UNAUTHENTICATED',
+        };
+      }
       return {
         success: false,
         status: 'failed',
@@ -896,7 +951,10 @@ export async function getNestedDriveTree(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      if (!res.ok) return node;
+      if (!res.ok) {
+        if (res.status === 401) handleDriveAuth401();
+        return node;
+      }
 
       const data = await res.json();
       const files: any[] = (data.files || []).filter((f: any) => !f.trashed);

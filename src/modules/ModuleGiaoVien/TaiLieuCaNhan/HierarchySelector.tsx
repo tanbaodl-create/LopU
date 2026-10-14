@@ -52,7 +52,7 @@ const LEVEL_LABELS: Record<HierarchyLevel, string> = {
   chuyenDe: 'Chuyên đề',
 };
 
-const SUBJECT_OPTIONS = ['Toán Học', 'Vật Lý', 'Hóa Học', 'Ngữ Văn', 'Tiếng Anh', 'Sinh Học'];
+const SUBJECT_OPTIONS = ['Toán', 'Toán Học', 'Lý', 'Vật Lý', 'Hóa', 'Hóa Học', 'Sinh', 'Sinh Học', 'Tin', 'Tin Học', 'Anh', 'Tiếng Anh', 'Văn', 'Ngữ Văn'];
 const GRADE_OPTIONS = ['Khối 10', 'Khối 11', 'Khối 12'];
 
 export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
@@ -145,10 +145,15 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
   const docTitles = (subject && subject.trim() !== '' && grade && grade.trim() !== '')
     ? (() => {
         const matched = allDocTitles.filter(t => matchesSubjectAndGrade(t, subject, grade));
-        if (matched.length === 0) {
-          return [];
+        if (matched.length > 0) {
+          return matched;
         }
-        return matched;
+        // Fallback: nếu chưa có thư mục khớp chính xác cả khối lớp, lấy các thư mục khớp Môn học
+        const matchSubj = allDocTitles.filter(t => matchesSubjectAndGrade(t, subject, undefined));
+        if (matchSubj.length > 0) {
+          return matchSubj;
+        }
+        return [];
       })()
     : [];
 
@@ -195,7 +200,7 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     }
   }, []);
 
-  // Khi chọn Môn học và Khối lớp: lập tức đồng bộ Tên tài liệu
+  // Khi chọn Môn học và Khối lớp: quét thư mục con myApp\LopU\TaiLieu trên Drive để lấy Tên tài liệu
   const prevSubjectRef = useRef(subject);
   const prevGradeRef = useRef(grade);
 
@@ -208,14 +213,33 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     if (subjectChanged || gradeChanged) {
       if (subject && subject.trim() !== '' && grade && grade.trim() !== '') {
         setSyncingLevel('title');
-        setTimeout(() => setSyncingLevel(null), 600);
+
+        let isMounted = true;
+        scanAndSyncDriveHierarchy(
+          (quickStore) => {
+            if (isMounted && quickStore) {
+              setStore(quickStore);
+            }
+          },
+          (deepStore) => {
+            if (isMounted && deepStore) {
+              setStore(deepStore);
+            }
+          }
+        ).then((finalStore) => {
+          if (isMounted) {
+            if (finalStore) {
+              setStore(finalStore);
+            }
+            // Chỉ tắt chữ "Đang đồng bộ" màu đỏ sau khi đã quét xong Drive và nạp danh sách Tên tài liệu vào sổ xuống dropdown
+            setSyncingLevel(null);
+          }
+        }).catch((err) => {
+          console.warn('Lỗi khi lấy tên tài liệu từ Drive:', err);
+          if (isMounted) setSyncingLevel(null);
+        });
       } else {
         setSyncingLevel(null);
-      }
-      if (docTitles.length === 1) {
-        if (title !== docTitles[0]) onChangeTitle(docTitles[0]);
-      } else {
-        if (title) onChangeTitle('');
       }
       if (chuong) onChangeChuong('');
       if (bai) onChangeBai('');

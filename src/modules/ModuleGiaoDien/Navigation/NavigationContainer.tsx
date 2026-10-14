@@ -4,7 +4,17 @@ import katex from 'katex';
 import { ViewId, getViewMeta } from './menuConfig';
 import { UserRole, UserProfile, TeacherDocument, ClassItem } from '../../../services/storageTypes';
 import {
+  LopHocView,
+  SoDoLopView,
+  ThoiKhoaBieuView,
+  DangKyLopView,
+} from '../../ModuleHocSinh';
+import {
+  QuanLyLopDayView,
   TaiLieuCaNhanView,
+  TheoDoiHocSinhView,
+  ThuongMaiTaiLieuView,
+  QuanLyDriveView,
   createByPath,
   deleteByPath,
   getNestedDriveTree,
@@ -14,32 +24,12 @@ import {
   saveDocumentToDriveAndDatabase,
   formatSafeSlug,
 } from '../../ModuleGiaoVien';
-
-// Tải chậm (Lazy load) các module phụ trợ, ưu tiên tài liệu tải trước
-const LopHocView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.LopHocView })));
-const SoDoLopView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.SoDoLopView })));
-const ThoiKhoaBieuView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.ThoiKhoaBieuView })));
-const DangKyLopView = React.lazy(() => import('../../ModuleHocSinh').then(m => ({ default: m.DangKyLopView })));
-
-const QuanLyLopDayView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.QuanLyLopDayView })));
-const TheoDoiHocSinhView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.TheoDoiHocSinhView })));
-const ThuongMaiTaiLieuView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.ThuongMaiTaiLieuView })));
-const QuanLyDriveView = React.lazy(() => import('../../ModuleGiaoVien').then(m => ({ default: m.QuanLyDriveView })));
-
-const BaoCaoGiamSatView = React.lazy(() => import('../../ModuleQuanTri').then(m => ({ default: m.BaoCaoGiamSatView })));
-const QuanLyNguoiDungView = React.lazy(() => import('../../ModuleQuanTri').then(m => ({ default: m.QuanLyNguoiDungView })));
-const PhanQuyenLopHocView = React.lazy(() => import('../../ModuleQuanTri').then(m => ({ default: m.PhanQuyenLopHocView })));
-
-const HuongDanWebView = React.lazy(() => import('../HuongDanWeb').then(m => ({ default: m.HuongDanWebView })));
-const PhanTichLenh = React.lazy(() => import('../HuongDanWeb').then(m => ({ default: m.PhanTichLenh })));
-const LuuPromptChuanView = React.lazy(() => import('../HuongDanWeb').then(m => ({ default: m.LuuPromptChuanView })));
-
-const ModuleLoadingFallback: React.FC = () => (
-  <div className="flex flex-col items-center justify-center p-12 text-slate-500 space-y-3 min-h-[300px]">
-    <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-    <p className="text-xs font-semibold text-slate-600">Đang tải phân hệ...</p>
-  </div>
-);
+import {
+  BaoCaoGiamSatView,
+  QuanLyNguoiDungView,
+  PhanQuyenLopHocView,
+} from '../../ModuleQuanTri';
+import { HuongDanWebView, PhanTichLenh, LuuPromptChuanView } from '../HuongDanWeb';
 import { MathTypeEditorModal } from '../../ModuleGiaoVien/TaiLieuCaNhan/MathTypeEditorModal';
 import { QuestionEditorWord, QuestionViewMode } from '../../ModuleGiaoVien/TaiLieuCaNhan/QuestionEditorWord';
 import { convertMathExprToJs } from '../../ModuleGiaoVien/TaiLieuCaNhan/TikZVisualRenderer';
@@ -53,7 +43,6 @@ import {
   formatDocumentTitle,
   matchesSubjectAndGrade,
   saveStoredHierarchy,
-  getGradeNumber,
   HierarchyStore,
 } from '../../ModuleGiaoVien/TaiLieuCaNhan/hierarchyData';
 import {
@@ -63,6 +52,10 @@ import {
   Bold,
   Italic,
   Underline,
+  Undo,
+  Redo,
+  Baseline,
+  Highlighter,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -105,6 +98,8 @@ import {
   Download,
 } from 'lucide-react';
 import { InDeFileHsView } from '../../ModuleGiaoVien/SoanThao/InDeFileHsView';
+import { WordTextColorPicker, WordHighlightColorPicker } from '../../ModuleGiaoVien/SoanThao/WordColorPicker';
+import { WordStyleMenu } from '../../ModuleGiaoVien/SoanThao/WordStyleMenu';
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
 import {
   saveTeachingMaterialHierarchyToDrive,
@@ -112,6 +107,7 @@ import {
   createDriveFolderIfNotExists,
   deleteDriveFolderHierarchy,
   connectGoogleDrive,
+  ensureValidDriveToken,
   isRealGoogleOAuthToken,
   loadChuyenDeContentFromDrive,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
@@ -136,20 +132,8 @@ export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData };
  * - ĐỀ XUẤT 2: Thước lề trái quản lý Mốc Slide (🎬) & Mốc Hiệu ứng (✨) mượt mà, hỗ trợ kéo thả và trình chiếu PPT từng bước
  */
 const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole }) => {
-  const [classes, setClasses] = useState<ClassItem[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_classes');
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return [];
-  });
-  const [documents, setDocuments] = useState<TeacherDocument[]>(() => {
-    try {
-      const raw = localStorage.getItem('lopu_documents');
-      if (raw) return JSON.parse(raw);
-    } catch {}
-    return [];
-  });
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [documents, setDocuments] = useState<TeacherDocument[]>([]);
   
   // Trạng thái gợi ý mặc định là rỗng
   const [title, setTitle] = useState<string>('');
@@ -167,7 +151,30 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
   const [syncStatus, setSyncStatus] = useState<'idle' | 'saving' | 'saved' | 'unsaved'>('idle');
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [isLoadingFromDrive, setIsLoadingFromDrive] = useState<boolean>(false);
+  const [isReauthenticating, setIsReauthenticating] = useState<boolean>(false);
+  const [isBackgroundSyncing, setIsBackgroundSyncing] = useState<boolean>(false);
   const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+
+  // Lắng nghe sự kiện xác thực lại nền Google Drive để đồng bộ giao diện khóa/mở khóa
+  useEffect(() => {
+    const handleAuthChange = (e: any) => {
+      setIsReauthenticating(Boolean(e.detail?.isAuthenticating));
+    };
+    const handleTokenExpired = () => {
+      if (isTeacherOrHigher(currentRole)) {
+        setIsReauthenticating(true);
+        ensureValidDriveToken(undefined, true).finally(() => {
+          setIsReauthenticating(false);
+        });
+      }
+    };
+    window.addEventListener('lopu_drive_auth_change', handleAuthChange);
+    window.addEventListener('lopu_drive_token_expired', handleTokenExpired);
+    return () => {
+      window.removeEventListener('lopu_drive_auth_change', handleAuthChange);
+      window.removeEventListener('lopu_drive_token_expired', handleTokenExpired);
+    };
+  }, [currentRole]);
 
   // Editor states: Cỡ chữ mặc định 22px
   const editorRef = useRef<HTMLDivElement>(null);
@@ -175,7 +182,13 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
   const imageInputRef = useRef<HTMLInputElement>(null);
   const graphInputRef = useRef<HTMLInputElement>(null);
   const bbtInputRef = useRef<HTMLInputElement>(null);
-  const [fontSize, setFontSize] = useState<string>('22px');
+  const [fontSize, setFontSize] = useState<string>('14px');
+  const [textColor, setTextColor] = useState<string>('#0f172a');
+  const [highlightColor, setHighlightColor] = useState<string>('transparent');
+  const [selectedStyle, setSelectedStyle] = useState<string>('p');
+  const [isBold, setIsBold] = useState<boolean>(false);
+  const [isItalic, setIsItalic] = useState<boolean>(false);
+  const [isUnderline, setIsUnderline] = useState<boolean>(false);
 
   // Trạng thái mở menu xổ xuống của Toolbar
   const [openInsertMenu, setOpenInsertMenu] = useState<boolean>(false);
@@ -183,6 +196,9 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
   const [openGraphSubmenu, setOpenGraphSubmenu] = useState<boolean>(false);
   const [openBbtSubmenu, setOpenBbtSubmenu] = useState<boolean>(false);
   const [openAlignMenu, setOpenAlignMenu] = useState<boolean>(false);
+  const [openTextColorMenu, setOpenTextColorMenu] = useState<boolean>(false);
+  const [openHighlightColorMenu, setOpenHighlightColorMenu] = useState<boolean>(false);
+  const [openStyleMenu, setOpenStyleMenu] = useState<boolean>(false);
   const [openWordViewMenu, setOpenWordViewMenu] = useState<boolean>(false);
   const [wordViewMode, setWordViewMode] = useState<QuestionViewMode>('full');
   const [currentAlignment, setCurrentAlignment] = useState<'left' | 'center' | 'right' | 'justify'>('left');
@@ -3730,48 +3746,45 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
   const [syncingLevel, setSyncingLevel] = useState<'title' | 'chuong' | 'bai' | 'vanDe' | 'chuyenDe' | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
-    const timer = setTimeout(async () => {
-      try {
-        const cls = await getClasses();
-        if (isMounted) setClasses(cls);
-        const docs = await getTeacherDocuments();
-        if (isMounted) {
-          setDocuments(docs);
-          const docTitlesFromStore = docs.map(d => d.title).filter(Boolean);
-          setTitleList(prev => Array.from(new Set([...prev, ...docTitlesFromStore])));
-        }
+    async function load() {
+      const cls = await getClasses();
+      setClasses(cls);
+      const docs = await getTeacherDocuments();
+      setDocuments(docs);
+      
+      const docTitlesFromStore = docs.map(d => d.title).filter(Boolean);
+      setTitleList(prev => Array.from(new Set([...prev, ...docTitlesFromStore])));
 
-        // Tự động quét và đồng bộ trực tiếp danh mục từ Google Drive nếu đã kết nối
+      // Tự động quét và đồng bộ trực tiếp danh mục từ Google Drive nếu đã kết nối
+      try {
         const { isConnected } = getDriveConnectionState();
         if (isConnected) {
-          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { maxDepth: 2 }).catch(() => null);
-          if (isMounted && res && res.success && res.tree && res.tree.children) {
-            const titles: string[] = [];
-            const chuongs: string[] = [];
-            const bais: string[] = [];
-            const vanDes: string[] = [];
-            const chuyenDes: string[] = [];
+          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu']);
+          if (res.success && res.tree && res.tree.children) {
+          const titles: string[] = [];
+          const chuongs: string[] = [];
+          const bais: string[] = [];
+          const vanDes: string[] = [];
+          const chuyenDes: string[] = [];
 
-            for (const docNode of res.tree.children) {
-              if (docNode.type === 'folder') {
-                titles.push(docNode.name);
-                if (docNode.children) {
-                  for (const chNode of docNode.children) {
-                    if (chNode.type === 'folder') {
-                      chuongs.push(chNode.name);
-                      if (chNode.children) {
-                        for (const bNode of chNode.children) {
-                          if (bNode.type === 'folder') {
-                            bais.push(bNode.name);
-                            if (bNode.children) {
-                              for (const vNode of bNode.children) {
-                                if (vNode.type === 'folder') {
-                                  vanDes.push(vNode.name);
-                                  if (vNode.children) {
-                                    for (const cdNode of vNode.children) {
-                                      chuyenDes.push(cdNode.name);
-                                    }
+          for (const docNode of res.tree.children) {
+            if (docNode.type === 'folder') {
+              titles.push(docNode.name);
+              if (docNode.children) {
+                for (const chNode of docNode.children) {
+                  if (chNode.type === 'folder') {
+                    chuongs.push(chNode.name);
+                    if (chNode.children) {
+                      for (const bNode of chNode.children) {
+                        if (bNode.type === 'folder') {
+                          bais.push(bNode.name);
+                          if (bNode.children) {
+                            for (const vNode of bNode.children) {
+                              if (vNode.type === 'folder') {
+                                vanDes.push(vNode.name);
+                                if (vNode.children) {
+                                  for (const cdNode of vNode.children) {
+                                    chuyenDes.push(cdNode.name);
                                   }
                                 }
                               }
@@ -3784,22 +3797,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 }
               }
             }
-            setTitleList(prev => Array.from(new Set([...prev, ...titles])));
-            setChuongList(prev => Array.from(new Set([...prev, ...chuongs])));
-            setBaiList(prev => Array.from(new Set([...prev, ...bais])));
-            setVanDeList(prev => Array.from(new Set([...prev, ...vanDes])));
-            setChuyenDeList(prev => Array.from(new Set([...prev, ...chuyenDes])));
           }
+          setTitleList(prev => Array.from(new Set([...prev, ...titles])));
+          setChuongList(prev => Array.from(new Set([...prev, ...chuongs])));
+          setBaiList(prev => Array.from(new Set([...prev, ...bais])));
+          setVanDeList(prev => Array.from(new Set([...prev, ...vanDes])));
+          setChuyenDeList(prev => Array.from(new Set([...prev, ...chuyenDes])));
         }
-      } catch (err) {
+      }
+    } catch (err) {
         console.warn('NavigationContainer auto drive sync error:', err);
       }
-    }, 50);
-
-    return () => {
-      isMounted = false;
-      clearTimeout(timer);
-    };
+    }
+    load();
   }, []);
 
   const lastLoadedDocKeyRef = useRef<string>('');
@@ -3821,11 +3831,74 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       }
 
       let isCancelled = false;
+      const isTeacher = isTeacherOrHigher(currentRole);
+
+      // Tìm cache nội dung bài giảng có sẵn trong bộ nhớ trình duyệt
+      const rawCd = chuyenDe.trim();
+      const cleanCd = rawCd.replace(/^(?:Chuyên\s*đề|Chuyen\s*de)\s*:?\s*/i, '').trim();
+      const cachedContent = (selectedKienThucName && localStorage.getItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${rawCd}`))
+        || (selectedKienThucName && localStorage.getItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${cleanCd}`))
+        || localStorage.getItem(`lopu_kienthuc_${rawCd}`)
+        || localStorage.getItem(`lopu_kienthuc_${cleanCd}`)
+        || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${rawCd}`)
+        || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${cleanCd}`)
+        || localStorage.getItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html');
+
+      // 1. VỚI HỌC SINH: Không có soạn bài nên xem ngay từ cache (0ms delay) để học ngay,
+      // không khóa cửa sổ Word và cập nhật nền vào sau!
+      if (!isTeacher && cachedContent && cachedContent.trim()) {
+        if (editorRef.current) {
+          editorRef.current.innerHTML = cachedContent;
+        }
+        setWordDocumentHtml(cachedContent);
+        setIsLoadingFromDrive(false);
+        setTimeout(() => refreshRailMarkers(), 50);
+
+        // Chạy cập nhật nền ngầm từ Drive không khóa cửa sổ học sinh
+        setIsBackgroundSyncing(true);
+        (async () => {
+          try {
+            const driveRes = await loadChuyenDeContentFromDrive({
+              title,
+              subject,
+              grade,
+              chuong,
+              bai,
+              vanDe,
+              chuyenDe,
+              tienTrinh: tienTrinhChuyenDe as any,
+              selectedKienThucName,
+              selectedExerciseName,
+              isStudent: true,
+              allowInteractivePopup: false,
+            });
+            if (isCancelled) return;
+            if (driveRes.success && driveRes.contentHtml && driveRes.contentHtml.trim()) {
+              if (driveRes.contentHtml !== cachedContent) {
+                if (editorRef.current) {
+                  editorRef.current.innerHTML = driveRes.contentHtml;
+                }
+                setWordDocumentHtml(driveRes.contentHtml);
+                setTimeout(() => refreshRailMarkers(), 50);
+              }
+            }
+          } catch (bgErr) {
+            console.warn('Lỗi cập nhật nền cho học sinh:', bgErr);
+          } finally {
+            if (!isCancelled) setIsBackgroundSyncing(false);
+          }
+        })();
+        return;
+      }
+
+      // 2. VỚI GIÁO VIÊN (hoặc Học sinh chưa có cache):
+      // Giáo viên BẮT BUỘC phải đảm bảo cập nhật mới nhất từ Drive mới được soạn bài, cập nhật, chỉnh sửa.
+      // Khi Xác thực lại nền chưa xong thì vẫn báo "Đang đồng bộ" và KHÓA cửa sổ Word!
       setIsLoadingFromDrive(true);
 
       (async () => {
         try {
-          // 1. ƯU TIÊN NẠP TRỰC TIẾP TỪ GOOGLE DRIVE CỦA GIÁO VIÊN
+          // Ưu tiên nạp bản mới nhất từ Google Drive của Giáo viên
           const driveRes = await loadChuyenDeContentFromDrive({
             title,
             subject,
@@ -3837,6 +3910,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             tienTrinh: tienTrinhChuyenDe as any,
             selectedKienThucName,
             selectedExerciseName,
+            isStudent: !isTeacher,
+            allowInteractivePopup: isTeacher,
           });
 
           if (isCancelled) return;
@@ -3867,7 +3942,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             return;
           }
 
-          // 2. NẾU KHÔNG CÓ FILE TƯƠNG ỨNG TRÊN DRIVE GIÁO VIÊN: MỞ KHÓA CỬA SỔ SOẠN THẢO WORD VỚI NỘI DUNG RỖNG
+          // Nếu không có file tương ứng trên Drive Giáo viên: Mở trang trắng để giáo viên bắt đầu soạn mới
           if (editorRef.current) {
             editorRef.current.innerHTML = '<p><br></p>';
           }
@@ -3890,7 +3965,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         isCancelled = true;
       };
     }
-  }, [title, subject, grade, chuong, bai, vanDe, chuyenDe, tienTrinhChuyenDe, selectedKienThucName, selectedExerciseName, documents]);
+  }, [title, subject, grade, chuong, bai, vanDe, chuyenDe, tienTrinhChuyenDe, selectedKienThucName, selectedExerciseName, documents, currentRole]);
 
   // Luôn đồng bộ wordDocumentHtml vào editorRef khi editorRef được gắn vào DOM
   useEffect(() => {
@@ -4322,10 +4397,163 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
   }, [wordViewMode, wordDocumentHtml]);
 
+  // Định nghĩa chuẩn các Style văn bản theo yêu cầu Word
+  const WORD_STYLE_PRESETS: Record<string, {
+    tag: string;
+    fontSize: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+    textColor?: string;
+    highlightColor?: string;
+    alignment?: 'left' | 'center' | 'right' | 'justify';
+  }> = {
+    p: {
+      tag: 'P',
+      fontSize: '14px',
+      bold: false,
+      italic: false,
+      underline: false,
+      textColor: '#0f172a',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h1: {
+      tag: 'H1',
+      fontSize: '22px',
+      bold: true,
+      italic: false,
+      underline: false,
+      textColor: '#1e40af',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h2: {
+      tag: 'H2',
+      fontSize: '20px',
+      bold: true,
+      italic: false,
+      underline: false,
+      textColor: '#1d4ed8',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h3: {
+      tag: 'H3',
+      fontSize: '18px',
+      bold: true,
+      italic: true,
+      underline: false,
+      textColor: '#047857',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    h4: {
+      tag: 'H4',
+      fontSize: '16px',
+      bold: true,
+      italic: true,
+      underline: true,
+      textColor: '#b45309',
+      highlightColor: 'transparent',
+      alignment: 'left',
+    },
+    title: {
+      tag: 'H1',
+      fontSize: '24px',
+      bold: true,
+      italic: false,
+      underline: false,
+      textColor: '#1e1b4b',
+      highlightColor: 'transparent',
+      alignment: 'center',
+    },
+    subtitle: {
+      tag: 'P',
+      fontSize: '16px',
+      bold: false,
+      italic: true,
+      underline: false,
+      textColor: '#475569',
+      highlightColor: 'transparent',
+      alignment: 'center',
+    },
+    highlight: {
+      tag: 'P',
+      fontSize: '14px',
+      bold: true,
+      italic: false,
+      underline: true,
+      textColor: '#9a3412',
+      highlightColor: '#fef08a',
+      alignment: 'left',
+    },
+    quote: {
+      tag: 'P',
+      fontSize: '14px',
+      bold: false,
+      italic: true,
+      underline: false,
+      textColor: '#0369a1',
+      highlightColor: '#e0f2fe',
+      alignment: 'justify',
+    },
+  };
+
+  const updateToolbarFormattingStates = () => {
+    try {
+      setIsBold(document.queryCommandState('bold'));
+      setIsItalic(document.queryCommandState('italic'));
+      setIsUnderline(document.queryCommandState('underline'));
+      if (document.queryCommandState('justifyCenter')) setCurrentAlignment('center');
+      else if (document.queryCommandState('justifyRight')) setCurrentAlignment('right');
+      else if (document.queryCommandState('justifyFull')) setCurrentAlignment('justify');
+      else if (document.queryCommandState('justifyLeft')) setCurrentAlignment('left');
+    } catch {}
+  };
+
   const execCommand = (command: string, value: string | undefined = undefined) => {
     document.execCommand(command, false, value);
     if (editorRef.current) {
       editorRef.current.focus();
+    }
+    updateToolbarFormattingStates();
+  };
+
+  // Áp dụng cỡ chữ trực tiếp vào vùng bôi đen hoặc thẻ khối hiện tại
+  const applyFontSizeToSelectionOrBlock = (size: string) => {
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) return;
+
+    if (!sel.isCollapsed) {
+      document.execCommand('styleWithCSS', false, 'true');
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontSize = size;
+      try {
+        span.appendChild(range.extractContents());
+        range.insertNode(span);
+        sel.removeAllRanges();
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        sel.addRange(newRange);
+      } catch {
+        document.execCommand('fontSize', false, '4');
+      }
+    } else {
+      let node: Node | null = sel.anchorNode;
+      while (node && node !== editorRef.current) {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          const el = node as HTMLElement;
+          if (['P', 'H1', 'H2', 'H3', 'H4', 'DIV', 'LI', 'SPAN'].includes(el.tagName)) {
+            el.style.fontSize = size;
+            break;
+          }
+        }
+        node = node.parentNode;
+      }
     }
   };
 
@@ -4336,6 +4564,77 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     else if (type === 'right') execCommand('justifyRight');
     else if (type === 'justify') execCommand('justifyFull');
     setOpenAlignMenu(false);
+  };
+
+  const handleFontSizeChange = (newSize: string) => {
+    setFontSize(newSize);
+    applyFontSizeToSelectionOrBlock(newSize);
+  };
+
+  // Hàm chọn Style: tác động lên các chức năng tương ứng (cỡ chữ, in đậm B, in nghiêng I, gạch chân U, màu chữ, màu nền, canh lề)
+  const handleSelectStyle = (styleKey: string) => {
+    setSelectedStyle(styleKey);
+    if (!editorRef.current) return;
+    editorRef.current.focus();
+
+    const preset = WORD_STYLE_PRESETS[styleKey] || WORD_STYLE_PRESETS.p;
+
+    // 1. Cỡ chữ: tác động lên chức năng cỡ chữ để điều khiển
+    setFontSize(preset.fontSize);
+    applyFontSizeToSelectionOrBlock(preset.fontSize);
+
+    // 2. Chuyển khối formatBlock (H1, H2, H3, H4, P)
+    document.execCommand('formatBlock', false, preset.tag);
+
+    // 3. Quy định In đậm (B): kích hoạt hoặc hủy kích hoạt biểu tượng chữ B
+    setIsBold(preset.bold);
+    const curBold = document.queryCommandState('bold');
+    if (preset.bold && !curBold) {
+      document.execCommand('bold', false);
+    } else if (!preset.bold && curBold) {
+      document.execCommand('bold', false);
+    }
+
+    // 4. Quy định In nghiêng (I): kích hoạt hoặc hủy kích hoạt biểu tượng chữ I
+    setIsItalic(preset.italic);
+    const curItalic = document.queryCommandState('italic');
+    if (preset.italic && !curItalic) {
+      document.execCommand('italic', false);
+    } else if (!preset.italic && curItalic) {
+      document.execCommand('italic', false);
+    }
+
+    // 5. Quy định Gạch chân (U): kích hoạt hoặc hủy kích hoạt biểu tượng chữ U
+    setIsUnderline(preset.underline);
+    const curUnderline = document.queryCommandState('underline');
+    if (preset.underline && !curUnderline) {
+      document.execCommand('underline', false);
+    } else if (!preset.underline && curUnderline) {
+      document.execCommand('underline', false);
+    }
+
+    // 6. Quy định Màu văn bản: chọn vào màu văn bản tương ứng
+    if (preset.textColor) {
+      setTextColor(preset.textColor);
+      document.execCommand('foreColor', false, preset.textColor);
+    }
+
+    // 7. Quy định Màu nền: chọn vào màu nền tương ứng
+    if (preset.highlightColor) {
+      setHighlightColor(preset.highlightColor);
+      if (preset.highlightColor === 'transparent') {
+        document.execCommand('hiliteColor', false, 'transparent');
+      } else {
+        document.execCommand('hiliteColor', false, preset.highlightColor);
+      }
+    }
+
+    // 8. Quy định Canh lề: chọn canh lề tương ứng trong nút canh lề
+    if (preset.alignment) {
+      handleAlign(preset.alignment);
+    }
+
+    setTimeout(updateToolbarFormattingStates, 50);
   };
 
   // Chèn Bảng vào Word
@@ -4636,22 +4935,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       ...documents.map(d => d.title).filter((x): x is string => Boolean(x))
     ])).filter(t => !delList.includes(t));
 
-    const matched = allTitles.filter(t => {
-      if (matchesSubjectAndGrade(t, subject, grade)) return true;
-      const matchedDoc = documents.find(d => d.title === t);
-      if (matchedDoc) {
-        const sMatch = !matchedDoc.subject || matchesSubjectAndGrade(matchedDoc.subject, subject);
-        const gMatch = !matchedDoc.grade || getGradeNumber(matchedDoc.grade) === getGradeNumber(grade);
-        if (sMatch && gMatch) return true;
-      }
-      return false;
-    });
-
-    if (matched.length === 0) {
-      return [];
-    }
-
-    return matched;
+    return allTitles.filter(t => matchesSubjectAndGrade(t, subject, grade));
   }, [titleList, documents, subject, grade]);
 
   // Khi chọn Môn học và Khối lớp: Chỉ khi CẢ HAI đều khác rỗng mới tiến hành đồng bộ
@@ -4677,36 +4961,26 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       (async () => {
         try {
-          // 1. Tải mới danh sách tài liệu từ Firestore
-          const freshDocs = await getTeacherDocuments().catch(() => []);
-          if (freshDocs && freshDocs.length > 0) {
-            setDocuments(freshDocs);
-            const docTitles = freshDocs.map(d => d.title).filter(Boolean);
-            if (docTitles.length > 0) {
-              setTitleList(prev => Array.from(new Set([...prev, ...docTitles])));
+          // 1. Kiểm tra / Tự động kết nối Google Drive nếu token chưa có hoặc hết hạn
+          let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+          if (!isRealGoogleOAuthToken(token)) {
+            const connRes = await connectGoogleDrive();
+            if (connRes.success) {
+              token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
             }
           }
 
-          // 2. Quét cây thư mục từ Google Drive nếu đã kết nối
-          const { isConnected } = getDriveConnectionState();
-          if (isConnected) {
-            let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-            const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { overrideToken: token || undefined });
-            if (res.success && res.tree && res.tree.children) {
-              const driveTitles: string[] = [];
-              const currentStore = getStoredHierarchy();
-              for (const docNode of res.tree.children) {
-                if (docNode.type === 'folder') {
-                  driveTitles.push(docNode.name);
-                  if (!currentStore[docNode.name]) {
-                    currentStore[docNode.name] = {};
-                  }
-                }
+          // 2. Quét cây thư mục từ Google Drive
+          const res = await getNestedDriveTree(['myApp', 'LopU', 'TaiLieu'], { overrideToken: token || undefined });
+          if (res.success && res.tree && res.tree.children) {
+            const driveTitles: string[] = [];
+            for (const docNode of res.tree.children) {
+              if (docNode.type === 'folder') {
+                driveTitles.push(docNode.name);
               }
-              saveStoredHierarchy(currentStore);
-              if (driveTitles.length > 0) {
-                setTitleList(prev => Array.from(new Set([...prev, ...driveTitles])));
-              }
+            }
+            if (driveTitles.length > 0) {
+              setTitleList(prev => Array.from(new Set([...prev, ...driveTitles])));
             }
           }
         } catch (err) {
@@ -4714,7 +4988,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         } finally {
           setTimeout(() => {
             setSyncingLevel(null);
-          }, 300);
+          }, 600);
         }
       })();
     } else {
@@ -4724,11 +4998,15 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
   }, [subject, grade]);
 
-  // Quy tắc tự động chọn Tên tài liệu: Luôn tự động chọn tùy chọn đầu tiên để dropdown luôn hiển thị tên tài liệu
+  // Quy tắc tự động chọn Tên tài liệu: Nếu có duy nhất 1 tùy chọn thì tự động chọn; nếu > 1 tùy chọn thì rỗng
   useEffect(() => {
-    if (filteredTitleList.length > 0) {
-      if (!title || !filteredTitleList.includes(title)) {
+    if (filteredTitleList.length === 1) {
+      if (title !== filteredTitleList[0]) {
         setTitle(filteredTitleList[0]);
+      }
+    } else if (filteredTitleList.length > 1) {
+      if (title && !filteredTitleList.includes(title)) {
+        setTitle('');
       }
     } else {
       if (title) setTitle('');
@@ -5076,7 +5354,15 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setSyncingLevel(addingLevel as any);
     setModalAddError(null);
 
-    const driveRes = await createByPath(pathSegments);
+    let driveRes = await createByPath(pathSegments);
+
+    // Tự động kích hoạt đăng nhập lại nếu Token Google Drive hết hạn (401)
+    if (!driveRes.success && (driveRes.message.includes('401') || driveRes.message.includes('hết hạn') || driveRes.message.includes('authentication credential'))) {
+      const reConn = await connectGoogleDrive();
+      if (reConn.success) {
+        driveRes = await createByPath(pathSegments);
+      }
+    }
 
     if (!driveRes.success) {
       setIsAddingFolder(false);
@@ -5089,12 +5375,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     const currentStore = getStoredHierarchy();
 
     if (addingLevel === 'title') {
-      const formattedTitle = (subject && grade) ? formatDocumentTitle(subject, grade, val) : val;
-      setTitleList(prev => Array.from(new Set([...prev, formattedTitle, val])));
-      if (!currentStore[formattedTitle]) currentStore[formattedTitle] = {};
+      setTitleList(prev => Array.from(new Set([...prev, val])));
       if (!currentStore[val]) currentStore[val] = {};
       saveStoredHierarchy(currentStore);
-      setTitle(formattedTitle);
+      setTitle(val);
       if (addModalType === 'danhGia') {
         setChuong('');
         setBai('');
@@ -6029,177 +6313,147 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               className="sticky top-16 z-40 bg-white/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-lg flex flex-wrap items-center gap-1.5 transition-all"
               style={{ top: '64px', position: 'sticky' }}
             >
-              {/* NÚT SOẠN BÀI ▾ (Chỉ dành cho tài khoản Giáo viên trở lên - Giải pháp 1: Tự động đóng khung khi bôi đen hoặc chèn mới) */}
-              {isTeacherOrHigher(currentRole) && (
-                <div className="relative">
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => setOpenSoanBaiMenu(!openSoanBaiMenu)}
-                    className={`px-3 py-1 rounded-lg text-xs font-black flex items-center gap-1.5 border transition-colors cursor-pointer shadow-2xs ${
-                      openSoanBaiMenu
-                        ? 'bg-indigo-700 text-white border-indigo-800'
-                        : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600'
-                    }`}
-                    title="Giải pháp 1: Định dạng vùng bôi đen thành Khái niệm/Định lý/Trắc nghiệm hoặc chèn mới mẫu cấu trúc"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Soạn bài</span>
-                    <ChevronDown className="w-3.5 h-3.5" />
-                  </button>
 
-                  {openSoanBaiMenu && (
-                    <div className="absolute z-50 left-0 mt-1.5 bg-white border border-slate-200 rounded-2xl shadow-2xl w-68 py-2 text-xs divide-y divide-slate-100 animate-scale-up">
-                      {/* Gợi ý Giải pháp 1 thông minh */}
-                      <div className="px-3.5 py-1.5 bg-indigo-50/80 text-[10px] text-indigo-800 font-semibold flex items-center gap-1">
-                        <span>✨</span>
-                        <span>Bôi đen chữ để đóng khung hoặc chèn mẫu mới</span>
-                      </div>
 
-                      {/* 1. NHÓM LÝ THUYẾT (Chỉ có khi tiến trình là Kiến thức) */}
-                      {tienTrinhChuyenDe === 'Kiến thức' && (
-                        <div className="py-1">
-                          <div className="px-3.5 py-1 text-[10px] font-black uppercase text-indigo-800 tracking-wider bg-indigo-50/60 select-none">
-                            ── LÝ THUYẾT ──
-                          </div>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('khaiNiem')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Khái niệm / Định nghĩa</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('dinhLy')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Định lý / Tính chất</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('heQua')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Hệ quả / Chú ý</span>
-                          </button>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => handleInsertLessonTemplate('phuongPhap')}
-                            className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-indigo-50 hover:text-indigo-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                          >
-                            <span>+</span> <span>Phương pháp giải (Dạng toán)</span>
-                          </button>
-                        </div>
-                      )}
+            {/* Undo / Redo */}
+            <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
+              <Undo className="w-4 h-4" />
+            </button>
+            <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
+              <Redo className="w-4 h-4" />
+            </button>
 
-                      {/* 2. NHÓM VÍ DỤ & BÀI TẬP (Có trong tất cả tiến trình: Kiến thức, Luyện tập, Kiểm tra) */}
-                      <div className="py-1">
-                        <div className="px-3.5 py-1 text-[10px] font-black uppercase text-amber-800 tracking-wider bg-amber-50/60 select-none">
-                          ── VÍ DỤ & BÀI TẬP ──
-                        </div>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertLessonTemplate('viDu')}
-                          className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>+</span> <span>Ví dụ minh họa</span>
-                        </button>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertLessonTemplate('tuLuan')}
-                          className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>+</span> <span>Bài tập Tự luận</span>
-                        </button>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertLessonTemplate('tracNghiem4')}
-                          className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>+</span> <span>Trắc nghiệm 4 lựa chọn (A, B, C, D)</span>
-                        </button>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertLessonTemplate('dungSai')}
-                          className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>+</span> <span>Trắc nghiệm Đúng / Sai</span>
-                        </button>
-                        <button
-                          type="button"
-                          onMouseDown={(e) => e.preventDefault()}
-                          onClick={() => handleInsertLessonTemplate('traLoiNgan')}
-                          className="w-full px-3.5 py-1.5 text-left text-slate-700 hover:bg-amber-50 hover:text-amber-900 font-semibold flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>+</span> <span>Trắc nghiệm Trả lời ngắn</span>
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
+            <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-              <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
-
-            {/* 1. Đậm, Nghiêng, Gạch chân */}
-            <button onClick={() => execCommand('bold')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Chữ Đậm (Ctrl+B)">
+            {/* 1. Đậm, Nghiêng, Gạch chân (kích hoạt biểu tượng chữ B, I, U tương ứng khi bật) */}
+            <button
+              type="button"
+              onClick={() => {
+                execCommand('bold');
+                setIsBold((prev) => !prev);
+              }}
+              className={`p-1.5 rounded-lg transition-all ${
+                isBold
+                  ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                  : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+              }`}
+              title="Chữ Đậm (Ctrl+B)"
+            >
               <Bold className="w-4 h-4" />
             </button>
-            <button onClick={() => execCommand('italic')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Chữ Nghiêng (Ctrl+I)">
+            <button
+              type="button"
+              onClick={() => {
+                execCommand('italic');
+                setIsItalic((prev) => !prev);
+              }}
+              className={`p-1.5 rounded-lg transition-all ${
+                isItalic
+                  ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                  : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+              }`}
+              title="Chữ Nghiêng (Ctrl+I)"
+            >
               <Italic className="w-4 h-4" />
             </button>
-            <button onClick={() => execCommand('underline')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Gạch Chân (Ctrl+U)">
+            <button
+              type="button"
+              onClick={() => {
+                execCommand('underline');
+                setIsUnderline((prev) => !prev);
+              }}
+              className={`p-1.5 rounded-lg transition-all ${
+                isUnderline
+                  ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                  : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+              }`}
+              title="Gạch Chân (Ctrl+U)"
+            >
               <Underline className="w-4 h-4" />
             </button>
 
-            {/* 2. DROPDOWN CỠ CHỮ ĐƯA NGAY SAU GẠCH CHÂN (U) VÀ CHỈ GHI NGẮN GỌN (ví dụ 22px) */}
+            {/* Chọn màu chữ chuẩn mực Microsoft Word */}
+            <WordTextColorPicker
+              color={textColor}
+              onSelectColor={(val) => {
+                setTextColor(val);
+                execCommand('foreColor', val);
+              }}
+              isOpen={openTextColorMenu}
+              onToggle={() => {
+                setOpenTextColorMenu(!openTextColorMenu);
+                setOpenHighlightColorMenu(false);
+                setOpenAlignMenu(false);
+                setOpenInsertMenu(false);
+                setOpenFunctionMenu(false);
+              }}
+              onClose={() => setOpenTextColorMenu(false)}
+            />
+
+            {/* Chọn màu nền chữ / Highlight chuẩn mực Microsoft Word */}
+            <WordHighlightColorPicker
+              color={highlightColor}
+              onSelectColor={(val) => {
+                setHighlightColor(val);
+                execCommand('hiliteColor', val);
+              }}
+              isOpen={openHighlightColorMenu}
+              onToggle={() => {
+                setOpenHighlightColorMenu(!openHighlightColorMenu);
+                setOpenTextColorMenu(false);
+                setOpenAlignMenu(false);
+                setOpenInsertMenu(false);
+                setOpenFunctionMenu(false);
+              }}
+              onClose={() => setOpenHighlightColorMenu(false)}
+            />
+
+            {/* 2. DROPDOWN CỠ CHỮ ĐƯA NGAY SAU GẠCH CHÂN (U) VÀ CHỈ GHI NGẮN GỌN (mặc định 14px - điều khiển trực tiếp) */}
             <select
               value={fontSize}
-              onChange={(e) => {
-                setFontSize(e.target.value);
-                execCommand('fontSize', '4');
-              }}
+              onChange={(e) => handleFontSizeChange(e.target.value)}
               className="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500 ml-1"
-              title="Cỡ chữ (Mặc định 22px)"
+              title="Cỡ chữ (Mặc định 14px)"
             >
               <option value="12px">12px</option>
-              <option value="14px">14px</option>
+              <option value="14px">14px (Mặc định)</option>
               <option value="16px">16px</option>
               <option value="18px">18px</option>
               <option value="20px">20px</option>
               <option value="22px">22px</option>
+              <option value="24px">24px</option>
+              <option value="28px">28px</option>
             </select>
 
             <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
 
-            {/* 3. MENU CANH LỀ (XỔ XUỐNG): Gôm Trái, Giữa, Phải, Đều 2 bên */}
+            {/* 3. MENU CANH LỀ (XỔ XUỐNG): Chọn canh lề tương ứng trong nút canh lề */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => {
                   setOpenAlignMenu(!openAlignMenu);
+                  setOpenTextColorMenu(false);
+                  setOpenHighlightColorMenu(false);
+                  setOpenStyleMenu(false);
                   setOpenInsertMenu(false);
                   setOpenFunctionMenu(false);
                 }}
                 className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
                   openAlignMenu ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
                 }`}
-                title="Canh lề văn bản"
+                title="Canh lề văn bản (Căn trái, Căn giữa, Căn phải, Căn đều)"
               >
-                {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5" />}
-                {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5" />}
-                {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5" />}
-                {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5" />}
-                <span>Canh lề</span>
+                {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5 text-indigo-600" />}
+                {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5 text-indigo-600" />}
+                {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5 text-indigo-600" />}
+                {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5 text-indigo-600" />}
+                <span className="font-semibold">
+                  {currentAlignment === 'left' && 'Căn trái'}
+                  {currentAlignment === 'center' && 'Căn giữa'}
+                  {currentAlignment === 'right' && 'Căn phải'}
+                  {currentAlignment === 'justify' && 'Căn đều'}
+                </span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </button>
 
@@ -6208,7 +6462,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   <button
                     type="button"
                     onClick={() => handleAlign('left')}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold"
+                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                      currentAlignment === 'left' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                    }`}
                   >
                     <AlignLeft className="w-4 h-4 text-slate-500" />
                     <span>Canh trái</span>
@@ -6216,7 +6472,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   <button
                     type="button"
                     onClick={() => handleAlign('center')}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold"
+                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                      currentAlignment === 'center' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                    }`}
                   >
                     <AlignCenter className="w-4 h-4 text-slate-500" />
                     <span>Canh giữa</span>
@@ -6224,7 +6482,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   <button
                     type="button"
                     onClick={() => handleAlign('right')}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold"
+                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                      currentAlignment === 'right' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                    }`}
                   >
                     <AlignRight className="w-4 h-4 text-slate-500" />
                     <span>Canh phải</span>
@@ -6232,7 +6492,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   <button
                     type="button"
                     onClick={() => handleAlign('justify')}
-                    className="w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold"
+                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                      currentAlignment === 'justify' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                    }`}
                   >
                     <AlignJustify className="w-4 h-4 text-slate-500" />
                     <span>Canh đều 2 bên</span>
@@ -6248,6 +6510,28 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách số">
               <ListOrdered className="w-4 h-4" />
             </button>
+
+            {/* NÚT STYLE & SOẠN BÀI HỢP NHẤT: Bố trí khoa học, các style chuẩn mực không giải thích dài dòng */}
+            <WordStyleMenu
+              selectedStyle={selectedStyle}
+              onSelectStyle={handleSelectStyle}
+              isOpen={openStyleMenu}
+              onToggle={() => {
+                setOpenStyleMenu(!openStyleMenu);
+                setOpenAlignMenu(false);
+                setOpenTextColorMenu(false);
+                setOpenHighlightColorMenu(false);
+                setOpenInsertMenu(false);
+                setOpenFunctionMenu(false);
+                setOpenWordViewMenu(false);
+              }}
+              onClose={() => setOpenStyleMenu(false)}
+              canAuthor={isTeacherOrHigher(currentRole)}
+              tienTrinh={tienTrinhChuyenDe}
+              insertPositionMode={insertPositionMode}
+              onSetInsertPositionMode={setInsertPositionMode}
+              onInsertLessonTemplate={handleInsertLessonTemplate}
+            />
 
             <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
 
@@ -6461,6 +6745,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
             {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
             <div className="ml-auto flex items-center gap-2">
+              {isBackgroundSyncing && !isTeacherOrHigher(currentRole) && (
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 text-xs font-bold animate-pulse" title="Học sinh đang xem bài giảng ngay từ cache, hệ thống đang tự động đồng bộ bản mới nhất từ Google Drive ở nền">
+                  <RotateCcw className="w-3 h-3 animate-spin text-red-600" />
+                  <span>Đang đồng bộ</span>
+                </div>
+              )}
               <DongBoDriveButton
                 isSaving={isSaving}
                 syncStatus={syncStatus}
@@ -6470,8 +6760,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             </div>
           </div>
 
-          {/* Cửa sổ thông báo Đang đồng bộ màu đỏ khi chưa nạp xong nội dung từ Drive */}
-          {isLoadingFromDrive && (
+          {/* Cửa sổ thông báo Đang đồng bộ màu đỏ khi chưa nạp xong nội dung từ Drive hoặc đang xác thực lại nền đối với Giáo viên */}
+          {(isLoadingFromDrive || (isTeacherOrHigher(currentRole) && isReauthenticating)) && (
             <div className="w-full max-w-4xl min-h-[520px] bg-white rounded-2xl border-2 border-red-300 shadow-2xl flex flex-col items-center justify-center p-8 text-center space-y-4 my-4 mx-auto z-30 animate-pulse">
               <div className="w-14 h-14 rounded-full bg-red-50 border-2 border-red-200 flex items-center justify-center shadow-xs">
                 <RotateCcw className="w-7 h-7 text-red-600 animate-spin" />
@@ -6480,13 +6770,15 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 <span>Đang đồng bộ</span>
               </div>
               <p className="text-slate-600 text-xs sm:text-sm font-medium italic max-w-md">
-                Đang nạp dữ liệu bài giảng từ Google Drive lên cửa sổ Word. Cửa sổ soạn thảo đang ẩn và khóa tạm thời cho đến khi nạp hoàn tất...
+                {isReauthenticating
+                  ? 'Đang tự động xác thực lại tài khoản Google trong nền... Với tài khoản Giáo viên, cửa sổ Word đang khóa để đảm bảo bạn luôn cập nhật bản mới nhất trước khi soạn bài, cập nhật, chỉnh sửa.'
+                  : 'Đang nạp dữ liệu bài giảng từ Google Drive lên cửa sổ Word. Với tài khoản Giáo viên, cửa sổ soạn thảo đang ẩn và khóa tạm thời cho đến khi nạp hoàn tất...'}
               </p>
             </div>
           )}
 
-          {/* Vùng hiển thị theo chế độ View được chọn (Chỉ hiển thị khi đã hoàn tất đồng bộ từ Drive) */}
-          {!isLoadingFromDrive && (
+          {/* Vùng hiển thị theo chế độ View được chọn (Chỉ hiển thị khi đã hoàn tất đồng bộ từ Drive hoặc học sinh xem ngay từ cache) */}
+          {!(isLoadingFromDrive || (isTeacherOrHigher(currentRole) && isReauthenticating)) && (
             wordViewMode === 'ppt' ? (
               <PptSlideViewer
                 slides={pptSlides}
@@ -6531,7 +6823,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
           {/* Vùng giấy Word Toàn bộ (luôn giữ trong DOM để bảo toàn con trỏ, lịch sử undo và nội dung khi chuyển đổi View) */}
           <div
-            style={{ display: !isLoadingFromDrive && wordViewMode === 'full' ? 'flex' : 'none' }}
+            style={{ display: !(isLoadingFromDrive || (isTeacherOrHigher(currentRole) && isReauthenticating)) && wordViewMode === 'full' ? 'flex' : 'none' }}
             onDoubleClick={isTeacherOrHigher(currentRole) ? handleDoubleClickToInsertRow : undefined}
             className={`bg-slate-200 p-4 sm:p-8 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner min-h-[620px] justify-center ${
               !isTeacherOrHigher(currentRole) ? 'word-doc-student-mode cursor-default' : 'cursor-text'
@@ -6679,11 +6971,20 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
                 <div
                   ref={editorRef}
-                contentEditable={isTeacherOrHigher(currentRole)}
+                contentEditable={!(isLoadingFromDrive || isReauthenticating) && isTeacherOrHigher(currentRole)}
                 suppressContentEditableWarning
-                onKeyUp={saveCurrentSelection}
-                onMouseUp={saveCurrentSelection}
-                onSelect={saveCurrentSelection}
+                onKeyUp={() => {
+                  saveCurrentSelection();
+                  updateToolbarFormattingStates();
+                }}
+                onMouseUp={() => {
+                  saveCurrentSelection();
+                  updateToolbarFormattingStates();
+                }}
+                onSelect={() => {
+                  saveCurrentSelection();
+                  updateToolbarFormattingStates();
+                }}
                 onBlur={saveCurrentSelection}
                 onDoubleClick={(e) => {
                   if (!isTeacherOrHigher(currentRole)) return;
@@ -7067,11 +7368,18 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     }
                   }
                 }}
-                className={`w-full max-w-4xl bg-white p-8 sm:p-14 rounded-2xl shadow-xl border border-slate-300 min-h-[580px] focus:outline-none focus:ring-2 focus:ring-indigo-400 overflow-y-auto prose max-w-none text-slate-800 transition-all ${
+                className={`w-full max-w-4xl bg-white p-8 sm:p-14 rounded-2xl shadow-xl border border-slate-300 min-h-[580px] focus:outline-none focus:ring-2 focus:ring-indigo-400 overflow-y-auto prose max-w-none text-slate-800 word-editor-canvas transition-all ${
                   !isTeacherOrHigher(currentRole) ? 'word-doc-student-mode select-text' : ''
                 }`}
                 style={{ fontSize: fontSize, lineHeight: '1.6' }}
               />
+              <style>{`
+                .word-editor-canvas h1 { font-size: 22px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; line-height: 1.3; color: #0f172a; }
+                .word-editor-canvas h2 { font-size: 20px; font-weight: 700; margin-top: 12px; margin-bottom: 5px; line-height: 1.35; color: #1e293b; }
+                .word-editor-canvas h3 { font-size: 18px; font-weight: 700; margin-top: 10px; margin-bottom: 4px; line-height: 1.4; color: #334155; }
+                .word-editor-canvas h4 { font-size: 16px; font-weight: 700; margin-top: 8px; margin-bottom: 4px; line-height: 1.4; color: #475569; }
+                .word-editor-canvas p { font-size: 14px; margin-top: 4px; margin-bottom: 4px; line-height: 1.6; }
+              `}</style>
 
               {/* Thanh công cụ tùy chỉnh trực quan khi chọn Đồ thị / Đường gióng / Trục tọa độ / Chữ / Số (Chỉ giáo viên mới thấy) */}
               {selectedGraphElement && isTeacherOrHigher(currentRole) && (
@@ -8622,80 +8930,72 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
     );
   }
 
-  // Render view khi đã được phép (Bọc React.Suspense để tải các module con mượt mà, ưu tiên tài liệu)
-  const renderActiveView = () => {
-    switch (activeView) {
-      // Module 4: Giao diện & Hướng dẫn Web (ModuleGiaoDien) -> Sơ đồ cây module & Trợ lý phân tích lệnh (Chỉ Superadmin)
-      case 'guide-tree':
-        return <HuongDanWebView currentRole={currentRole} onNavigateToView={onNavigateToView} />;
-      case 'guide-prompt-assistant':
-        return <PhanTichLenh onNavigateToView={onNavigateToView} />;
-      case 'guide-prompts-saved': {
-        if (currentRole !== 'superadmin') {
-          return (
-            <div className="p-8 text-center bg-rose-50 text-rose-700 font-bold border border-rose-200 rounded-2xl max-w-md mx-auto mt-10 shadow-xs">
-              Quyền truy cập bị từ chối! Phân hệ này chỉ dành riêng cho Superadmin.
-            </div>
-          );
-        }
-        return <LuuPromptChuanView />;
+  // Render view khi đã được phép
+  switch (activeView) {
+    // Module 4: Giao diện & Hướng dẫn Web (ModuleGiaoDien) -> Sơ đồ cây module & Trợ lý phân tích lệnh (Chỉ Superadmin)
+    case 'guide-tree':
+      return <HuongDanWebView currentRole={currentRole} onNavigateToView={onNavigateToView} />;
+    case 'guide-prompt-assistant':
+      return <PhanTichLenh onNavigateToView={onNavigateToView} />;
+    case 'guide-prompts-saved': {
+      if (currentRole !== 'superadmin') {
+        return (
+          <div className="p-8 text-center bg-rose-50 text-rose-700 font-bold border border-rose-200 rounded-2xl max-w-md mx-auto mt-10 shadow-xs">
+            Quyền truy cập bị từ chối! Phân hệ này chỉ dành riêng cho Superadmin.
+          </div>
+        );
       }
-
-      // Module 1: Không gian Học tập (ModuleHocSinh)
-      case 'learning-classes':
-        return <LopHocView />;
-      case 'learning-seating':
-        return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
-      case 'learning-schedule':
-        return <ThoiKhoaBieuView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
-      case 'learning-join':
-        return <DangKyLopView />;
-
-      // Module 2: Nghiệp vụ Giảng dạy & Lớp học (ModuleGiaoVien)
-      case 'teaching-soanthao':
-        return <WordSoanThaoView currentRole={currentRole} />;
-      case 'teaching-management':
-        return <QuanLyLopDayView currentRole={currentRole} />;
-      case 'teaching-documents':
-        return (
-          <TaiLieuCaNhanView
-            currentRole={currentRole}
-            onChangeRole={onChangeRole}
-            driveEmail={driveEmail}
-            onOpenDriveConnect={onOpenDriveConnect}
-          />
-        );
-      case 'teaching-drive':
-        return <QuanLyDriveView />;
-      case 'teaching-monetization':
-        return <ThuongMaiTaiLieuView />;
-      case 'teaching-students':
-        return <TheoDoiHocSinhView />;
-
-      // Module 3: Quản trị & Báo cáo Giám sát (ModuleQuanTri)
-      case 'reports-progress':
-        return <BaoCaoGiamSatView />;
-      case 'settings-users':
-        return (
-          <QuanLyNguoiDungView
-            currentRole={currentRole}
-            onNavigateToView={onNavigateToView}
-            driveEmail={driveEmail}
-            onOpenDriveConnect={onOpenDriveConnect}
-            onChangeRole={onChangeRole}
-          />
-        );
-      case 'settings-permissions':
-        return <PhanQuyenLopHocView currentRole={currentRole} />;
-
-      default:
-        return <LopHocView />;
+      return <LuuPromptChuanView />;
     }
-  };
 
-  return (
-    <React.Suspense fallback={<ModuleLoadingFallback />}>
-      {renderActiveView()}
-    </React.Suspense>
-  );
+    // Module 1: Không gian Học tập (ModuleHocSinh)
+    case 'learning-classes':
+      return <LopHocView />;
+    case 'learning-seating':
+      return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
+    case 'learning-schedule':
+      return <ThoiKhoaBieuView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
+    case 'learning-join':
+      return <DangKyLopView />;
+
+    // Module 2: Nghiệp vụ Giảng dạy & Lớp học (ModuleGiaoVien)
+    case 'teaching-soanthao':
+      return <WordSoanThaoView currentRole={currentRole} />;
+    case 'teaching-management':
+      return <QuanLyLopDayView currentRole={currentRole} />;
+    case 'teaching-documents':
+      return (
+        <TaiLieuCaNhanView
+          currentRole={currentRole}
+          onChangeRole={onChangeRole}
+          driveEmail={driveEmail}
+          onOpenDriveConnect={onOpenDriveConnect}
+        />
+      );
+    case 'teaching-drive':
+      return <QuanLyDriveView />;
+    case 'teaching-monetization':
+      return <ThuongMaiTaiLieuView />;
+    case 'teaching-students':
+      return <TheoDoiHocSinhView />;
+
+    // Module 3: Quản trị & Báo cáo Giám sát (ModuleQuanTri)
+    case 'reports-progress':
+      return <BaoCaoGiamSatView />;
+    case 'settings-users':
+      return (
+        <QuanLyNguoiDungView
+          currentRole={currentRole}
+          onNavigateToView={onNavigateToView}
+          driveEmail={driveEmail}
+          onOpenDriveConnect={onOpenDriveConnect}
+          onChangeRole={onChangeRole}
+        />
+      );
+    case 'settings-permissions':
+      return <PhanQuyenLopHocView currentRole={currentRole} />;
+
+    default:
+      return <LopHocView />;
+  }
 };

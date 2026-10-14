@@ -279,14 +279,6 @@ export function sanitizeHierarchyStore(rawStore: any, validDocs?: TeacherDocumen
       continue;
     }
 
-    // Nếu có danh sách validDocs và title không khớp doc nào và không có chuong con
-    if (validDocs && validDocs.length > 0) {
-      const matchDoc = validDocs.some(d => (d.title || '').trim() === cleanTitle);
-      if (!matchDoc && (!chuongs || typeof chuongs !== 'object' || Object.keys(chuongs).length === 0)) {
-        continue;
-      }
-    }
-
     cleaned[cleanTitle] = {};
 
     if (chuongs && typeof chuongs === 'object') {
