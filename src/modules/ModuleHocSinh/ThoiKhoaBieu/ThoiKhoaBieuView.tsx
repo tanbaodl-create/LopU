@@ -33,7 +33,7 @@ import {
   Filter,
 } from 'lucide-react';
 import { ScheduleItem, UserRole } from '../../../services/storageTypes';
-import { savePersonalScheduleToDrive } from '../../ConnectData/ConnectDrive';
+import { savePersonalScheduleToDrive, saveTimetableToDrive } from '../../ConnectData/ConnectDrive';
 import { getUsers } from '../../ConnectData/ConnectFirestore';
 
 // Đường dẫn mặc định của app và module Thời khóa biểu
@@ -953,8 +953,9 @@ export const ThoiKhoaBieuView: React.FC<ThoiKhoaBieuViewProps> = ({
     }));
     await savePersonalScheduleToDrive('u_hs01', standardItems);
     const accountName = activeProfile?.name || 'Cá nhân';
-    const filePath = `myApp\\LopU\\ThoiKhoaBieu\\TKB ${accountName} lần ${applyWeek}.json`;
-    showNotice(`Đã lưu Thời khóa biểu thành công tại: ${filePath}`);
+    const driveRes = await saveTimetableToDrive(accountName, applyWeek, standardItems);
+    const filePath = driveRes.filePath || `myApp\\LopU\\ThoiKhoaBieu\\TKB ${accountName} lần ${applyWeek}.json`;
+    showNotice(`Đã lưu & đồng bộ Thời khóa biểu thành công tại Google Drive: ${filePath}`);
   };
 
   return (

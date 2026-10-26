@@ -28,6 +28,7 @@ import {
   Settings,
   AlertTriangle,
   MapPin,
+  Zap,
 } from 'lucide-react';
 import { toPng } from 'html-to-image';
 import { ClassItem, ClassSeatingPlan, UserRole } from '../../../services/storageTypes';
@@ -52,6 +53,8 @@ import {
   parseMultiplePositions,
   formatFixedPosition,
   validateAndSyncFixedSeatPositions,
+  parseAvoidNearGroups,
+  formatAvoidNearGroups,
 } from '../../ModuleGiaoVien/NhapHocSinh/nhapHocSinhService';
 import { read, utils, write } from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -295,6 +298,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const [fixedFormRow, setFixedFormRow] = useState<number>(1);
   const [fixedFormCol, setFixedFormCol] = useState<number>(1);
   const [fixedFormStudent, setFixedFormStudent] = useState<string>('');
+  const [newAvoidGroupMembers, setNewAvoidGroupMembers] = useState<string[]>([]);
 
   // Cài đặt điều kiện xếp chỗ của Giáo viên
   const [seatingRules, setSeatingRules] = useState<SeatingRulesConfig>(() => getClassSeatingRules('class_10a1'));
@@ -662,51 +666,250 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       y = s.desk;
     }
 
-    return { row, desk: s.desk, seatCol: s.seatCol, x, y };
+    return { row, x, y, desk: s.desk, seatCol: s.seatCol };
+  };
+
+  // Helper so sánh khớp tên hoặc biệt danh học sinh (không phân biệt hoa thường)
+  const isStudentMatch = (ruleNick: string, targetNick: string, studentList: StudentCardData[]): boolean => {
+    if (!ruleNick || !targetNick) return false;
+    const rLower = ruleNick.trim().toLowerCase();
+    const tLower = targetNick.trim().toLowerCase();
+    if (rLower === tLower) return true;
+
+    const stTarget = studentList.find(s => 
+      s.id === targetNick ||
+      (s.nickname && s.nickname.toLowerCase() === tLower) ||
+      s.name.toLowerCase() === tLower
+    );
+    if (stTarget) {
+      if ((stTarget.nickname && stTarget.nickname.toLowerCase() === rLower) || stTarget.name.toLowerCase() === rLower) {
+        return true;
+      }
+    }
+
+    const stRule = studentList.find(s => 
+      (s.nickname && s.nickname.toLowerCase() === rLower) ||
+      s.name.toLowerCase() === rLower
+    );
+    if (stRule) {
+      if ((stRule.nickname && stRule.nickname.toLowerCase() === tLower) || stRule.name.toLowerCase() === tLower) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Helper thêm hoặc bỏ chọn 1 vị trí ghế cố định (Desk, Row, SeatCol) cho học sinh được chỉ định (nick)
+  const toggleFixedSeatPosition = (nick: string, deskNum: number, rowNum: number, seatColNum: number) => {
+    if (!nick) return;
+
+    setSeatingRules(prev => {
+      const currentRules = prev.fixedSeatRules || [];
+      const ruleIdx = currentRules.findIndex(r => isStudentMatch(r.studentNickname, nick, students));
+
+      let updatedRules: StudentFixedSeatRule[];
+
+      if (ruleIdx >= 0) {
+        const targetRule = currentRules[ruleIdx];
+        const posIdx = targetRule.positions.findIndex(p => p.desk === deskNum && p.row === rowNum && p.seatCol === seatColNum);
+
+        let newPositions: FixedSeatPosition[];
+        if (posIdx >= 0) {
+          // Đã có vị trí này -> bỏ chọn ghế
+          newPositions = targetRule.positions.filter((_, i) => i !== posIdx);
+        } else {
+          // Chưa có vị trí này -> thêm ghế bổ sung
+          newPositions = [
+            ...targetRule.positions,
+            {
+              desk: deskNum,
+              row: rowNum,
+              seatCol: seatColNum,
+              label: formatFixedPosition(deskNum, rowNum, seatColNum),
+            },
+          ];
+        }
+
+        if (newPositions.length === 0) {
+          // Nếu xóa hết ghế -> xóa nguyên quy tắc học sinh này
+          updatedRules = currentRules.filter((_, i) => i !== ruleIdx);
+        } else {
+          updatedRules = currentRules.map((r, i) =>
+            i === ruleIdx
+              ? {
+                  ...r,
+                  positions: newPositions,
+                  rawText: newPositions.map(p => p.label).join('; '),
+                }
+              : r
+          );
+        }
+      } else {
+        // Chưa có quy tắc cho học sinh này -> tạo quy tắc mới
+        const newPos: FixedSeatPosition = {
+          desk: deskNum,
+          row: rowNum,
+          seatCol: seatColNum,
+          label: formatFixedPosition(deskNum, rowNum, seatColNum),
+        };
+        const newRule: StudentFixedSeatRule = {
+          studentNickname: nick,
+          positions: [newPos],
+          rawText: newPos.label,
+        };
+        updatedRules = [...currentRules, newRule];
+      }
+
+      return { ...prev, fixedSeatRules: updatedRules };
+    });
+  };
+
+  // Hàm chọn/bỏ chọn nhanh các vị trí ghế cho học sinh đang chọn (fixedFormStudent)
+  const handleQuickSelectPositions = (
+    actionType: 'desk' | 'row' | 'team' | 'clear',
+    params?: { desk?: number; row?: number; teamId?: string }
+  ) => {
+    const nick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
+    if (!nick) return;
+
+    if (actionType === 'clear') {
+      setSeatingRules(prev => ({
+        ...prev,
+        fixedSeatRules: (prev.fixedSeatRules || []).filter(
+          r => !isStudentMatch(r.studentNickname, nick, students)
+        ),
+      }));
+      return;
+    }
+
+    const targetSeats: { desk: number; row: number; seatCol: number }[] = [];
+
+    if (actionType === 'desk' && params?.desk !== undefined && params?.row !== undefined) {
+      const cap = getDeskSeatCount(params.desk, params.row);
+      for (let g = 1; g <= cap; g++) {
+        targetSeats.push({ desk: params.desk, row: params.row, seatCol: g });
+      }
+    } else if (actionType === 'row' && params?.row !== undefined) {
+      for (let d = 1; d <= 6; d++) {
+        const cap = getDeskSeatCount(d, params.row);
+        for (let g = 1; g <= cap; g++) {
+          targetSeats.push({ desk: d, row: params.row, seatCol: g });
+        }
+      }
+    } else if (actionType === 'team' && params?.teamId !== undefined) {
+      let r = 1;
+      let desks = [1, 2, 3];
+      if (params.teamId === 'team_1' || params.teamId === 'Tổ 1') {
+        r = 1; desks = [1, 2, 3];
+      } else if (params.teamId === 'team_2' || params.teamId === 'Tổ 2') {
+        r = 1; desks = [4, 5, 6];
+      } else if (params.teamId === 'team_3' || params.teamId === 'Tổ 3') {
+        r = 2; desks = [1, 2, 3];
+      } else if (params.teamId === 'team_4' || params.teamId === 'Tổ 4') {
+        r = 2; desks = [4, 5, 6];
+      }
+      for (const d of desks) {
+        const cap = getDeskSeatCount(d, r);
+        for (let g = 1; g <= cap; g++) {
+          targetSeats.push({ desk: d, row: r, seatCol: g });
+        }
+      }
+    }
+
+    if (targetSeats.length === 0) return;
+
+    setSeatingRules(prev => {
+      const currentRules = prev.fixedSeatRules || [];
+      const ruleIdx = currentRules.findIndex(
+        r => isStudentMatch(r.studentNickname, nick, students)
+      );
+
+      let currentPos: FixedSeatPosition[] = [];
+      if (ruleIdx >= 0) {
+        currentPos = [...currentRules[ruleIdx].positions];
+      }
+
+      // Dù đã chọn hay chưa, luôn cộng dồn các vị trí vào danh sách cố định của học sinh
+      for (const ts of targetSeats) {
+        if (!currentPos.some(p => p.desk === ts.desk && p.row === ts.row && p.seatCol === ts.seatCol)) {
+          currentPos.push({
+            ...ts,
+            label: formatFixedPosition(ts.desk, ts.row, ts.seatCol),
+          });
+        }
+      }
+
+      let updatedRules: StudentFixedSeatRule[];
+      if (ruleIdx >= 0) {
+        updatedRules = currentRules.map((r, i) =>
+          i === ruleIdx
+            ? {
+                ...r,
+                positions: currentPos,
+                rawText: currentPos.map(p => p.label).join('; '),
+              }
+            : r
+        );
+      } else {
+        updatedRules = [
+          ...currentRules,
+          {
+            studentNickname: nick,
+            positions: currentPos,
+            rawText: currentPos.map(p => p.label).join('; '),
+          },
+        ];
+      }
+
+      return { ...prev, fixedSeatRules: updatedRules };
+    });
   };
 
   // Hàm kiểm tra vi phạm điều kiện xếp chỗ của giáo viên
   const validateSeatingViolations = (studentList: StudentCardData[], rules: SeatingRulesConfig): SeatingViolation[] => {
     const violations: SeatingViolation[] = [];
 
-    // 1. Ràng buộc: Học sinh không được ngồi gần nhau
+    // 1. Ràng buộc: Học sinh trong cùng nhóm không được ngồi gần nhau
     if (rules.avoidNearStudents.trim()) {
-      const avoidNames = rules.avoidNearStudents
-        .split(/[;,]+/)
-        .map(n => n.trim().toLowerCase())
-        .filter(Boolean);
+      const avoidGroups = parseAvoidNearGroups(rules.avoidNearStudents);
 
-      const seatedAvoidStudents: { s: StudentCardData; coords: { row: number; desk: number; seatCol: number; x: number; y: number } }[] = [];
-      for (const st of studentList) {
-        const nick = (st.nickname || '').toLowerCase();
-        const fullName = st.name.toLowerCase();
-        if (avoidNames.some(name => name === nick || name === fullName || fullName.includes(name))) {
-          const coords = getStudentCoordinates(st);
-          if (coords) {
-            seatedAvoidStudents.push({ s: st, coords });
+      avoidGroups.forEach((groupNames, groupIdx) => {
+        const avoidNames = groupNames.map(n => n.trim().toLowerCase()).filter(Boolean);
+        if (avoidNames.length < 2) return;
+
+        const seatedAvoidStudents: { s: StudentCardData; coords: { row: number; desk: number; seatCol: number; x: number; y: number } }[] = [];
+        for (const st of studentList) {
+          const nick = (st.nickname || '').toLowerCase();
+          const fullName = st.name.toLowerCase();
+          if (avoidNames.some(name => name === nick || name === fullName || fullName.includes(name))) {
+            const coords = getStudentCoordinates(st);
+            if (coords) {
+              seatedAvoidStudents.push({ s: st, coords });
+            }
           }
         }
-      }
 
-      for (let i = 0; i < seatedAvoidStudents.length; i++) {
-        for (let j = i + 1; j < seatedAvoidStudents.length; j++) {
-          const st1 = seatedAvoidStudents[i];
-          const st2 = seatedAvoidStudents[j];
+        for (let i = 0; i < seatedAvoidStudents.length; i++) {
+          for (let j = i + 1; j < seatedAvoidStudents.length; j++) {
+            const st1 = seatedAvoidStudents[i];
+            const st2 = seatedAvoidStudents[j];
 
-          const dx = Math.abs(st1.coords.x - st2.coords.x);
-          const dy = Math.abs(st1.coords.y - st2.coords.y);
-          const isSameRow = st1.coords.row === st2.coords.row;
+            const dx = Math.abs(st1.coords.x - st2.coords.x);
+            const dy = Math.abs(st1.coords.y - st2.coords.y);
+            const isSameRow = st1.coords.row === st2.coords.row;
 
-          // Nếu cùng dãy và cùng bàn hoặc bàn kề nhau và khoảng cách ngang <= 1 (kề nhau dọc, ngang, hoặc xiên)
-          if (isSameRow && dx <= 1 && dy <= 1) {
-            violations.push({
-              type: 'avoid_near',
-              message: `Học sinh "${st1.s.nickname || st1.s.name}" và "${st2.s.nickname || st2.s.name}" không được ngồi gần nhau! (Hiện ngồi kề nhau tại Bàn ${st1.s.desk}-Dãy ${st1.coords.row} và Bàn ${st2.s.desk}-Dãy ${st2.coords.row})`,
-              studentNames: [st1.s.nickname || st1.s.name, st2.s.nickname || st2.s.name],
-            });
+            if (isSameRow && dx <= 1 && dy <= 1) {
+              const groupLabel = avoidGroups.length > 1 ? ` (Nhóm ${groupIdx + 1})` : '';
+              violations.push({
+                type: 'avoid_near',
+                message: `Học sinh "${st1.s.nickname || st1.s.name}" và "${st2.s.nickname || st2.s.name}"${groupLabel} không được ngồi gần nhau! (Hiện ngồi kề nhau tại Bàn ${st1.s.desk}-Dãy ${st1.coords.row} và Bàn ${st2.s.desk}-Dãy ${st2.coords.row})`,
+                studentNames: [st1.s.nickname || st1.s.name, st2.s.nickname || st2.s.name],
+              });
+            }
           }
         }
-      }
+      });
     }
 
     // 2. Ràng buộc: Vị trí bàn cố định
@@ -878,53 +1081,55 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       }
     }
 
-    // BƯỚC 3: XẾP HỌC SINH KHÔNG ĐƯỢC GẦN NHAU (TÁCH XA NHAU TỐI ĐA)
+    // BƯỚC 3: XẾP HỌC SINH KHÔNG ĐƯỢC GẦN NHAU (TÁCH XA NHAU TỐI ĐA TRONG TỪNG NHÓM)
     if (seatingRules.avoidNearStudents.trim()) {
-      const avoidNames = seatingRules.avoidNearStudents
-        .split(/[;,]+/)
-        .map(n => n.trim().toLowerCase())
-        .filter(Boolean);
+      const avoidGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
 
-      const avoidStudents = copy.filter(
-        s => !assignedIds.has(s.id) && avoidNames.some(name => name === (s.nickname || '').toLowerCase() || s.name.toLowerCase() === name || s.name.toLowerCase().includes(name))
-      );
+      for (const groupNames of avoidGroups) {
+        const avoidNames = groupNames.map(n => n.trim().toLowerCase()).filter(Boolean);
+        if (avoidNames.length < 2) continue;
 
-      // Điểm ưu tiên các góc phòng và các dãy đối diện để tách xa nhất
-      for (const st of avoidStudents) {
-        let bestSlot: SeatSlot | null = null;
-        let maxMinDist = -1;
+        const groupStudents = copy.filter(
+          s => !assignedIds.has(s.id) && avoidNames.some(name => name === (s.nickname || '').toLowerCase() || s.name.toLowerCase() === name || s.name.toLowerCase().includes(name))
+        );
 
-        const freeSlots = allSlots.filter(sl => !sl.occupiedBy);
-        const placedAvoidSlots = allSlots.filter(sl => sl.occupiedBy && avoidNames.some(name => (sl.occupiedBy?.nickname || '').toLowerCase() === name || (sl.occupiedBy?.name || '').toLowerCase().includes(name)));
+        for (const st of groupStudents) {
+          let bestSlot: SeatSlot | null = null;
+          let maxMinDist = -1;
 
-        for (const slot of freeSlots) {
-          if (placedAvoidSlots.length === 0) {
-            bestSlot = slot;
-            break;
+          const freeSlots = allSlots.filter(sl => !sl.occupiedBy);
+          const placedGroupSlots = allSlots.filter(
+            sl => sl.occupiedBy && avoidNames.some(name => (sl.occupiedBy?.nickname || '').toLowerCase() === name || (sl.occupiedBy?.name || '').toLowerCase().includes(name))
+          );
+
+          for (const slot of freeSlots) {
+            if (placedGroupSlots.length === 0) {
+              bestSlot = slot;
+              break;
+            }
+
+            let minDist = 999;
+            for (const pSlot of placedGroupSlots) {
+              const isSameRow = slot.row === pSlot.row;
+              const dx = Math.abs(slot.x - pSlot.x);
+              const dy = Math.abs(slot.y - pSlot.y);
+              const dist = isSameRow ? Math.max(dx, dy) : Math.sqrt(dx * dx + dy * dy) + 5;
+              if (dist < minDist) minDist = dist;
+            }
+
+            if (minDist > maxMinDist) {
+              maxMinDist = minDist;
+              bestSlot = slot;
+            }
           }
 
-          let minDist = 999;
-          for (const pSlot of placedAvoidSlots) {
-            const isSameRow = slot.row === pSlot.row;
-            const dx = Math.abs(slot.x - pSlot.x);
-            const dy = Math.abs(slot.y - pSlot.y);
-            const dist = isSameRow ? Math.max(dx, dy) : Math.sqrt(dx * dx + dy * dy) + 5; // Khác dãy được cộng điểm cách ly
-            if (dist < minDist) minDist = dist;
+          if (bestSlot) {
+            bestSlot.occupiedBy = st;
+            st.team = bestSlot.teamName;
+            st.desk = bestSlot.desk;
+            st.seatCol = bestSlot.seatCol;
+            assignedIds.add(st.id);
           }
-
-          // Chỉ chọn nếu cách ít nhất 1 bạn (minDist >= 2 trên cùng dãy hoặc khác dãy)
-          if (minDist > maxMinDist) {
-            maxMinDist = minDist;
-            bestSlot = slot;
-          }
-        }
-
-        if (bestSlot) {
-          bestSlot.occupiedBy = st;
-          st.team = bestSlot.teamName;
-          st.desk = bestSlot.desk;
-          st.seatCol = bestSlot.seatCol;
-          assignedIds.add(st.id);
         }
       }
     }
@@ -1445,19 +1650,15 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
         localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
 
-        const conn = getDriveConnectionState();
+        // Lưu vào bộ nhớ đệm và đẩy trực tiếp lên thư mục "myApp/LopU/SoDoLop" trên Google Drive
+        const driveRes = await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
         const cleanFileName = fileName.replace('.json', '');
-        if (conn.isConnected) {
-          try {
-            // Upload to real Drive using existing driveService API with full custom file name and data structure
-            await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
-            setSyncMessage(`Đã tải lên Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
-          } catch (realErr) {
-            console.warn('Real Drive upload failed:', realErr);
-            setSyncMessage(`Đã lưu file ${cleanFileName} vào hệ thống!`);
-          }
+
+        const conn = getDriveConnectionState();
+        if (conn.isConnected || driveRes.success) {
+          setSyncMessage(`Đã tải lên Google Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
         } else {
-          setSyncMessage(`Đã lưu file ${cleanFileName} vào hệ thống (Google Drive chưa kết nối)!`);
+          setSyncMessage(`Đã lưu sơ đồ lớp ${cleanFileName} vào hệ thống thành công (Thư mục: myApp\\LopU\\SoDoLop)!`);
         }
 
         setIsUploadingDrive(false);
@@ -2789,83 +2990,203 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             {/* Modal Body */}
             <div className="p-4 sm:p-6 overflow-y-auto space-y-6 flex-1 text-xs">
               
-              {/* TRƯỜNG 1: HỌC SINH KHÔNG ĐƯỢC GẦN NHAU */}
+              {/* TRƯỜNG 1: HỌC SINH KHÔNG ĐƯỢC GẦN NHAU (HỖ TRỢ NHIỀU NHÓM TÁCH RIÊNG) */}
               <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-rose-500" />
                     <span>1. Danh sách học sinh không được gần nhau</span>
                   </label>
-                  <span className="text-[11px] text-slate-500 italic">Cách nhau bằng dấu ;</span>
+                  <span className="text-[11px] text-slate-500 italic">Hỗ trợ nhiều nhóm khác nhau</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed">
-                  💡 <strong>Quy tắc tách:</strong> Khi phân tự động sẽ tách các học sinh này cách nhau <strong>ít nhất 1 bạn</strong> theo chiều dọc, theo chiều ngang và theo chiều xiên; tốt nhất là càng xa nhau càng tốt.
+                  💡 <strong>Quy tắc tách nhiều nhóm:</strong> Có thể thêm <strong>nhiều nhóm bạn không ngồi gần nhau khác nhau</strong>. Các học sinh thuộc cùng một nhóm sẽ được tách xa nhau ít nhất 1 bạn (ví dụ: <em>Nhóm 1: Bạn A - Bạn B; Nhóm 2: Bạn C - Bạn D - Bạn E</em>).
                 </p>
 
-                {/* Chọn từ dropdown biệt danh */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <select
-                    id="select-avoid-student"
-                    className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                    defaultValue=""
-                    onChange={e => {
-                      const val = e.target.value;
-                      if (!val) return;
-                      const current = seatingRules.avoidNearStudents ? seatingRules.avoidNearStudents.split(';').map(x => x.trim()).filter(Boolean) : [];
-                      if (!current.includes(val)) {
-                        current.push(val);
-                        setSeatingRules(prev => ({ ...prev, avoidNearStudents: current.join('; ') }));
-                      }
-                      e.target.value = '';
-                    }}
-                  >
-                    <option value="" disabled>+ Chọn Biệt danh học sinh để thêm...</option>
-                    {students.map(s => {
-                      const display = s.nickname || s.name;
-                      return (
-                        <option key={s.id} value={display}>
-                          {display} {s.nickname ? `(${s.name})` : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
+                {/* Form ghép thêm nhóm mới hỗ trợ không giới hạn số lượng học sinh (2, 3, 4, 5... bạn) */}
+                <div className="bg-white border border-slate-200 rounded-xl p-3 space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-800 block">
+                      + Tạo nhóm không gần nhau mới (Có thể chọn 2, 3, 4, 5... học sinh vào 1 nhóm):
+                    </span>
+                    {newAvoidGroupMembers.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setNewAvoidGroupMembers([])}
+                        className="text-[10px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        Xóa chọn
+                      </button>
+                    )}
+                  </div>
 
-                  <span className="text-[11px] text-slate-400 font-medium">hoặc chỉnh sửa trực tiếp chuỗi bên dưới:</span>
+                  {/* Dropdown chọn học sinh để thêm vào nhóm mới */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select
+                      className="bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:ring-2 focus:ring-purple-500 focus:outline-hidden cursor-pointer"
+                      defaultValue=""
+                      onChange={e => {
+                        const val = e.target.value;
+                        if (!val) return;
+                        if (!newAvoidGroupMembers.some(x => x.toLowerCase() === val.toLowerCase())) {
+                          setNewAvoidGroupMembers(prev => [...prev, val]);
+                        }
+                        e.target.value = '';
+                      }}
+                    >
+                      <option value="" disabled>+ Chọn học sinh để thêm vào nhóm mới...</option>
+                      {students.map(s => {
+                        const display = s.nickname || s.name;
+                        if (newAvoidGroupMembers.some(x => x.toLowerCase() === display.toLowerCase())) return null;
+                        return (
+                          <option key={s.id} value={display}>
+                            {display} {s.nickname ? `(${s.name})` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+
+                    <button
+                      type="button"
+                      disabled={newAvoidGroupMembers.length < 2}
+                      onClick={() => {
+                        if (newAvoidGroupMembers.length < 2) return;
+                        const currentGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+                        currentGroups.push([...newAvoidGroupMembers]);
+                        setSeatingRules(prev => ({ ...prev, avoidNearStudents: formatAvoidNearGroups(currentGroups) }));
+                        setNewAvoidGroupMembers([]);
+                      }}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs ${
+                        newAvoidGroupMembers.length >= 2
+                          ? 'bg-rose-600 hover:bg-rose-700 text-white cursor-pointer'
+                          : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      }`}
+                    >
+                      + Lưu Nhóm Mới ({newAvoidGroupMembers.length} bạn)
+                    </button>
+                  </div>
+
+                  {/* Danh sách thẻ các bạn đang được chọn cho nhóm mới */}
+                  {newAvoidGroupMembers.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                      <span className="text-[10px] font-extrabold text-slate-500 uppercase mr-1">Các thành viên nhóm mới:</span>
+                      {newAvoidGroupMembers.map((name, idx) => (
+                        <span
+                          key={idx}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 bg-rose-100 border border-rose-300 text-rose-900 font-extrabold rounded-md text-[11px]"
+                        >
+                          <span>{name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setNewAvoidGroupMembers(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-rose-500 hover:text-rose-800 font-black cursor-pointer ml-0.5"
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <input
-                  type="text"
-                  value={seatingRules.avoidNearStudents}
-                  onChange={e => setSeatingRules(prev => ({ ...prev, avoidNearStudents: e.target.value }))}
-                  placeholder="Ví dụ: Bảo; Tuấn; Minh; Hoàng"
-                  className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
-                />
+                {/* Danh sách các nhóm hiện có */}
+                {(() => {
+                  const avoidGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+                  if (avoidGroups.length === 0) return null;
 
-                {/* Danh sách Tag học sinh không gần nhau */}
-                {seatingRules.avoidNearStudents && (
-                  <div className="flex flex-wrap gap-1.5 pt-1">
-                    {seatingRules.avoidNearStudents.split(/[;,]+/).map(x => x.trim()).filter(Boolean).map((name, idx) => (
-                      <span
-                        key={idx}
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 font-bold rounded-lg text-[11px]"
-                      >
-                        <span>{name}</span>
-                        <button
-                          onClick={() => {
-                            const filtered = seatingRules.avoidNearStudents
-                              .split(/[;,]+/)
-                              .map(x => x.trim())
-                              .filter(x => x.toLowerCase() !== name.toLowerCase());
-                            setSeatingRules(prev => ({ ...prev, avoidNearStudents: filtered.join('; ') }));
-                          }}
-                          className="text-rose-400 hover:text-rose-700 cursor-pointer font-black"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                  return (
+                    <div className="space-y-2 pt-1">
+                      <span className="text-[11px] font-bold text-slate-700 block">Các nhóm học sinh không gần nhau hiện tại:</span>
+                      <div className="space-y-2">
+                        {avoidGroups.map((groupNames, gIdx) => (
+                          <div key={gIdx} className="bg-white border border-rose-200 rounded-xl p-2.5 space-y-2 shadow-2xs">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-extrabold text-rose-900 text-[11px]">
+                                🚫 Nhóm {gIdx + 1} ({groupNames.length} bạn không được ngồi gần nhau):
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const groups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+                                  groups.splice(gIdx, 1);
+                                  setSeatingRules(prev => ({ ...prev, avoidNearStudents: formatAvoidNearGroups(groups) }));
+                                }}
+                                className="text-[10px] text-rose-500 hover:text-rose-700 hover:bg-rose-50 font-bold px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                              >
+                                Xóa nhóm {gIdx + 1}
+                              </button>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              {groupNames.map((name, nIdx) => (
+                                <span
+                                  key={nIdx}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-rose-50 border border-rose-200 text-rose-800 font-bold rounded-lg text-[11px]"
+                                >
+                                  <span>{name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const groups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+                                      if (groups[gIdx]) {
+                                        groups[gIdx] = groups[gIdx].filter(x => x.toLowerCase() !== name.toLowerCase());
+                                        if (groups[gIdx].length === 0) {
+                                          groups.splice(gIdx, 1);
+                                        }
+                                      }
+                                      setSeatingRules(prev => ({ ...prev, avoidNearStudents: formatAvoidNearGroups(groups) }));
+                                    }}
+                                    className="text-rose-400 hover:text-rose-700 cursor-pointer font-black"
+                                    title={`Xóa ${name} khỏi Nhóm ${gIdx + 1}`}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+
+                              {/* Dropdown thêm bạn vào nhóm này */}
+                              <select
+                                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 cursor-pointer focus:outline-hidden"
+                                defaultValue=""
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  if (!val) return;
+                                  const groups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+                                  if (groups[gIdx] && !groups[gIdx].some(x => x.toLowerCase() === val.toLowerCase())) {
+                                    groups[gIdx].push(val);
+                                    setSeatingRules(prev => ({ ...prev, avoidNearStudents: formatAvoidNearGroups(groups) }));
+                                  }
+                                  e.target.value = '';
+                                }}
+                              >
+                                <option value="" disabled>+ Thêm bạn vào Nhóm {gIdx + 1}...</option>
+                                {students.map(s => {
+                                  const display = s.nickname || s.name;
+                                  if (groupNames.some(x => x.toLowerCase() === display.toLowerCase())) return null;
+                                  return <option key={s.id} value={display}>{display}</option>;
+                                })}
+                              </select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Nhập / Sửa trực tiếp chuỗi */}
+                <div className="space-y-1 pt-1">
+                  <span className="text-[10px] font-bold text-slate-400 block">
+                    Hoặc chỉnh sửa trực tiếp chuỗi (Các nhóm cách nhau bởi dấu ;, các bạn trong nhóm cách nhau bởi gạch ngang -):
+                  </span>
+                  <input
+                    type="text"
+                    value={seatingRules.avoidNearStudents}
+                    onChange={e => setSeatingRules(prev => ({ ...prev, avoidNearStudents: e.target.value }))}
+                    placeholder="Ví dụ: Bạn A - Bạn B; Bạn C - Bạn D - Bạn E"
+                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-semibold text-slate-900 focus:ring-2 focus:ring-purple-500 focus:outline-hidden"
+                  />
+                </div>
               </div>
 
               {/* TRƯỜNG 2: VỊ TRÍ BÀN CỐ ĐỊNH */}
@@ -2878,11 +3199,11 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                   <span className="text-[11px] text-slate-500 italic">bàn x-dãy y-Gz (cách nhau bởi ;)</span>
                 </div>
                 <p className="text-slate-600 leading-relaxed">
-                  💡 <strong>Cấu trúc:</strong> Mỗi học sinh có thể có nhiều vị trí bàn cố định (VD: <em>Học sinh X có vị trí: bàn 6-dãy 1-G3; bàn 6-dãy 2-G1; Bàn 5-dãy 1-G2</em>). Thêm bằng cách <strong>trỏ chuột chọn trên sơ đồ bàn không tên</strong> hoặc <strong>chọn Bàn/Dãy/Ghế</strong> bên dưới:
+                  💡 <strong>Cấu trúc:</strong> Mỗi học sinh có thể chọn <strong>nhiều vị trí cùng lúc</strong> hoặc chọn bằng <strong>nút chọn nhanh cả Bàn, cả Dãy, cả Tổ</strong> bên dưới.
                 </p>
 
-                {/* Form thêm quy tắc vị trí cố định */}
-                <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-4 shadow-2xs">
+                {/* Form chọn học sinh & thanh nút chọn nhanh */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-4 space-y-3.5 shadow-2xs">
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="space-y-1">
                       <span className="text-[10px] font-bold text-slate-500 uppercase">Chọn Học sinh (Biệt danh):</span>
@@ -2960,48 +3281,106 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                       </select>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
-                        const desk = fixedFormDesk;
-                        const row = fixedFormRow;
-                        const currentDeskCap = getDeskSeatCount(desk, row);
-                        const seatCol = Math.min(fixedFormCol, currentDeskCap);
+                    <div className="flex items-center gap-2 mt-5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
+                          const desk = fixedFormDesk;
+                          const row = fixedFormRow;
+                          const currentDeskCap = getDeskSeatCount(desk, row);
+                          const seatCol = Math.min(fixedFormCol, currentDeskCap);
 
-                        if (!nick) return;
+                          if (!nick) return;
+                          toggleFixedSeatPosition(nick, desk, row, seatCol);
+                        }}
+                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
+                      >
+                        + Thêm 1 Ghế
+                      </button>
 
-                        const newPos: FixedSeatPosition = {
-                          desk,
-                          row,
-                          seatCol,
-                          label: formatFixedPosition(desk, row, seatCol),
-                        };
+                      <button
+                        type="button"
+                        onClick={() => handleQuickSelectPositions('desk', { desk: fixedFormDesk, row: fixedFormRow })}
+                        className="px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
+                        title={`Thêm / Bỏ chọn toàn bộ ghế Bàn ${fixedFormDesk} - Dãy ${fixedFormRow}`}
+                      >
+                        + Thêm Cả Bàn {fixedFormDesk}
+                      </button>
+                    </div>
+                  </div>
 
-                        setSeatingRules(prev => {
-                          const existingRules = [...(prev.fixedSeatRules || [])];
-                          const ruleIdx = existingRules.findIndex(r => r.studentNickname.toLowerCase() === nick.toLowerCase());
+                  {/* Nút chọn nhanh Cả Tổ, Cả Dãy, Xóa vị trí */}
+                  {(() => {
+                    const currentNick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
+                    const currentRule = seatingRules.fixedSeatRules?.find(r => isStudentMatch(r.studentNickname, currentNick, students));
+                    const posCount = currentRule?.positions.length || 0;
 
-                          if (ruleIdx >= 0) {
-                            const exists = existingRules[ruleIdx].positions.some(p => p.desk === desk && p.row === row && p.seatCol === seatCol);
-                            if (!exists) {
-                              existingRules[ruleIdx].positions.push(newPos);
-                              existingRules[ruleIdx].rawText = existingRules[ruleIdx].positions.map(p => p.label).join('; ');
-                            }
-                          } else {
-                            existingRules.push({
-                              studentNickname: nick,
-                              positions: [newPos],
-                              rawText: newPos.label,
-                            });
-                          }
-                          return { ...prev, fixedSeatRules: existingRules };
-                        });
-                      }}
-                      className="mt-5 px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
-                    >
-                      + Thêm Vị Trí
-                    </button>
+                    return (
+                      <div className="bg-indigo-50/70 border border-indigo-200/80 rounded-xl p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-extrabold text-indigo-900 flex items-center gap-1.5">
+                            <Zap className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>NÚT CHỌN NHANH VỊ TRÍ Cho "{currentNick}" ({posCount} vị trí đã chọn):</span>
+                          </span>
+                          {posCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleQuickSelectPositions('clear')}
+                              className="text-[10px] font-extrabold text-rose-600 hover:text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                            >
+                              🗑️ Xóa vị trí HS này
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                          <span className="text-[10px] font-extrabold text-slate-500 uppercase mr-1">⚡ Chọn Cả Tổ:</span>
+                          {['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'].map((tName, tIdx) => (
+                            <button
+                              key={tName}
+                              type="button"
+                              onClick={() => handleQuickSelectPositions('team', { teamId: `team_${tIdx + 1}` })}
+                              className="px-2.5 py-1 bg-white hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-[11px] font-black rounded-lg shadow-3xs cursor-pointer transition-colors"
+                              title={`Chọn / Bỏ chọn toàn bộ ghế trong ${tName}`}
+                            >
+                              ⚡ {tName}
+                            </button>
+                          ))}
+
+                          <span className="text-[10px] font-extrabold text-slate-500 uppercase ml-2 mr-1">| ⚡ Chọn Cả Dãy:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickSelectPositions('row', { row: 1 })}
+                            className="px-2.5 py-1 bg-white hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-[11px] font-black rounded-lg shadow-3xs cursor-pointer transition-colors"
+                            title="Chọn / Bỏ chọn toàn bộ ghế Dãy 1 (Bàn 1-6)"
+                          >
+                            ⚡ Dãy 1
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickSelectPositions('row', { row: 2 })}
+                            className="px-2.5 py-1 bg-white hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-[11px] font-black rounded-lg shadow-3xs cursor-pointer transition-colors"
+                            title="Chọn / Bỏ chọn toàn bộ ghế Dãy 2 (Bàn 1-6)"
+                          >
+                            ⚡ Dãy 2
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Banner hiển thị học sinh đang được chọn để gán ghế */}
+                  <div className="flex items-center justify-between bg-purple-100/80 border border-purple-300 p-2.5 rounded-xl text-xs font-bold text-purple-950 shadow-2xs">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-purple-700 shrink-0 animate-bounce" />
+                      <span>
+                        Đang chọn vị trí cố định cho: <strong className="text-purple-800 text-sm font-black underline decoration-purple-400">{fixedFormStudent || (students[0]?.nickname || students[0]?.name || '')}</strong>
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-purple-700 font-semibold italic">
+                      (Bấm trỏ chuột vào ô ghế bất kỳ trên sơ đồ để thêm hoặc bỏ chọn)
+                    </span>
                   </div>
 
                   {/* Sơ đồ bàn tương tác KHÔNG CÓ TÊN HỌC SINH để trỏ chuột bấm chọn vị trí */}
@@ -3011,25 +3390,47 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                         <MapPin className="w-3.5 h-3.5 text-purple-600" />
                         <span>Trỏ chuột chọn trực tiếp trên sơ đồ bàn lớp học:</span>
                       </span>
-                      <span className="text-[10px] text-slate-400">Bấm ô ghế để thêm/bỏ vị trí (đồng bộ theo số ghế thực tế từng bàn)</span>
+                      <span className="text-[10px] text-slate-400">Bấm ô ghế/nút Cả bàn để chọn/bỏ vị trí cho học sinh</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 bg-slate-50/70 p-3 rounded-xl border border-slate-200">
                       {/* Cột Dãy 1 */}
                       <div className="space-y-2">
-                        <div className="text-center font-extrabold text-[11px] text-indigo-900 bg-indigo-50 py-1 rounded-lg border border-indigo-100">
-                          DÃY 1 (Tổ 1 & Tổ 2)
+                        <div className="flex items-center justify-between bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                          <span className="font-extrabold text-[11px] text-indigo-900">
+                            DÃY 1 (Tổ 1 & Tổ 2)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickSelectPositions('row', { row: 1 })}
+                            className="text-[10px] font-extrabold text-indigo-700 hover:text-indigo-900 bg-white border border-indigo-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors shadow-3xs"
+                            title="Chọn / Bỏ chọn tất cả ghế Dãy 1"
+                          >
+                            ⚡ Cả Dãy 1
+                          </button>
                         </div>
+
                         <div className="space-y-1.5">
                           {[1, 2, 3, 4, 5, 6].map(deskNum => {
                             const currentCap = getDeskSeatCount(deskNum, 1);
                             return (
                               <div key={deskNum} className="flex items-center justify-between gap-1 bg-white p-1.5 rounded-lg border border-slate-200">
-                                <span className="text-[10px] font-bold text-slate-500 w-12 shrink-0">Bàn {deskNum}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="text-[10px] font-bold text-slate-500">Bàn {deskNum}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickSelectPositions('desk', { desk: deskNum, row: 1 })}
+                                    className="text-[9px] font-extrabold text-indigo-700 hover:bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded cursor-pointer transition-colors"
+                                    title={`Chọn / Bỏ chọn cả Bàn ${deskNum} - Dãy 1`}
+                                  >
+                                    ⚡ Cả bàn
+                                  </button>
+                                </div>
+
                                 <div className="flex items-center gap-1 flex-1 justify-end">
                                   {Array.from({ length: currentCap }, (_, i) => i + 1).map(gNum => {
                                     const currentNick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
-                                    const studentRule = seatingRules.fixedSeatRules?.find(r => r.studentNickname.toLowerCase() === currentNick.toLowerCase());
+                                    const studentRule = seatingRules.fixedSeatRules?.find(r => isStudentMatch(r.studentNickname, currentNick, students));
                                     const isSelected = studentRule?.positions.some(p => p.desk === deskNum && p.row === 1 && p.seatCol === gNum);
 
                                     return (
@@ -3039,38 +3440,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                                         onClick={() => {
                                           const nick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
                                           if (!nick) return;
-
-                                          setSeatingRules(prev => {
-                                            const existingRules = [...(prev.fixedSeatRules || [])];
-                                            const ruleIdx = existingRules.findIndex(r => r.studentNickname.toLowerCase() === nick.toLowerCase());
-
-                                            if (ruleIdx >= 0) {
-                                              const posIdx = existingRules[ruleIdx].positions.findIndex(p => p.desk === deskNum && p.row === 1 && p.seatCol === gNum);
-                                              if (posIdx >= 0) {
-                                                existingRules[ruleIdx].positions.splice(posIdx, 1);
-                                              } else {
-                                                existingRules[ruleIdx].positions.push({
-                                                  desk: deskNum,
-                                                  row: 1,
-                                                  seatCol: gNum,
-                                                  label: formatFixedPosition(deskNum, 1, gNum),
-                                                });
-                                              }
-                                              existingRules[ruleIdx].rawText = existingRules[ruleIdx].positions.map(p => p.label).join('; ');
-                                            } else {
-                                              existingRules.push({
-                                                studentNickname: nick,
-                                                positions: [{
-                                                  desk: deskNum,
-                                                  row: 1,
-                                                  seatCol: gNum,
-                                                  label: formatFixedPosition(deskNum, 1, gNum),
-                                                }],
-                                                rawText: formatFixedPosition(deskNum, 1, gNum),
-                                              });
-                                            }
-                                            return { ...prev, fixedSeatRules: existingRules };
-                                          });
+                                          toggleFixedSeatPosition(nick, deskNum, 1, gNum);
                                         }}
                                         className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                           isSelected
@@ -3092,19 +3462,41 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
                       {/* Cột Dãy 2 */}
                       <div className="space-y-2">
-                        <div className="text-center font-extrabold text-[11px] text-indigo-900 bg-indigo-50 py-1 rounded-lg border border-indigo-100">
-                          DÃY 2 (Tổ 3 & Tổ 4)
+                        <div className="flex items-center justify-between bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100">
+                          <span className="font-extrabold text-[11px] text-indigo-900">
+                            DÃY 2 (Tổ 3 & Tổ 4)
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleQuickSelectPositions('row', { row: 2 })}
+                            className="text-[10px] font-extrabold text-indigo-700 hover:text-indigo-900 bg-white border border-indigo-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors shadow-3xs"
+                            title="Chọn / Bỏ chọn tất cả ghế Dãy 2"
+                          >
+                            ⚡ Cả Dãy 2
+                          </button>
                         </div>
+
                         <div className="space-y-1.5">
                           {[1, 2, 3, 4, 5, 6].map(deskNum => {
                             const currentCap = getDeskSeatCount(deskNum, 2);
                             return (
                               <div key={deskNum} className="flex items-center justify-between gap-1 bg-white p-1.5 rounded-lg border border-slate-200">
-                                <span className="text-[10px] font-bold text-slate-500 w-12 shrink-0">Bàn {deskNum}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="text-[10px] font-bold text-slate-500">Bàn {deskNum}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickSelectPositions('desk', { desk: deskNum, row: 2 })}
+                                    className="text-[9px] font-extrabold text-indigo-700 hover:bg-indigo-50 border border-indigo-200 px-1 py-0.5 rounded cursor-pointer transition-colors"
+                                    title={`Chọn / Bỏ chọn cả Bàn ${deskNum} - Dãy 2`}
+                                  >
+                                    ⚡ Cả bàn
+                                  </button>
+                                </div>
+
                                 <div className="flex items-center gap-1 flex-1 justify-end">
                                   {Array.from({ length: currentCap }, (_, i) => i + 1).map(gNum => {
                                     const currentNick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
-                                    const studentRule = seatingRules.fixedSeatRules?.find(r => r.studentNickname.toLowerCase() === currentNick.toLowerCase());
+                                    const studentRule = seatingRules.fixedSeatRules?.find(r => isStudentMatch(r.studentNickname, currentNick, students));
                                     const isSelected = studentRule?.positions.some(p => p.desk === deskNum && p.row === 2 && p.seatCol === gNum);
 
                                     return (
@@ -3114,38 +3506,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                                         onClick={() => {
                                           const nick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
                                           if (!nick) return;
-
-                                          setSeatingRules(prev => {
-                                            const existingRules = [...(prev.fixedSeatRules || [])];
-                                            const ruleIdx = existingRules.findIndex(r => r.studentNickname.toLowerCase() === nick.toLowerCase());
-
-                                            if (ruleIdx >= 0) {
-                                              const posIdx = existingRules[ruleIdx].positions.findIndex(p => p.desk === deskNum && p.row === 2 && p.seatCol === gNum);
-                                              if (posIdx >= 0) {
-                                                existingRules[ruleIdx].positions.splice(posIdx, 1);
-                                              } else {
-                                                existingRules[ruleIdx].positions.push({
-                                                  desk: deskNum,
-                                                  row: 2,
-                                                  seatCol: gNum,
-                                                  label: formatFixedPosition(deskNum, 2, gNum),
-                                                });
-                                              }
-                                              existingRules[ruleIdx].rawText = existingRules[ruleIdx].positions.map(p => p.label).join('; ');
-                                            } else {
-                                              existingRules.push({
-                                                studentNickname: nick,
-                                                positions: [{
-                                                  desk: deskNum,
-                                                  row: 2,
-                                                  seatCol: gNum,
-                                                  label: formatFixedPosition(deskNum, 2, gNum),
-                                                }],
-                                                rawText: formatFixedPosition(deskNum, 2, gNum),
-                                              });
-                                            }
-                                            return { ...prev, fixedSeatRules: existingRules };
-                                          });
+                                          toggleFixedSeatPosition(nick, deskNum, 2, gNum);
                                         }}
                                         className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-all cursor-pointer ${
                                           isSelected
@@ -3171,30 +3532,87 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 {/* Danh sách các quy tắc cố định hiện tại */}
                 {seatingRules.fixedSeatRules && seatingRules.fixedSeatRules.length > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <span className="text-[11px] font-bold text-slate-700">Các vị trí cố định đã cấu hình:</span>
+                    <span className="text-[11px] font-bold text-slate-700">Các vị trí cố định đã cấu hình (Bấm vào thẻ học sinh để chọn thêm vị trí):</span>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {seatingRules.fixedSeatRules.map((rule, idx) => (
-                        <div key={idx} className="bg-white border border-slate-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                          <div className="min-w-0">
-                            <span className="font-extrabold text-purple-900">{rule.studentNickname}: </span>
-                            <span className="text-slate-600 font-medium">
-                              {rule.positions.map(p => p.label).join('; ') || rule.rawText}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              setSeatingRules(prev => ({
-                                ...prev,
-                                fixedSeatRules: prev.fixedSeatRules.filter((_, i) => i !== idx),
-                              }));
-                            }}
-                            className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"
-                            title="Xóa quy tắc này"
+                      {seatingRules.fixedSeatRules.map((rule, idx) => {
+                        const activeNick = fixedFormStudent || (students[0]?.nickname || students[0]?.name || '');
+                        const isActive = isStudentMatch(rule.studentNickname, activeNick, students);
+
+                        return (
+                          <div
+                            key={idx}
+                            onClick={() => setFixedFormStudent(rule.studentNickname)}
+                            className={`rounded-xl p-2.5 flex flex-col gap-2 transition-all cursor-pointer ${
+                              isActive
+                                ? 'bg-indigo-50/90 border-2 border-indigo-500 shadow-xs ring-2 ring-indigo-200'
+                                : 'bg-white border border-slate-200 hover:border-indigo-300 shadow-2xs'
+                            }`}
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-extrabold text-xs text-purple-900">{rule.studentNickname}</span>
+                                {isActive ? (
+                                  <span className="px-2 py-0.5 bg-indigo-600 text-white text-[9px] font-black rounded-md animate-pulse">
+                                    ✨ Đang chọn vị trí cho HS này
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-indigo-600 hover:underline">
+                                    + Bấm chọn thêm vị trí
+                                  </span>
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSeatingRules(prev => ({
+                                    ...prev,
+                                    fixedSeatRules: prev.fixedSeatRules.filter((_, i) => i !== idx),
+                                  }));
+                                }}
+                                className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg cursor-pointer"
+                                title="Xóa toàn bộ quy tắc cố định của học sinh này"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Danh sách các vị trí dưới dạng pill có thể xóa lẻ */}
+                            <div className="flex flex-wrap items-center gap-1">
+                              {rule.positions.map((pos, pIdx) => (
+                                <span
+                                  key={pIdx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-purple-100/80 border border-purple-200 text-purple-900 font-bold rounded-md text-[10px]"
+                                >
+                                  <span>{pos.label}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSeatingRules(prev => {
+                                        const copy = [...(prev.fixedSeatRules || [])];
+                                        if (copy[idx]) {
+                                          copy[idx].positions = copy[idx].positions.filter((_, pi) => pi !== pIdx);
+                                          copy[idx].rawText = copy[idx].positions.map(p => p.label).join('; ');
+                                          if (copy[idx].positions.length === 0) {
+                                            copy.splice(idx, 1);
+                                          }
+                                        }
+                                        return { ...prev, fixedSeatRules: copy };
+                                      });
+                                    }}
+                                    className="text-purple-500 hover:text-rose-600 font-black cursor-pointer ml-0.5"
+                                    title={`Bỏ vị trí ${pos.label}`}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

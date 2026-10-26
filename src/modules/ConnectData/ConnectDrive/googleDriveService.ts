@@ -1960,6 +1960,101 @@ export async function saveSeatingChartToDrive(classId: string, seatingData: any,
 }
 
 /**
+ * Tải lên & Đồng bộ file Thời khóa biểu JSON thực tế lên Google Drive theo cấu trúc "myApp/LopU/ThoiKhoaBieu"
+ */
+export async function saveTimetableToDrive(
+  accountName: string,
+  weekNum: number | string,
+  scheduleData: any
+): Promise<{ success: boolean; fileId: string; fileName: string; filePath: string }> {
+  try {
+    const cleanAccountName = (accountName || 'CaNhan').replace(/\s+/g, '_');
+    const fileName = `TKB_${cleanAccountName}_Tuan${weekNum || 1}.json`;
+    const filePath = `myApp\\LopU\\ThoiKhoaBieu\\${fileName}`;
+    const fileId = `gdrive_tkb_${cleanAccountName}_${Date.now()}`;
+
+    // Lưu vào bộ nhớ đệm cục bộ
+    const filesRaw = localStorage.getItem('lopu_google_drive_files_v1') || localStorage.getItem('lopu_gdrive_files_v1') || '[]';
+    let files: DriveStoredFile[] = [];
+    try {
+      files = JSON.parse(filesRaw);
+    } catch {}
+
+    const newFile: DriveStoredFile = {
+      id: fileId,
+      name: fileName,
+      mimeType: 'application/json',
+      category: 'personal_schedule',
+      modifiedTime: new Date().toISOString(),
+      size: `${(JSON.stringify(scheduleData).length / 1024).toFixed(1)} KB`,
+      content: scheduleData,
+    };
+
+    const existingIdx = files.findIndex(f => f.name === fileName);
+    if (existingIdx >= 0) {
+      files[existingIdx] = newFile;
+    } else {
+      files.push(newFile);
+    }
+
+    localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
+    localStorage.setItem('lopu_gdrive_files_v1', JSON.stringify(files));
+
+    // Thực hiện upload thực tế lên Google Drive
+    const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+    if (token) {
+      try {
+        const physicalFolders = ['myApp', 'LopU', 'ThoiKhoaBieu'];
+        const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+
+        // Xóa file trùng cũ
+        try {
+          const query = `name = '${fileName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed = false`;
+          const findUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+          const findRes = await fetch(findUrl, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (findRes.ok) {
+            const findData = await findRes.json();
+            if (findData.files && findData.files.length > 0) {
+              for (const existingFile of findData.files) {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}`, {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${token}` }
+                }).catch(() => {});
+              }
+            }
+          }
+        } catch {}
+
+        const metadata = {
+          name: fileName,
+          mimeType: 'application/json',
+          parents: [parentFolderId],
+        };
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', new Blob([JSON.stringify(scheduleData, null, 2)], { type: 'application/json' }));
+
+        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: form,
+        });
+        console.log(`Đã tải lên Google Drive thời khóa biểu thực tế thành công tại "myApp/LopU/ThoiKhoaBieu": ${fileName}`);
+      } catch (uploadErr) {
+        console.error('Lỗi tải file thời khóa biểu lên Google Drive API:', uploadErr);
+      }
+    }
+
+    return { success: true, fileId, fileName, filePath };
+  } catch (err) {
+    console.error('Lỗi lưu thời khóa biểu Google Drive:', err);
+    return { success: false, fileId: '', fileName: '', filePath: '' };
+  }
+}
+
+/**
  * Đọc nội dung JSON từ file trên Google Drive (hỗ trợ cả REST API thực tế và Local Cache)
  */
 export async function fetchDriveFileJsonContent(fileId: string, fallbackContent?: any): Promise<any> {

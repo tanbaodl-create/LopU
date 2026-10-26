@@ -118,7 +118,7 @@ export interface StudentFixedSeatRule {
 }
 
 export interface SeatingRulesConfig {
-  avoidNearStudents: string; // VD: "Bảo; Tuấn; Minh" (các học sinh không được gần nhau, cách ít nhất 1 bạn theo dọc, ngang, xiên)
+  avoidNearStudents: string; // VD: "Bảo - Tuấn; Cường - Dũng - Giảng" (các nhóm học sinh không được gần nhau)
   fixedSeatRules: StudentFixedSeatRule[];
   studyPairs: string; // VD: "HS1 - HS2; HS3 - HS4" (Cặp đôi cùng tiến)
 }
@@ -128,6 +128,52 @@ export const DEFAULT_SEATING_RULES: SeatingRulesConfig = {
   fixedSeatRules: [],
   studyPairs: '',
 };
+
+/**
+ * Phân tích chuỗi điều kiện các nhóm học sinh không ngồi gần nhau
+ * VD: "Bạn A - Bạn B; Bạn C - Bạn D - Bạn E" -> [["Bạn A", "Bạn B"], ["Bạn C", "Bạn D", "Bạn E"]]
+ */
+export function parseAvoidNearGroups(raw: string): string[][] {
+  if (!raw || !raw.trim()) return [];
+  const lines = raw.split(/[\n;]+/).map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+
+  const hasGroupSeparators = lines.some(l => l.includes('-') || l.includes(','));
+
+  if (hasGroupSeparators) {
+    const groups: string[][] = [];
+    for (const line of lines) {
+      const items = line.split(/[-,\t]+/).map(x => x.trim()).filter(Boolean);
+      if (items.length >= 2) {
+        groups.push(items);
+      } else if (items.length === 1) {
+        if (groups.length > 0) {
+          groups[groups.length - 1].push(items[0]);
+        } else {
+          groups.push(items);
+        }
+      }
+    }
+    return groups;
+  } else {
+    // Nếu chỉ có danh sách phân tách dấu chấm phẩy thông thường, coi như 1 nhóm duy nhất
+    if (lines.length >= 2) {
+      return [lines];
+    }
+    return [];
+  }
+}
+
+/**
+ * Chuyển danh sách mảng nhóm các học sinh không gần nhau thành chuỗi chuẩn hiển thị
+ */
+export function formatAvoidNearGroups(groups: string[][]): string {
+  return groups
+    .map(g => g.filter(Boolean).join(' - '))
+    .filter(Boolean)
+    .join('; ');
+}
+
 
 /**
  * Chuẩn hóa và chuyển đổi định dạng vị trí: "bàn 6-dãy 1-G3" -> FixedSeatPosition
