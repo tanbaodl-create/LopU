@@ -1,0 +1,1270 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Cửa Sổ Trình Chiếu Bài Giảng - Bảng Tương Tác Kỹ Thuật Số</title>
+  
+  <!-- Phông chữ Montserrat chuẩn Tiếng Việt & JetBrains Mono cho số học/thời gian -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+  <!-- Cấu hình và Tải Thư viện MathJax 3 Render Công Thức Toán LaTeX ($ và $$) -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      svg: {
+        fontCache: 'global'
+      },
+      options: {
+        skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code']
+      }
+    };
+  </script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+
+  <style>
+    /* ============================================================
+       1. TRIẾT LÝ GIAO DIỆN (UI) & CSS RESET TOÀN DIỆN
+       ============================================================ */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden !important;
+      font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      position: relative;
+      touch-action: none;
+    }
+
+    /* Triệt tiêu hoàn toàn mọi thanh cuộn của trình duyệt */
+    ::-webkit-scrollbar {
+      display: none !important;
+      width: 0 !important;
+      height: 0 !important;
+    }
+    * {
+      scrollbar-width: none !important;
+      -ms-overflow-style: none !important;
+    }
+
+    /* ============================================================
+       THEMES BẢNG ĐEN / BẢNG XANH PHẤN / BẢNG TRẮNG KỸ THUẬT SỐ
+       ============================================================ */
+    body.theme-chalkboard {
+      background-color: #08281f;
+      background-image: 
+        radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 0),
+        linear-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+      background-size: 20px 20px, 40px 40px, 40px 40px;
+      color: #f0fdf4;
+    }
+
+    body.theme-blackboard {
+      background-color: #0b1120;
+      background-image: 
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+      background-size: 40px 40px;
+      color: #ffffff;
+    }
+
+    body.theme-whiteboard {
+      background-color: #f8fafc;
+      background-image: 
+        linear-gradient(rgba(59, 130, 246, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(59, 130, 246, 0.08) 1px, transparent 1px);
+      background-size: 40px 40px;
+      color: #0f172a;
+    }
+
+    /* ============================================================
+       2. CẤU TRÚC 2 LỚP XẾP CHỒNG (LAYERS)
+       ============================================================ */
+    /* Lớp 1: Lớp Nội Dung Đề Bài (Content Layer - Dưới, z-index: 10) */
+    #contentLayer {
+      position: absolute;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+      overflow-y: auto;
+      padding: 70px 60px 40px 60px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      pointer-events: auto;
+    }
+
+    .slide-wrapper {
+      width: 100%;
+      max-width: 1200px;
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      animation: fadeInSlide 0.35s ease-out;
+    }
+
+    @keyframes fadeInSlide {
+      from { opacity: 0; transform: translateY(12px) scale(0.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    /* Hộp Card câu hỏi lớn */
+    .question-card {
+      border-radius: 24px;
+      padding: 32px 36px;
+      position: relative;
+      transition: all 0.3s ease;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.4);
+    }
+
+    .theme-chalkboard .question-card {
+      background: rgba(10, 48, 37, 0.85);
+      border: 1.5px solid rgba(52, 211, 153, 0.3);
+      color: #f0fdf4;
+    }
+
+    .theme-blackboard .question-card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1.5px solid rgba(148, 163, 184, 0.25);
+      color: #f8fafc;
+    }
+
+    .theme-whiteboard .question-card {
+      background: #ffffff;
+      border: 1.5px solid #cbd5e1;
+      color: #0f172a;
+      box-shadow: 0 15px 35px -10px rgba(0, 0, 0, 0.08);
+    }
+
+    /* TIỀN TỐ NHÃN CÂU HỎI (TLN, TNLC, TNDS) - RÀNG BUỘC SƯ PHẠM BẮT BUỘC */
+    .question-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .theme-whiteboard .question-header {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .label-badge-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Tiền tố nhãn câu hỏi: Giữ nguyên TLN, TNLC, TNDS */
+    .question-prefix-tag {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.5px;
+      padding: 6px 14px;
+      border-radius: 12px;
+      text-transform: uppercase;
+      font-family: 'Montserrat', sans-serif;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Nhãn TLN (Tự luận ngắn) */
+    .tag-tln {
+      background: linear-gradient(135deg, #d97706, #b45309);
+      color: #fffbeb;
+      box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35);
+      border: 1px solid #fcd34d;
+    }
+
+    /* Nhãn TNLC (Trắc nghiệm lựa chọn) */
+    .tag-tnlc {
+      background: linear-gradient(135deg, #0284c7, #0369a1);
+      color: #f0f9ff;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.35);
+      border: 1px solid #7dd3fc;
+    }
+
+    /* Nhãn TNDS (Trắc nghiệm đúng sai) */
+    .tag-tnds {
+      background: linear-gradient(135deg, #7c3aed, #6d28d9);
+      color: #f5f3ff;
+      box-shadow: 0 4px 12px rgba(124, 58, 237, 0.35);
+      border: 1px solid #c4b5fd;
+    }
+
+    .question-full-title {
+      font-size: 22px;
+      font-weight: 800;
+      color: #fef08a;
+    }
+    .theme-whiteboard .question-full-title {
+      color: #1e3a8a;
+    }
+
+    .topic-pill {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 9999px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+    }
+    .theme-whiteboard .topic-pill {
+      background: #e2e8f0;
+      border-color: #cbd5e1;
+      color: #475569;
+    }
+
+    /* Nội dung văn bản đề bài */
+    .question-body {
+      font-size: 18px;
+      line-height: 1.8;
+      font-weight: 500;
+      letter-spacing: 0.15px;
+    }
+
+    .theme-chalkboard .question-body {
+      color: #ecfdf5;
+    }
+    .theme-blackboard .question-body {
+      color: #f1f5f9;
+    }
+    .theme-whiteboard .question-body {
+      color: #1e293b;
+    }
+
+    /* Nhóm ý con của đề bài a), b), c) */
+    .subquestions-list {
+      margin-top: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .subquestion-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 18px;
+      border-radius: 14px;
+      background: rgba(0, 0, 0, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 17px;
+    }
+
+    .theme-whiteboard .subquestion-item {
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+    }
+
+    .subquestion-label {
+      font-weight: 800;
+      color: #6ee7b7;
+      min-width: 28px;
+    }
+    .theme-whiteboard .subquestion-label {
+      color: #0284c7;
+    }
+
+    /* Khối minh họa sư phạm & Đồ thị */
+    .diagram-panel {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px dashed rgba(255, 255, 255, 0.2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .theme-whiteboard .diagram-panel {
+      background: #f8fafc;
+      border: 1px dashed #cbd5e1;
+    }
+
+    .hint-card {
+      margin-top: 20px;
+      padding: 16px 20px;
+      border-radius: 16px;
+      background: rgba(245, 158, 11, 0.12);
+      border-left: 4px solid #f59e0b;
+      font-size: 15px;
+      line-height: 1.6;
+      color: #fef3c7;
+    }
+    .theme-whiteboard .hint-card {
+      background: #fffbeb;
+      color: #92400e;
+    }
+
+    /* Lớp 2: Lớp Tương Tác Vẽ Tay (Inking Layer - Trên cùng, z-index: 25) */
+    #inkCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 25;
+      pointer-events: none;
+      touch-action: none;
+    }
+
+    #inkCanvas.active-pen {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+
+    #inkCanvas.active-eraser {
+      pointer-events: auto;
+      cursor: grab;
+    }
+
+    /* ============================================================
+       3. THANH CÔNG CỤ NỔI DẠNG VIÊN THUỐC (FLOATING PILL TOOLBAR)
+       ============================================================ */
+    #floatingToolbar {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      box-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s ease;
+      /* TỰ ĐỘNG MỜ ĐI KHI KHÔNG DI CHUỘT VÀO */
+      opacity: 0.28;
+    }
+
+    #floatingToolbar:hover,
+    #floatingToolbar:focus-within,
+    #floatingToolbar.keep-active {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+      box-shadow: 0 14px 35px -5px rgba(0, 0, 0, 0.65), 0 0 0 1.5px rgba(52, 211, 153, 0.4);
+    }
+
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 9999px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: #94a3b8;
+      font-family: 'Montserrat', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .tool-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+    }
+
+    .tool-btn.active {
+      background: #10b981;
+      color: #064e3b;
+      font-weight: 800;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.4);
+    }
+
+    .tool-btn.active.is-eraser {
+      background: #f43f5e;
+      color: #ffffff;
+      box-shadow: 0 2px 10px rgba(244, 63, 94, 0.4);
+    }
+
+    .tool-separator {
+      width: 1px;
+      height: 20px;
+      background: rgba(255, 255, 255, 0.18);
+      margin: 0 4px;
+    }
+
+    /* Bảng màu nhanh cho bút */
+    .color-dot-group {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 0 4px;
+    }
+
+    .color-dot {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .color-dot:hover {
+      transform: scale(1.2);
+    }
+
+    .color-dot.active {
+      border-color: #ffffff;
+      transform: scale(1.25);
+      box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+    }
+
+    /* Chỉ số Slide hiển thị trên toolbar */
+    .slide-indicator {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #38bdf8;
+      padding: 0 4px;
+    }
+
+    /* ============================================================
+       4. TIỆN ÍCH ĐỒNG HỒ ĐẾM NGƯỢC (COUNTDOWN TIMER POPUP)
+       ============================================================ */
+    #timerPopup {
+      position: fixed;
+      top: 76px;
+      right: 24px;
+      z-index: 60;
+      width: 290px;
+      border-radius: 24px;
+      padding: 20px;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      animation: popIn 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.9) translateY(-10px); }
+      to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .timer-header {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #e2e8f0;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .timer-close-btn {
+      background: transparent;
+      border: none;
+      color: #94a3b8;
+      font-size: 18px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px;
+    }
+    .timer-close-btn:hover { color: #fff; }
+
+    /* Màn hình hiển thị số đếm */
+    .timer-display {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 46px;
+      font-weight: 800;
+      color: #facc15;
+      letter-spacing: 2px;
+      text-shadow: 0 0 15px rgba(250, 204, 21, 0.4);
+    }
+
+    .timer-display.is-ended {
+      color: #f43f5e;
+      animation: pulseAlert 0.6s infinite alternate;
+    }
+
+    @keyframes pulseAlert {
+      from { transform: scale(1); text-shadow: 0 0 10px rgba(244, 63, 94, 0.4); }
+      to { transform: scale(1.08); text-shadow: 0 0 25px rgba(244, 63, 94, 0.9); }
+    }
+
+    /* Các mốc nhanh */
+    .preset-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      width: 100%;
+    }
+
+    .preset-btn {
+      padding: 6px 0;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .preset-btn:hover {
+      background: #38bdf8;
+      color: #0c4a6e;
+      border-color: #38bdf8;
+    }
+
+    .timer-actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn-timer-primary {
+      flex: 2;
+      padding: 10px 0;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+      font-weight: 800;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 0.15s ease;
+    }
+    .btn-timer-primary:active { transform: scale(0.97); }
+
+    .btn-timer-secondary {
+      flex: 1;
+      padding: 10px 0;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .btn-timer-secondary:hover { color: #fff; background: rgba(255, 255, 255, 0.15); }
+
+    /* Nút thu nhỏ / mở rộng toàn màn hình */
+    .fs-hint {
+      position: fixed;
+      bottom: 12px;
+      right: 16px;
+      z-index: 40;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.35);
+      pointer-events: none;
+      font-family: 'JetBrains Mono', monospace;
+    }
+  </style>
+</head>
+<body class="theme-chalkboard">
+
+  <!-- ============================================================
+       LỚP 1: NỘI DUNG SLIDE ĐỀ BÀI (CONTENT LAYER - DƯỚI)
+       ============================================================ -->
+  <main id="contentLayer">
+    <div id="slideContainer" class="slide-wrapper">
+      <!-- Nội dung Slide sẽ được render động từ mảng JSON tại đây -->
+    </div>
+  </main>
+
+  <!-- ============================================================
+       LỚP 2: BẢNG VIẾT VẼ TAY TRONG SUỐT (INKING LAYER - TRÊN CÙNG)
+       ============================================================ -->
+  <canvas id="inkCanvas"></canvas>
+
+  <!-- ============================================================
+       THANH CÔNG CỤ NỔI DẠNG VIÊN THUỐC (FLOATING PILL TOOLBAR)
+       Tự động mờ (opacity: 0.28) khi không di chuột vào
+       ============================================================ -->
+  <nav id="floatingToolbar" aria-label="Thanh công cụ trình chiếu">
+    <!-- Nút Chuyển Slide Trái -->
+    <button id="btnPrevSlide" class="tool-btn" title="Slide trước (Phím mũi tên Trái)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+    </button>
+
+    <!-- Chỉ số Slide -->
+    <span id="slideCounter" class="slide-indicator">1 / 3</span>
+
+    <!-- Nút Chuyển Slide Phải -->
+    <button id="btnNextSlide" class="tool-btn" title="Slide tiếp theo (Phím mũi tên Phải hoặc Phím Space)">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </button>
+
+    <div class="tool-separator"></div>
+
+    <!-- Công cụ Con trỏ chuột -->
+    <button id="btnCursor" class="tool-btn active" title="Con trỏ chuột (Thao tác chỉ bài)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l7 18 3-7 7-3L3 3z"></path></svg>
+      <span>Con trỏ</span>
+    </button>
+
+    <!-- Công cụ Bút viết -->
+    <button id="btnPen" class="tool-btn" title="Bút viết tay (Viết phấn / ghi chú trực tiếp)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"></path><path d="M18 13l-1.5-1.5"></path><path d="M2 22l5-2 13-13-3-3-13 13-2 5z"></path></svg>
+      <span>Bút viết</span>
+    </button>
+
+    <!-- Bảng màu mực -->
+    <div id="paletteGroup" class="color-dot-group">
+      <div class="color-dot active" data-color="#fef08a" style="background: #fef08a;" title="Vàng phấn"></div>
+      <div class="color-dot" data-color="#ffffff" style="background: #ffffff;" title="Trắng phấn"></div>
+      <div class="color-dot" data-color="#38bdf8" style="background: #38bdf8;" title="Xanh Cyan"></div>
+      <div class="color-dot" data-color="#f43f5e" style="background: #f43f5e;" title="Đỏ cam"></div>
+    </div>
+
+    <!-- Công cụ Tẩy nét vẽ -->
+    <button id="btnEraser" class="tool-btn" title="Tẩy nét viết tay">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7L3 16C2 15 2 13 3 12L13 2L22 11L20 20Z"></path><path d="M17 17L7 7"></path></svg>
+      <span>Tẩy</span>
+    </button>
+
+    <!-- Nút Xóa toàn bộ nét trên Slide -->
+    <button id="btnClearInk" class="tool-btn" title="Xóa toàn bộ nét vẽ của slide này">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+    </button>
+
+    <div class="tool-separator"></div>
+
+    <!-- Tiện ích Đồng hồ đếm ngược -->
+    <button id="btnTimerToggle" class="tool-btn" title="Đồng hồ đếm ngược thời gian làm bài">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+      <span id="timerBadgeText">Đồng hồ</span>
+    </button>
+
+    <!-- Nút Đổi Theme Bảng -->
+    <button id="btnThemeToggle" class="tool-btn" title="Đổi kiểu nền bảng (Bảng xanh / Bảng đen / Bảng trắng)">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+    </button>
+
+    <!-- Nút Bật Toàn Màn Hình -->
+    <button id="btnFullscreen" class="tool-btn" title="Bật/Tắt Toàn Màn Hình (F11)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
+    </button>
+  </nav>
+
+  <!-- ============================================================
+       POPUP ĐỒNG HỒ ĐẾM NGƯỢC (GÓC PHẢI MÀN HÌNH)
+       ============================================================ -->
+  <aside id="timerPopup" role="dialog" aria-label="Đồng hồ đếm ngược">
+    <div class="timer-header">
+      <span>⏱️ Đếm Ngược Làm Bài</span>
+      <button id="btnCloseTimer" class="timer-close-btn" title="Đóng">&times;</button>
+    </div>
+
+    <!-- Số hiển thị -->
+    <div id="timerDisplay" class="timer-display">02:00</div>
+
+    <!-- Các mốc nhanh -->
+    <div class="preset-row">
+      <button class="preset-btn" data-sec="60">1 Phút</button>
+      <button class="preset-btn" data-sec="120">2 Phút</button>
+      <button class="preset-btn" data-sec="180">3 Phút</button>
+      <button class="preset-btn" data-sec="300">5 Phút</button>
+    </div>
+
+    <!-- Thao tác Bắt đầu / Tạm dừng / Đặt lại -->
+    <div class="timer-actions">
+      <button id="btnStartPauseTimer" class="btn-timer-primary">Bắt Đầu</button>
+      <button id="btnResetTimer" class="btn-timer-secondary">Đặt Lại</button>
+    </div>
+  </aside>
+
+  <div class="fs-hint">F11: Toàn màn hình | &larr; &rarr;: Chuyển Slide</div>
+
+  <!-- ============================================================
+       JAVASCRIPT CHÍNH XỬ LÝ TOÀN BỘ UX & LOGIC SƯ PHẠM
+       ============================================================ -->
+  <script>
+    (function () {
+      'use strict';
+
+      /* ------------------------------------------------------------
+         3. MẢNG DỮ LIỆU JSON MẪU CHỨA NỘI DUNG SLIDE & RÀNG BUỘC SƯ PHẠM
+         Tuyệt đối giữ nguyên nhãn tiền tố: TLN, TNLC, TNDS!
+         Slide 1: Câu hỏi TLN Câu 7 ứng dụng giải tích và vật lý
+         ------------------------------------------------------------ */
+      const SLIDES_DATA = [
+        {
+          id: "slide_1",
+          type: "TLN",
+          questionPrefix: "TLN",
+          questionNumber: "Câu 7",
+          topic: "Ứng dụng Đạo hàm trong Chuyển động Cơ học (Giải tích & Vật lý)",
+          contentHtml: "Một chất điểm chuyển động theo phương trình quãng đường được xác định bởi hàm số:<br>" +
+                       "$$s(t) = -\\frac{1}{3}t^3 + 6t^2 + 15t$$" +
+                       "(trong đó thời gian $t$ tính bằng giây kể từ mốc $t = 0$, quãng đường $s(t)$ tính bằng mét).",
+          subQuestions: [
+            {
+              label: "a)",
+              text: "Lập công thức tính vận tốc tức thời $v(t)$ của chất điểm tại thời điểm $t$."
+            },
+            {
+              label: "b)",
+              text: "Tìm thời điểm $t$ mà tại đó vận tốc của chất điểm đạt giá trị lớn nhất. Tính giá trị vận tốc lớn nhất $v_{\\max}$ đó."
+            },
+            {
+              label: "c)",
+              text: "Tính gia tốc tức thời $a(t)$ của chất điểm tại thời điểm vận tốc đạt cực đại và tại thời điểm chất điểm bắt đầu dừng lại ($v = 0$)."
+            }
+          ],
+          pedagogicalHint: "<strong>💡 Ghi chú tư duy Sư phạm:</strong><br>" +
+                           "• Vận tốc tức thời là đạo hàm bậc nhất của quãng đường: $v(t) = s'(t) = -t^2 + 12t + 15$ (m/s).<br>" +
+                           "• Gia tốc tức thời là đạo hàm bậc nhất của vận tốc (đạo hàm bậc hai của quãng đường): $a(t) = v'(t) = s''(t) = -2t + 12$ (m/s$^2$).<br>" +
+                           "• Vận tốc $v(t) = -(t - 6)^2 + 51 \\le 51$. Vận tốc cực đại $v_{\\max} = 51$ m/s đạt tại $t = 6$ s. Khi đó gia tốc $a(6) = 0$ m/s$^2$.",
+          diagramHtml: '<svg viewBox="0 0 600 130" style="width: 100%; max-width: 580px; height: auto;" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                       '<path d="M30 100 L560 100" stroke="#6ee7b7" stroke-width="2" stroke-dasharray="4 4"/>' +
+                       '<path d="M50 100 C 150 20, 250 15, 360 40 C 420 55, 480 85, 530 100" stroke="#facc15" stroke-width="3"/>' +
+                       '<circle cx="260" cy="20" r="5" fill="#f43f5e"/>' +
+                       '<text x="260" y="14" fill="#fef08a" font-size="12" font-family="Montserrat" font-weight="700" text-anchor="middle">v_max = 51 m/s (t = 6s)</text>' +
+                       '<line x1="260" y1="20" x2="260" y2="100" stroke="#f43f5e" stroke-width="1.5" stroke-dasharray="3 3"/>' +
+                       '<text x="260" y="116" fill="#cbd5e1" font-size="11" font-family="Montserrat" text-anchor="middle">t = 6s (a = 0)</text>' +
+                       '<text x="50" y="116" fill="#cbd5e1" font-size="11" font-family="Montserrat">t = 0s (v = 15)</text>' +
+                       '<text x="530" y="116" fill="#cbd5e1" font-size="11" font-family="Montserrat" text-anchor="end">Dừng lại v=0 (t ≈ 13.1s)</text>' +
+                       '</svg>'
+        },
+        {
+          id: "slide_2",
+          type: "TNLC",
+          questionPrefix: "TNLC",
+          questionNumber: "Câu 12",
+          topic: "Khảo sát và Vẽ đồ thị Hàm số - Cực trị & Tiệm cận",
+          contentHtml: "Cho hàm số bậc ba $y = f(x) = x^3 - 3x^2 + 2$. Điểm cực đại của đồ thị hàm số đã cho là điểm nào sau đây?",
+          subQuestions: [
+            { label: "A.", text: "$M(0; 2)$" },
+            { label: "B.", text: "$N(2; -2)$" },
+            { label: "C.", text: "$P(1; 0)$" },
+            { label: "D.", text: "$Q(-1; -2)$" }
+          ],
+          pedagogicalHint: "<strong>💡 Lời giải chi tiết:</strong> Ta có $f'(x) = 3x^2 - 6x = 3x(x - 2)$.<br>" +
+                           "$f'(x) = 0 \\iff x = 0$ hoặc $x = 2$. Do $f''(0) = -6 < 0$ nên điểm cực đại của đồ thị là $M(0; 2)$. Chọn phương án A.",
+          diagramHtml: ""
+        },
+        {
+          id: "slide_3",
+          type: "TNDS",
+          questionPrefix: "TNDS",
+          questionNumber: "Câu 3",
+          topic: "Tính đơn điệu & Khảo sát hàm phân thức hữu tỉ trên đoạn",
+          contentHtml: "Cho hàm số $y = f(x) = \\frac{2x - 1}{x + 1}$ xác định trên $D = \\mathbb{R} \\setminus \\{-1\\}$. Xét tính đúng / sai của các khẳng định sau:",
+          subQuestions: [
+            { label: "a)", text: "Hàm số đồng biến trên từng khoảng $(-\\infty; -1)$ và $(-1; +\\infty)$. [ĐÚNG]" },
+            { label: "b)", text: "Đồ thị hàm số có đường tiệm cận đứng là $x = 1$ và tiệm cận ngang là $y = 2$. [SAI - TCĐ là $x = -1$]" },
+            { label: "c)", text: "Giá trị nhỏ nhất của hàm số trên đoạn $[0; 3]$ bằng $-1$ tại $x = 0$. [ĐÚNG]" },
+            { label: "d)", text: "Tiếp tuyến của đồ thị tại điểm có hoành độ $x_0 = 0$ có hệ số góc bằng $k = 3$. [ĐÚNG]" }
+          ],
+          pedagogicalHint: "<strong>💡 Lưu ý sư phạm:</strong> Nhắc nhở học sinh không được ghi 'đồng biến trên $\\mathbb{R} \\setminus \\{-1\\}$' mà bắt buộc phải phân tách thành hai khoảng riêng biệt.",
+          diagramHtml: ""
+        }
+      ];
+
+      /* ------------------------------------------------------------
+         STATE MANAGEMENT
+         ------------------------------------------------------------ */
+      let currentSlideIndex = 0;
+      let activeTool = 'cursor'; // 'cursor' | 'pen' | 'eraser'
+      let currentColor = '#fef08a';
+      let currentPenWidth = 3.5;
+      let currentTheme = 'theme-chalkboard';
+
+      // Lưu trữ nét vẽ riêng biệt cho từng slide: { [slideIndex]: [ strokes ] }
+      const slideStrokes = {};
+
+      /* ------------------------------------------------------------
+         RENDER SLIDE NỘI DUNG (CONTENT LAYER)
+         ------------------------------------------------------------ */
+      const slideContainer = document.getElementById('slideContainer');
+      const slideCounter = document.getElementById('slideCounter');
+
+      function renderCurrentSlide() {
+        const slide = SLIDES_DATA[currentSlideIndex];
+        slideCounter.textContent = (currentSlideIndex + 1) + ' / ' + SLIDES_DATA.length;
+
+        // Xác định class cho nhãn tiền tố
+        const tagClass = slide.questionPrefix === 'TLN' ? 'tag-tln' :
+                         slide.questionPrefix === 'TNLC' ? 'tag-tnlc' : 'tag-tnds';
+
+        let subQuestionsHtml = '';
+        if (slide.subQuestions && slide.subQuestions.length > 0) {
+          subQuestionsHtml = '<div class="subquestions-list">' +
+            slide.subQuestions.map(function (q) {
+              return '<div class="subquestion-item">' +
+                     '<span class="subquestion-label">' + q.label + '</span>' +
+                     '<span>' + q.text + '</span>' +
+                     '</div>';
+            }).join('') +
+            '</div>';
+        }
+
+        let diagramSection = '';
+        if (slide.diagramHtml) {
+          diagramSection = '<div class="diagram-panel">' + slide.diagramHtml + '</div>';
+        }
+
+        let hintSection = '';
+        if (slide.pedagogicalHint) {
+          hintSection = '<div class="hint-card">' + slide.pedagogicalHint + '</div>';
+        }
+
+        function getSlideMaxStrokeY() {
+          const strokes = slideStrokes[currentSlideIndex] || [];
+          let maxY = 0;
+          for (let i = 0; i < strokes.length; i++) {
+            const pts = strokes[i].points || [];
+            for (let j = 0; j < pts.length; j++) {
+              if (pts[j].y > maxY) maxY = pts[j].y;
+            }
+          }
+          return maxY;
+        }
+
+        const maxInkY = getSlideMaxStrokeY();
+
+        slideContainer.innerHTML =
+          '<article class="question-card">' +
+            '<header class="question-header">' +
+              '<div class="label-badge-group">' +
+                /* RÀNG BUỘC CỰC KỲ QUAN TRỌNG: Render chính xác tiền tố gốc TLN / TNLC / TNDS */
+                '<span class="question-prefix-tag ' + tagClass + '">' + slide.questionPrefix + '</span>' +
+                '<span class="question-full-title">' + slide.questionNumber + '</span>' +
+              '</div>' +
+              '<span class="topic-pill">' + slide.topic + '</span>' +
+            '</header>' +
+            '<div class="question-body" data-teaching-block="body">' + slide.contentHtml + '</div>' +
+            (subQuestionsHtml ? '<div data-teaching-block="subq">' + subQuestionsHtml + '</div>' : '') +
+            (diagramSection ? '<div data-teaching-block="diagram">' + diagramSection + '</div>' : '') +
+            (hintSection ? '<div data-teaching-block="hint">' + hintSection + '</div>' : '') +
+            '<div id="tv-blocks-list" class="mt-6 space-y-4"></div>' +
+          '</article>';
+
+        // Tự động căn chỉnh vị trí phần lời giải/hướng dẫn bên dưới hàng cuối cùng có nét vẽ vẽ đến
+        if (maxInkY > 0) {
+          setTimeout(function () {
+            const blocks = slideContainer.querySelectorAll('[data-teaching-block]');
+            if (blocks.length > 1) {
+              const prevEl = blocks[blocks.length - 2];
+              const lastEl = blocks[blocks.length - 1];
+              if (prevEl && lastEl) {
+                const prevBottom = prevEl.offsetTop + prevEl.offsetHeight;
+                if (maxInkY > prevBottom) {
+                  const neededOffset = Math.ceil(maxInkY - prevBottom) + 24;
+                  lastEl.style.marginTop = neededOffset + 'px';
+                }
+              }
+            }
+          }, 30);
+        }
+
+        // Render công thức Toán học MathJax nếu thư viện đã sẵn sàng
+        if (window.MathJax && window.MathJax.typesetPromise) {
+          window.MathJax.typesetPromise([slideContainer]).catch(function (err) {
+            console.error('MathJax typeset error:', err);
+          });
+        }
+
+        // Vẽ lại nét viết tay tương ứng của slide này
+        redrawInkCanvas();
+      }
+
+      /* ------------------------------------------------------------
+         CANVAS INKING LAYER (POINTER EVENTS & SMOOTH DRAWING)
+         ------------------------------------------------------------ */
+      const canvas = document.getElementById('inkCanvas');
+      const ctx = canvas.getContext('2d');
+      let isDrawing = false;
+      let currentStroke = null;
+
+      function resizeCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = window.innerWidth * dpr;
+        canvas.height = window.innerHeight * dpr;
+        ctx.scale(dpr, dpr);
+        redrawInkCanvas();
+      }
+      window.addEventListener('resize', resizeCanvas);
+      window.addEventListener('orientationchange', resizeCanvas);
+
+      function redrawInkCanvas() {
+        const dpr = window.devicePixelRatio || 1;
+        ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+
+        const strokes = slideStrokes[currentSlideIndex] || [];
+        strokes.forEach(function (stroke) {
+          if (!stroke.points || stroke.points.length === 0) return;
+          ctx.beginPath();
+          ctx.strokeStyle = stroke.color;
+          ctx.lineWidth = stroke.width;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+
+          if (stroke.points.length === 1) {
+            ctx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width / 2, 0, Math.PI * 2);
+            ctx.fillStyle = stroke.color;
+            ctx.fill();
+          } else {
+            ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
+            for (let i = 1; i < stroke.points.length; i++) {
+              ctx.lineTo(stroke.points[i].x, stroke.points[i].y);
+            }
+            ctx.stroke();
+          }
+        });
+      }
+
+      // Xử lý Pointer Events cho bút vẽ / chạm / chuột
+      canvas.addEventListener('pointerdown', function (e) {
+        if (activeTool === 'cursor') return;
+        isDrawing = true;
+        canvas.setPointerCapture(e.pointerId);
+
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (activeTool === 'eraser') {
+          eraseStrokesNear(x, y);
+          return;
+        }
+
+        currentStroke = {
+          color: currentColor,
+          width: currentPenWidth,
+          points: [{ x: x, y: y }]
+        };
+
+        if (!slideStrokes[currentSlideIndex]) {
+          slideStrokes[currentSlideIndex] = [];
+        }
+        slideStrokes[currentSlideIndex].push(currentStroke);
+        redrawInkCanvas();
+      });
+
+      canvas.addEventListener('pointermove', function (e) {
+        if (!isDrawing) return;
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        if (activeTool === 'eraser') {
+          eraseStrokesNear(x, y);
+          return;
+        }
+
+        if (currentStroke) {
+          currentStroke.points.push({ x: x, y: y });
+          redrawInkCanvas();
+        }
+      });
+
+      function stopDrawing(e) {
+        if (!isDrawing) return;
+        isDrawing = false;
+        currentStroke = null;
+        if (e && e.pointerId) {
+          try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+        }
+      }
+      canvas.addEventListener('pointerup', stopDrawing);
+      canvas.addEventListener('pointercancel', stopDrawing);
+
+      // Thuật toán tẩy nét vẽ ở gần con trỏ (radius = 24px)
+      function eraseStrokesNear(x, y) {
+        const radius = 24;
+        const strokes = slideStrokes[currentSlideIndex] || [];
+        slideStrokes[currentSlideIndex] = strokes.filter(function (s) {
+          return !s.points.some(function (p) {
+            const dx = p.x - x;
+            const dy = p.y - y;
+            return Math.sqrt(dx * dx + dy * dy) < radius;
+          });
+        });
+        redrawInkCanvas();
+      }
+
+      /* ------------------------------------------------------------
+         CHUYỂN ĐỔI CÔNG CỤ TOOLBAR
+         ------------------------------------------------------------ */
+      const btnCursor = document.getElementById('btnCursor');
+      const btnPen = document.getElementById('btnPen');
+      const btnEraser = document.getElementById('btnEraser');
+      const btnClearInk = document.getElementById('btnClearInk');
+      const paletteGroup = document.getElementById('paletteGroup');
+
+      function setTool(tool) {
+        activeTool = tool;
+        btnCursor.classList.toggle('active', tool === 'cursor');
+        btnPen.classList.toggle('active', tool === 'pen');
+        btnEraser.classList.toggle('active', tool === 'eraser');
+        btnEraser.classList.toggle('is-eraser', tool === 'eraser');
+
+        canvas.classList.toggle('active-pen', tool === 'pen');
+        canvas.classList.toggle('active-eraser', tool === 'eraser');
+      }
+
+      btnCursor.addEventListener('click', function () { setTool('cursor'); });
+      btnPen.addEventListener('click', function () { setTool('pen'); });
+      btnEraser.addEventListener('click', function () { setTool('eraser'); });
+
+      btnClearInk.addEventListener('click', function () {
+        slideStrokes[currentSlideIndex] = [];
+        redrawInkCanvas();
+      });
+
+      // Chọn màu bút
+      const colorDots = document.querySelectorAll('.color-dot');
+      colorDots.forEach(function (dot) {
+        dot.addEventListener('click', function () {
+          colorDots.forEach(function (d) { d.classList.remove('active'); });
+          dot.classList.add('active');
+          currentColor = dot.getAttribute('data-color');
+          setTool('pen');
+        });
+      });
+
+      /* ------------------------------------------------------------
+         ĐIỀU HƯỚNG SLIDE (TRÁI / PHẢI)
+         ------------------------------------------------------------ */
+      const btnPrevSlide = document.getElementById('btnPrevSlide');
+      const btnNextSlide = document.getElementById('btnNextSlide');
+
+      function goToPrevSlide() {
+        if (currentSlideIndex > 0) {
+          currentSlideIndex--;
+          renderCurrentSlide();
+        }
+      }
+
+      function goToNextSlide() {
+        if (currentSlideIndex < SLIDES_DATA.length - 1) {
+          currentSlideIndex++;
+          renderCurrentSlide();
+        }
+      }
+
+      btnPrevSlide.addEventListener('click', goToPrevSlide);
+      btnNextSlide.addEventListener('click', goToNextSlide);
+
+      // Phím tắt điều hướng bàn phím
+      window.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          goToPrevSlide();
+        } else if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+          goToNextSlide();
+        } else if (e.key === 'F11') {
+          e.preventDefault();
+          toggleFullscreen();
+        }
+      });
+
+      /* ------------------------------------------------------------
+         CHUYỂN THEME BẢNG (BẢNG XANH -> BẢNG ĐEN -> BẢNG TRẮNG)
+         ------------------------------------------------------------ */
+      const btnThemeToggle = document.getElementById('btnThemeToggle');
+      const themes = ['theme-chalkboard', 'theme-blackboard', 'theme-whiteboard'];
+      let themeIdx = 0;
+
+      btnThemeToggle.addEventListener('click', function () {
+        document.body.classList.remove(themes[themeIdx]);
+        themeIdx = (themeIdx + 1) % themes.length;
+        currentTheme = themes[themeIdx];
+        document.body.classList.add(currentTheme);
+      });
+
+      /* ------------------------------------------------------------
+         BẬT TOÀN MÀN HÌNH (FULLSCREEN)
+         ------------------------------------------------------------ */
+      const btnFullscreen = document.getElementById('btnFullscreen');
+      function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(function () {});
+        } else {
+          if (document.exitFullscreen) document.exitFullscreen();
+        }
+      }
+      btnFullscreen.addEventListener('click', toggleFullscreen);
+
+      /* ------------------------------------------------------------
+         4. TIỆN ÍCH ĐỒNG HỒ ĐẾM NGƯỢC (COUNTDOWN TIMER)
+         Tích hợp chuông Web Audio API ngân vang thanh nhã khi hết giờ
+         ------------------------------------------------------------ */
+      const timerPopup = document.getElementById('timerPopup');
+      const btnTimerToggle = document.getElementById('btnTimerToggle');
+      const btnCloseTimer = document.getElementById('btnCloseTimer');
+      const timerDisplay = document.getElementById('timerDisplay');
+      const btnStartPauseTimer = document.getElementById('btnStartPauseTimer');
+      const btnResetTimer = document.getElementById('btnResetTimer');
+      const timerBadgeText = document.getElementById('timerBadgeText');
+      const toolbar = document.getElementById('floatingToolbar');
+
+      let timerTotalSeconds = 120;
+      let timerRemaining = 120;
+      let timerInterval = null;
+      let isTimerRunning = false;
+
+      function formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = sec % 60;
+        return (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+      }
+
+      function updateTimerDisplay() {
+        timerDisplay.textContent = formatTime(timerRemaining);
+        if (isTimerRunning) {
+          timerBadgeText.textContent = formatTime(timerRemaining);
+        } else {
+          timerBadgeText.textContent = 'Đồng hồ';
+        }
+      }
+
+      // Phát chuông báo kết thúc bằng Web Audio API Synthesizer (3 nốt ngân vang)
+      function playEndChime() {
+        try {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (!AudioContext) return;
+          const ctxAudio = new AudioContext();
+
+          const notes = [880, 1174.66, 1760]; // A5, D6, A6
+          notes.forEach(function (freq, index) {
+            const osc = ctxAudio.createOscillator();
+            const gain = ctxAudio.createGain();
+            const startTime = ctxAudio.currentTime + index * 0.22;
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, startTime);
+
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.35, startTime + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 1.2);
+
+            osc.connect(gain);
+            gain.connect(ctxAudio.destination);
+
+            osc.start(startTime);
+            osc.stop(startTime + 1.3);
+          });
+        } catch (err) {
+          console.warn('AudioContext playback error:', err);
+        }
+      }
+
+      function startTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        isTimerRunning = true;
+        btnStartPauseTimer.textContent = 'Tạm Dừng';
+        btnStartPauseTimer.style.background = '#e11d48';
+        timerDisplay.classList.remove('is-ended');
+
+        timerInterval = setInterval(function () {
+          if (timerRemaining > 0) {
+            timerRemaining--;
+            updateTimerDisplay();
+          } else {
+            clearInterval(timerInterval);
+            isTimerRunning = false;
+            btnStartPauseTimer.textContent = 'Bắt Đầu';
+            btnStartPauseTimer.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            timerDisplay.classList.add('is-ended');
+            playEndChime();
+          }
+        }, 1000);
+      }
+
+      function pauseTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        isTimerRunning = false;
+        btnStartPauseTimer.textContent = 'Tiếp Tục';
+        btnStartPauseTimer.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        updateTimerDisplay();
+      }
+
+      function resetTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        isTimerRunning = false;
+        timerRemaining = timerTotalSeconds;
+        btnStartPauseTimer.textContent = 'Bắt Đầu';
+        btnStartPauseTimer.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+        timerDisplay.classList.remove('is-ended');
+        updateTimerDisplay();
+      }
+
+      btnStartPauseTimer.addEventListener('click', function () {
+        if (isTimerRunning) {
+          pauseTimer();
+        } else {
+          startTimer();
+        }
+      });
+
+      btnResetTimer.addEventListener('click', resetTimer);
+
+      // Chọn các mốc thời gian nhanh
+      const presetBtns = document.querySelectorAll('.preset-btn');
+      presetBtns.forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const sec = parseInt(btn.getAttribute('data-sec'), 10);
+          timerTotalSeconds = sec;
+          timerRemaining = sec;
+          resetTimer();
+        });
+      });
+
+      // Bật/tắt popup Timer
+      btnTimerToggle.addEventListener('click', function () {
+        const isShown = timerPopup.style.display === 'flex';
+        timerPopup.style.display = isShown ? 'none' : 'flex';
+        toolbar.classList.toggle('keep-active', !isShown);
+      });
+
+      btnCloseTimer.addEventListener('click', function () {
+        timerPopup.style.display = 'none';
+        toolbar.classList.remove('keep-active');
+      });
+
+      /* ------------------------------------------------------------
+         KHỞI CHẠY LẦN ĐẦU KHI TRANG SẴN SÀNG
+         ------------------------------------------------------------ */
+      resizeCanvas();
+      renderCurrentSlide();
+      updateTimerDisplay();
+    })();
+  </script>
+</body>
+</html>

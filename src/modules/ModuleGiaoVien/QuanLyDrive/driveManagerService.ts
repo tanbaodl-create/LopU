@@ -9,7 +9,7 @@
 
 import { getDriveConnectionState, connectGoogleDrive } from '../../ConnectData/ConnectDrive/driveService';
 export { getDriveConnectionState, connectGoogleDrive };
-import { createDriveFolderIfNotExists, ensureValidDriveToken } from '../../ConnectData/ConnectDrive/googleDriveService';
+import { createDriveFolderIfNotExists, ensureValidDriveToken, removeVietnameseTones } from '../../ConnectData/ConnectDrive/googleDriveService';
 
 export interface PathToIdResult {
   found: boolean;
@@ -296,10 +296,13 @@ export async function resolvePathToDriveId(
           if (fbRes.ok) {
             const fbData = await fbRes.json();
             const segNorm = segment.normalize('NFC').trim().toLowerCase();
+            const segSlug = removeVietnameseTones(segNorm).replace(/[^a-z0-9]/g, '');
             validFile = (fbData.files || []).find((f: any) => {
               if (f.trashed) return false;
               const fNameNorm = (f.name || '').normalize('NFC').trim().toLowerCase();
               if (fNameNorm === segNorm) return true;
+              const fSlug = removeVietnameseTones(fNameNorm).replace(/[^a-z0-9]/g, '');
+              if (segSlug && fSlug === segSlug) return true;
               if ((segNorm === 'tailieu' && fNameNorm === 'taillieu') || (segNorm === 'taillieu' && fNameNorm === 'tailieu')) {
                 return true;
               }
@@ -945,7 +948,7 @@ export async function getNestedDriveTree(
       const query = `'${folderId}' in parents and trashed = false`;
       const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
         query
-      )}&fields=files(id,name,mimeType,size,modifiedTime,trashed)&pageSize=100`;
+      )}&orderBy=modifiedTime desc&fields=files(id,name,mimeType,size,modifiedTime,trashed)&pageSize=100`;
 
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
@@ -958,6 +961,14 @@ export async function getNestedDriveTree(
 
       const data = await res.json();
       const files: any[] = (data.files || []).filter((f: any) => !f.trashed);
+
+      if (files.length > 1) {
+        files.sort((a, b) => {
+          const tA = a.modifiedTime ? new Date(a.modifiedTime).getTime() : 0;
+          const tB = b.modifiedTime ? new Date(b.modifiedTime).getTime() : 0;
+          return tB - tA;
+        });
+      }
 
       const childNodes = await Promise.all(
         files.map(async (item) => {

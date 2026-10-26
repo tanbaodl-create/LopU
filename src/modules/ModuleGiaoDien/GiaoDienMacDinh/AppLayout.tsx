@@ -24,7 +24,7 @@ interface AppLayoutProps {
 }
 
 export const AppLayout: React.FC<AppLayoutProps> = ({
-  initialView = 'teaching-documents',
+  initialView = 'teaching-soanthao',
 }) => {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [activeView, setActiveView] = useState<ViewId>(initialView);
@@ -293,7 +293,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       />
 
       {/* 3. Main Workspace / Dynamic View Container */}
-      <main id="app-main-content" className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+      <main
+        id="app-main-content"
+        className={`flex-1 w-full ${
+          activeView === 'teaching-interactive'
+            ? 'w-full max-w-none p-0 overflow-x-hidden'
+            : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8'
+        }`}
+      >
         <DynamicViewContainer
           activeView={activeView}
           currentRole={currentRole}

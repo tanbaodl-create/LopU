@@ -48,7 +48,7 @@ import { getClasses, getTeacherDocuments } from '../../ConnectData/ConnectFirest
 import { HierarchySelector } from '../TaiLieuCaNhan/HierarchySelector';
 import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
-import { DongBoDriveButton, useDongBoDrive, loadChuyenDeContentFromDrive, removeVietnameseTones, ensureValidDriveToken } from './DongBoDrive';
+import { DongBoDriveButton, useDongBoDrive, loadChuyenDeContentFromDrive, removeVietnameseTones, ensureValidDriveToken, deduplicateItemsBySlug } from './DongBoDrive';
 import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker';
 import { WordStyleMenu } from './WordStyleMenu';
 import { renderLatexInHtml, autoRenderLatexInDom } from './latexUtils';
@@ -337,9 +337,11 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
     const handleTokenExpired = () => {
       if (isTeacherOrHigher) {
         setIsReauthenticating(true);
-        ensureValidDriveToken(undefined, true).finally(() => {
-          setIsReauthenticating(false);
-        });
+        ensureValidDriveToken(undefined, true)
+          .catch((err) => console.warn('Lỗi kiểm tra token Drive:', err))
+          .finally(() => {
+            setIsReauthenticating(false);
+          });
       }
     };
     window.addEventListener('lopu_drive_auth_change', handleAuthChange);
@@ -490,8 +492,11 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
             setSelectedKienThucName(matchedItem);
           } else {
             const rawName = loadedFileName.slice('KienThuc_'.length, -'.html'.length);
-            setSelectedKienThucName(rawName);
-            setCustomKienThucList(prev => prev.includes(rawName) ? prev : [rawName, ...prev]);
+            let friendlyName = rawName;
+            if (rawName.toLowerCase() === 'lythuyettrongtam') friendlyName = 'Lý thuyết trọng tâm';
+            else if (rawName.toLowerCase() === 'tomtatcongthuc') friendlyName = 'Tóm tắt công thức';
+            setSelectedKienThucName(friendlyName);
+            setCustomKienThucList(prev => deduplicateItemsBySlug([friendlyName, ...prev]));
           }
         } else if (loadedFileName.toLowerCase().startsWith('luyentap_') && loadedFileName.toLowerCase().endsWith('.json')) {
           const rawSlug = removeVietnameseTones(loadedFileName.replace(/^luyentap_/i, '').replace(/\.json$/i, ''))
@@ -504,8 +509,10 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
             setSelectedExerciseName(matchedItem);
           } else {
             const rawName = loadedFileName.slice('luyentap_'.length, -'.json'.length);
-            setSelectedExerciseName(rawName);
-            setCustomLuyenTapList(prev => prev.includes(rawName) ? prev : [rawName, ...prev]);
+            let friendlyName = rawName;
+            if (rawName.toLowerCase() === 'co_ban' || rawName.toLowerCase() === 'coban') friendlyName = 'Bài luyện tập cơ bản';
+            setSelectedExerciseName(friendlyName);
+            setCustomLuyenTapList(prev => deduplicateItemsBySlug([friendlyName, ...prev]));
           }
         } else if (loadedFileName.toLowerCase().startsWith('ktdg_') && loadedFileName.toLowerCase().endsWith('.json')) {
           const rawSlug = removeVietnameseTones(loadedFileName.replace(/^ktdg_/i, '').replace(/\.json$/i, ''))
@@ -518,8 +525,10 @@ export const SoanThaoView: React.FC<SoanThaoViewProps> = ({ currentRole = 'teach
             setSelectedExerciseName(matchedItem);
           } else {
             const rawName = loadedFileName.slice('ktdg_'.length, -'.json'.length);
-            setSelectedExerciseName(rawName);
-            setCustomKtdgList(prev => prev.includes(rawName) ? prev : [rawName, ...prev]);
+            let friendlyName = rawName;
+            if (rawName.toLowerCase() === 'danh_gia_nang_luc' || rawName.toLowerCase() === 'danhgianangluc') friendlyName = 'Kiểm tra đánh giá năng lực';
+            setSelectedExerciseName(friendlyName);
+            setCustomKtdgList(prev => deduplicateItemsBySlug([friendlyName, ...prev]));
           }
         }
 

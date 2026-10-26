@@ -28,6 +28,7 @@ import {
   Coins,
   FileText,
   Tv,
+  Laptop,
 } from 'lucide-react';
 import { ViewId } from '../Navigation';
 import { PhanTichLenh } from './PhanTichLenh';
@@ -85,23 +86,24 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'LopHoc',
-        name: 'LopHoc (Lớp học & Bài giảng)',
+        name: 'LopHoc (Lớp học & Kho Tài Liệu 💎)',
         folderPath: 'src/modules/ModuleHocSinh/LopHoc',
-        description: 'Xem danh sách lớp học, lọc bài học đã mở khóa, tích hợp nút "lấy tọa độ GPS" mở Google Maps với 2 tùy chọn lớp bản đồ Mặc định và Vệ tinh, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đường dẫn mặc định: myApp/LopU/LopHoc. Đã loại bỏ hoàn toàn banner trùng lặp bên dưới thanh ngang trên cùng, đưa người dùng vào thẳng bộ lọc bài học.',
-        purpose: 'Học tập trực tiếp (Đường dẫn mặc định: myApp/LopU/LopHoc), loại bỏ tiêu đề lặp lại dưới thanh ngang',
+        description: 'Xem danh sách lớp học cá nhân, tích hợp nút "➕ Tham gia lớp mới" nhập mã PIN trực tiếp, Lớp học Công khai "Kho Tài Liệu 💎" (chứa tài liệu Miễn phí 🆓 và Trả phí Kim Cương 💎 cho tất cả người dùng), lọc bài học đã mở khóa, lấy tọa độ GPS Google Maps, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đường dẫn mặc định: myApp/LopU/LopHoc.',
+        purpose: 'Học tập trực tiếp, Đăng ký tham gia lớp mới (Mã PIN) & Kho Tài Liệu 💎 (Đường dẫn mặc định: myApp/LopU/LopHoc)',
         viewId: 'learning-classes',
         icon: BookOpen,
-        tags: ['Bài học', 'Đường dẫn myApp/LopU/LopHoc', 'lấy tọa độ GPS', 'Giao diện tối giản', 'Bỏ banner trùng'],
+        tags: ['Lớp học', 'Tham gia lớp mới (Mã PIN)', 'Kho Tài Liệu 💎', 'Đường dẫn myApp/LopU/LopHoc', 'lấy tọa độ GPS', 'Miễn phí 🆓 & Kim Cương 💎'],
       },
+
       {
         id: 'SoDoLop',
-        name: 'SoDoLop (Sơ Đồ Lớp - Xếp Chỗ Ngồi, Nạp Vào Sơ Đồ, Tối Giản Nút Bấm, Lưu Kèm 3 Điều Kiện Cài Đặt)',
+        name: 'SoDoLop (Sơ đồ vị trí chỗ ngồi & Chức danh VTM)',
         folderPath: 'src/modules/ModuleHocSinh/SoDoLop',
-        description: 'Sơ đồ lớp học tối giản & thông minh: Bỏ nút "Auto Xếp nhanh" và "Đồng bộ phân tổ"; đổi tên nút "Auto Xếp theo Điều kiện" thành "Xếp chỗ ngồi" và "Nạp lại Danh sách" thành "Nạp vào sơ đồ". Tích hợp đầy đủ 3 điều kiện xếp chỗ (Không gần nhau, Vị trí cố định, Cặp đôi cùng tiến) kèm tự động lưu/phục hồi từ Drive theo đường dẫn mặc định: myApp/LopU/SoDoLop.',
-        purpose: 'Sơ đồ lớp tinh gọn (Đường dẫn mặc định: myApp/LopU/SoDoLop) với nút Xếp chỗ ngồi, Nạp vào sơ đồ và tự động phục hồi 3 điều kiện cài đặt xếp chỗ',
+        description: 'Sơ đồ vị trí chỗ ngồi học sinh trong lớp học, đồng bộ cấu hình bàn ghế, chức danh VTM (Văn Thể Mỹ), xuất Excel/PNG và lưu Google Drive.',
+        purpose: 'Sơ đồ lớp học & vị trí chỗ ngồi (Đường dẫn mặc định: myApp/LopU/SoDoLop)',
         viewId: 'learning-seating',
         icon: LayoutGrid,
-        tags: ['Xếp chỗ ngồi', 'Nạp vào sơ đồ', 'Đường dẫn myApp/LopU/SoDoLop', 'Tối giản nút bấm', 'Lưu kèm 3 điều kiện cài đặt'],
+        tags: ['Sơ đồ bàn ghế', 'Chỗ ngồi', 'Chức danh VTM', 'Lưu Drive', 'Xuất Excel/PNG'],
       },
       {
         id: 'ThoiKhoaBieu',
@@ -112,16 +114,6 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         viewId: 'learning-schedule',
         icon: Calendar,
         tags: ['Đường dẫn myApp/LopU/ThoiKhoaBieu', 'Rà soát 14 trường thông tin', 'Các Lớp Dạy/Học', 'Tùy chọn lớp rỗng nếu chưa có', 'Không tự ý thêm lớp giả'],
-      },
-      {
-        id: 'DangKyLop',
-        name: 'DangKyLop (Tìm lớp & Đăng ký)',
-        folderPath: 'src/modules/ModuleHocSinh/DangKyLop',
-        description: 'Tra cứu danh sách lớp mở toàn trường, gửi yêu cầu tham gia kèm nhập mã PIN bảo mật do giáo viên cấp.',
-        purpose: 'Tìm lớp & Đăng ký tham gia',
-        viewId: 'learning-join',
-        icon: Search,
-        tags: ['Mã PIN', 'Tìm lớp & Đăng ký', 'Bảo mật'],
       },
     ],
   },
@@ -142,13 +134,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
     submodules: [
       {
         id: 'QuanLyLopDay',
-        name: 'QuanLyLopDay (Quản lý lớp dạy, Quy chuẩn Kiến thức & Bài tập, Xóa Drive trước khi xóa App & Xử lý 401)',
-        folderPath: 'src/modules/ModuleGiaoVien/QuanLyLopDay',
-        description: '(Chỉ Giáo viên trở lên mới thấy). Giảng dạy & quản lý lớp dạy: Chuẩn hóa quy chuẩn bài dạy — Kiến thức gồm Lý thuyết (Khái niệm, Định lý, Hệ quả, Phương pháp giải) & Bài tập (Ví dụ minh họa, Tự luận, Trắc nghiệm 4 lựa chọn/Đúng sai/Trả lời ngắn); Luyện tập & Kiểm tra chỉ gồm Bài tập. Mỗi hàng tương ứng 1 tiết / ca dạy của giáo viên; Phân quyền xem TikZ; Nút chỉnh sửa đồ thị tự động giữ nguyên tham số hàm đã vẽ; Xóa Tài liệu/Chương/Bài/Vấn đề/Chuyên đề kiểm tra xóa hoàn tất trên Google Drive của giáo viên trước mới xóa bên App; Nếu phiên Drive hết hạn (401), hiển thị thông báo kèm nút "Kết nối Drive" trực tiếp; đổi tên lớp, đổi vị trí Cửa ⇄ Bàn GV linh hoạt, tích hợp GPS Ba Gia và duyệt mã PIN.',
-        purpose: 'Giảng dạy, Quy chuẩn Kiến thức & Bài tập, Xóa Drive trước khi xóa App, Xử lý 401 & Giữ đúng tham số đồ thị',
-        viewId: 'teaching-management',
-        icon: CheckCircle2,
-        tags: ['Quyền Giáo viên+', 'Quy chuẩn Kiến thức & Bài tập', 'Xóa Drive trước khi xóa App', 'Nút Kết nối Drive khi 401', 'Sửa đồ thị giữ đúng hàm số', 'Phân quyền TikZ', 'Mỗi hàng 1 tiết/ca', 'Giảng dạy', 'Ví Kim Cương 💎', 'GPS Ba Gia', 'Đổi tên lớp'],
+        name: 'QuanLyLopDay (Quản lý Lớp dạy & Mã PIN Truy Cập)',
+        folderPath: 'src/modules/ModuleQuanTri/PhanQuyenLopHoc',
+        description: 'Phân hệ Quản lý Lớp dạy: 1) Giáo viên mở lớp dạy mới; 2) Duyệt/từ chối yêu cầu tham gia lớp bằng mã PIN từ học sinh; 3) Quản lý danh sách học sinh & Nhập Excel; 4) Phân công Giáo viên phụ trách môn học và thay đổi mã PIN bảo mật.',
+        purpose: 'Giáo viên mở lớp dạy mới, duyệt mã PIN, quản lý danh sách lớp & thành viên học sinh',
+        viewId: 'settings-permissions',
+        icon: KeyRound,
+        tags: ['Mở Lớp Dạy Mới', 'Duyệt Mã PIN', 'Quản lý Lớp', 'Phân công GV', 'Thành viên lớp', 'Nhập Excel'],
       },
       {
         id: 'NhapHocSinh',
@@ -168,16 +160,6 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         viewId: 'teaching-students',
         icon: LineChart,
         tags: ['Sổ điểm', 'Drive GV mở lớp', 'Đánh giá', 'Theo dõi TKB con em', 'Đa hồ sơ TKB'],
-      },
-      {
-        id: 'TaiLieuCaNhan',
-        name: 'TaiLieuCaNhan (Trang 1. Kiến thức, E-learning & Chèn Bảng Tùy Chỉnh Giáo Viên Nhập)',
-        folderPath: 'src/modules/ModuleGiaoVien/TaiLieuCaNhan',
-        description: 'Quản lý tài liệu và tiến trình bài dạy Chuyên đề: 1) Tích hợp Trang 1. Kiến thức nạp từ file KienThuc.html trên Google Drive, lưu trữ HinhAnh/AmThanh/Video chuẩn hóa và hỗ trợ bài giảng E-Learning đường dẫn tương đối; 2) Tính năng Chèn Bảng: Hỗ trợ giáo viên nhập số dòng (hàng), số cột, tùy chọn có hàng tiêu đề và tạo lưới bảng trực quan để nhập dữ liệu; 3) Đồng bộ Tài liệu chuẩn xác: Duy trì thông báo và huy hiệu trạng thái xuyên suốt đến khi danh sách tài liệu nạp trọn vẹn vào dropdown.',
-        purpose: 'Trang 1. Kiến thức KienThuc.html, Chèn bảng số dòng/cột/tiêu đề & đồng bộ dropdown tài liệu chuẩn xác',
-        viewId: 'teaching-documents',
-        icon: FolderLock,
-        tags: ['Chèn bảng số dòng/cột/tiêu đề', 'Trang 1. Kiến thức', 'KienThuc.html', 'HinhAnh/AmThanh/Video', 'Gói E-Learning', 'Đồng bộ dropdown chuẩn xác'],
       },
       {
         id: 'QuanLyDrive',
@@ -200,14 +182,24 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         tags: ['Style menu 3 cột', 'Ghi tắt Ví dụ/Bài/PPG/TNLC/TNDS/TLN', 'Hợp nhất Soạn bài vào Style', 'Bảng màu chuẩn mực Word', 'Nạp siêu tốc Drive'],
       },
       {
-        id: 'ThuongMaiTaiLieu',
-        name: 'ThuongMaiTaiLieu (Thương mại & Phát hành tài liệu riêng biệt)',
-        folderPath: 'src/modules/ModuleGiaoVien/ThuongMaiTaiLieu',
-        description: 'Phân hệ thương mại độc lập: Cấu hình tài liệu cấp miễn phí cho các lớp học (🆓) hoặc bán thu phí bằng Kim Cương (💎). Theo dõi số lượt mua, doanh thu tích lũy và phản hồi Tim ❤️ từ học sinh.',
-        purpose: 'Quản trị giá bán Kim Cương, phân quyền phân phối và tối ưu hóa doanh thu',
+        id: 'PhatHanhTaiLieu',
+        name: 'PhatHanhTaiLieu (Gộp nút thành 1 nút ⚙️ Cài đặt, Phân biệt lớp Thừa hưởng màu Tím chọn sẵn & Lọc lớp do Giáo viên mở)',
+        folderPath: 'src/modules/ModuleGiaoVien/PhatHanhTaiLieu',
+        description: 'Module độc lập chuyên trách Phát hành Tài liệu: 1) Giao diện tinh gọn, loại bỏ Thư viện mở khỏi Mục 1; 2) Phát hành phân cấp Cấu trúc (Tài liệu -> Chương -> Bài -> Vấn đề -> Chuyên đề -> Luyện tập -> Bài đánh giá -> KTDG); 3) Gộp các nút thành 1 nút "⚙️ Cài đặt" duy nhất ở cuối mỗi vị trí, mở modal xem chi tiết phát hành; 4) Modal tự động chọn sẵn lớp Thừa hưởng từ cha với màu Tím nổi bật, cho phép bấm chọn/bỏ chọn trực tiếp; 5) Chỉ hiển thị danh sách các Lớp do chính Giáo viên đó mở.',
+        purpose: 'Cài đặt phát hành & Định giá bán Kim Cương (💎) từng vị trí tinh gọn với 1 nút ⚙️ Cài đặt và màu sắc phân biệt lớp Thừa hưởng',
         viewId: 'teaching-monetization',
         icon: Coins,
-        tags: ['Ví Kim Cương 💎', 'Phát hành miễn phí 🆓', 'Theo dõi lượt mua', 'Lưu đồng bộ Firestore'],
+        tags: ['1 nút ⚙️ Cài đặt vị trí', 'Màu Tím chọn sẵn cho Thừa hưởng', 'Lọc danh sách Lớp do GV mở', 'Giá Kim Cương từng vị trí', 'Phát hành phân cấp Cấu trúc', 'Giao diện tinh gọn'],
+      },
+      {
+        id: 'DayHocInteractive',
+        name: 'LenLop / DayHocInteractive (Vùng Viết Tay Nổi Rõ Trực Quan & Phủ Nền Bảng 100% Chiều Ngang Màn Hình)',
+        folderPath: 'src/modules/ModuleGiaoVien/DayHocInteractive',
+        description: 'Phân hệ Lên Lớp & Cửa Sổ Trình Chiếu: 1) Vùng viết bài dạy sau khi nhấp đặt được giữ nguyên viền nét đứt và nền mờ rõ ràng, không bao giờ bị biến mất; 2) Khung bọc bảng ngoài đồng bộ màu nền và họa tiết ô vuông phủ kín 100% chiều ngang màn hình thiết bị, loại bỏ hoàn toàn dải đen/xám trống lề phải.',
+        purpose: 'Vùng viết tay nổi nét đứt rõ nét không biến mất & nền bảng phủ kín 100% chiều ngang màn hình',
+        viewId: 'teaching-interactive',
+        icon: Tv,
+        tags: ['Vùng Viết Tay Nổi Nét Đứt', 'Phủ Khít 100% Chiều Ngang', 'Không Biến Mất Khi Đặt', 'Giao Diện Chuẩn Mực'],
       },
     ],
   },
@@ -246,15 +238,16 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         icon: LineChart,
         tags: ['Thống kê', 'Tiến độ', 'Doanh thu Kim Cương 💎', 'Lượt mua tài liệu'],
       },
+
       {
-        id: 'PhanQuyenLopHoc',
-        name: 'PhanQuyenLopHoc (Phân công GV, Quản lý mã PIN & Bộ Lọc Mặc Định Rỗng)',
-        folderPath: 'src/modules/ModuleQuanTri/PhanQuyenLopHoc',
-        description: '(Phần sau thì Admin và Superadmin thấy: Quản trị). Cấu hình phân quyền lớp học, phân công Giáo viên phụ trách theo môn học, quản lý mã PIN bảo mật lớp học và điều phối quyền mở lớp. Bộ lọc Môn học & Khối lớp mặc định là Rỗng / Tất cả khi có nhiều tùy chọn.',
-        purpose: 'Phân quyền lớp học, quản lý mã PIN & Bộ lọc môn/khối mặc định rỗng trong phân hệ Quản trị',
-        viewId: 'settings-permissions',
-        icon: KeyRound,
-        tags: ['Admin & Superadmin', 'Mã PIN', 'Phân công GV', 'Môn & Khối mặc định rỗng', 'Giám sát Quyền Ghi Drive'],
+        id: 'QuanLyThietBi',
+        name: 'QuanLyThietBi (Quản lý thiết bị đăng nhập: 1 Thiết bị/1 HĐH & Tối đa 2 lượt đổi/tháng)',
+        folderPath: 'src/modules/ModuleQuanTri/QuanLyThietBi',
+        description: 'Kiểm soát chặt chẽ thiết bị truy cập của từng tài khoản: Mỗi tài khoản chỉ được phép duy trì 1 thiết bị trên mỗi Hệ điều hành (Windows, macOS, iOS, Android, Linux). Đề xuất và áp dụng quy định tối đa 2 lượt đổi/tháng (tự động làm mới ngày 01 hàng tháng). Cung cấp giao diện tự gỡ thiết bị cho người dùng và tính năng Reset lượt hỗ trợ khẩn cấp dành cho Admin.',
+        purpose: 'Bảo mật tài khoản, chống chia sẻ tài khoản & Giới hạn 1 thiết bị / 1 HĐH (Tối đa 2 lượt đổi/tháng)',
+        viewId: 'settings-devices',
+        icon: Laptop,
+        tags: ['1 Thiết bị / 1 HĐH', 'Tối đa 2 lượt đổi/tháng', 'Tự động làm mới ngày 01', 'Admin Reset khẩn cấp', 'Tự gỡ thiết bị cũ'],
       },
     ],
   },
@@ -329,13 +322,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'HuongDanWeb',
-        name: 'HuongDanWeb (Trợ giúp, Sơ đồ cây, Phân tích lệnh & Kho Prompt chuẩn)',
+        name: 'HuongDanWeb (Trợ giúp, Sơ đồ cây, Phân tích lệnh & Kho Prompt chuẩn 4 nhóm)',
         folderPath: 'src/modules/ModuleGiaoDien/HuongDanWeb',
-        description: '(Phần sau chỉ Superadmin mới thấy: Trợ giúp). Sơ đồ cây module phân cấp, bộ phân tích lệnh siêu tốc với nút "Copy lệnh" bên trái, cho phép người dùng tự sửa trực tiếp trong ô prompt trước khi copy và Kho prompt chuẩn hỗ trợ phát triển dự án (gồm Prompt Làm chuyên đề Toán và Prompt Tạo Web Slide E-learning Toán THPT 1 file HTML tối ưu toàn diện tích hợp giải pháp hòa trộn multiply chống đè mực highlight và bảng màu mở rộng).',
-        purpose: 'Đặc quyền Superadmin: Trợ giúp (Sơ đồ cây module, Phân tích lệnh & Kho Prompt)',
+        description: '(Phần sau chỉ Superadmin mới thấy: Trợ giúp). Sơ đồ cây module phân cấp, bộ phân tích lệnh siêu tốc với nút "Copy lệnh" bên trái, và Kho Prompt Lệnh Chuẩn gồm 4 nhóm: 1) Tài liệu (Làm chuyên đề SGK 2018); 2) KHDH (Soạn Word chuẩn CV 5512/TT 02/QĐ 2422 & KHBD_Web E-learning 1 file HTML); 3) Infographic (Tóm tắt trực quan 1 trang, Bản đồ lộ trình giải toán); 4) Tạo App (Lệnh sửa nhanh trúng đích 1 vị trí theo sơ đồ cây AGENTS.md, sửa đa module và tạo app chuẩn kiến trúc sạch).',
+        purpose: 'Đặc quyền Superadmin: Trợ giúp (Sơ đồ cây module, Phân tích lệnh & Kho Prompt 4 nhóm)',
         viewId: 'guide-tree',
         icon: Network,
-        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích lệnh', 'Copy lệnh bên trái', 'Sửa prompt trực tiếp', 'Kho Prompt Chuẩn', 'Prompt Tạo Web Slide', 'Chống đè mực highlight'],
+        tags: ['Chỉ Superadmin', 'Sơ đồ cây', 'Phân tích lệnh', 'Kho Prompt Chuẩn 4 nhóm', 'Tài liệu', 'KHDH (Soạn Word & KHBD_Web)', 'Infographic đồ họa', 'Tạo App sửa nhanh 1 chỗ'],
       },
     ],
   },
@@ -374,10 +367,35 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
     ],
   },
+  {
+    id: 'ModuleShared',
+    code: 'src/modules/ModuleShared',
+    name: 'Phân hệ Dùng Chung (ModuleShared)',
+    roleDescription: 'Chứa các module độc lập dùng chung cho cả Giáo viên, Học sinh và các phân hệ khác',
+    icon: Layers,
+    themeColor: {
+      bg: 'bg-emerald-50',
+      border: 'border-emerald-200',
+      text: 'text-emerald-800',
+      badge: 'bg-emerald-100 text-emerald-700 border-emerald-300',
+      cardBg: 'hover:border-emerald-300 hover:bg-emerald-50/40',
+      accent: 'bg-emerald-600 text-white',
+    },
+    submodules: [
+      {
+        id: 'BoChonHocLieuTienTrinh',
+        name: 'BoChonHocLieuTienTrinh (Bộ Chọn Học Liệu & Tiến Trình Dùng Chung Cho Cả GV và HS)',
+        folderPath: 'src/modules/ModuleShared/BoChonHocLieuTienTrinh',
+        description: 'Module con độc lập dùng chung: 1) Thanh điều hướng tiến trình trên cùng chuẩn bố trí 1 hàng gồm biểu tượng thư mục, dropdown Tiến trình (1. Kiến thức, 2. Luyện tập, 3. KTDG, 4. Cải thiện), badge chuyên đề, dropdown bài con; 2) Phân quyền linh hoạt: Chế độ chỉ chọn (readOnly/student) ẩn toàn bộ nút thêm/sửa/xóa bài con và nút thêm phân cấp; Chế độ quản trị (teacher) cho phép thêm/sửa/xóa; 3) Mặc định mở rộng sẵn khung 2 cột cố định (defaultExpanded=true) hoặc thu gọn; 4) Mặc định Môn học và Khối lớp ban đầu để rỗng để chọn từ đầu; 5) Đồng bộ siêu tốc kế thừa Firestore + LocalStorage + Drive Fast Tree (<200ms) như trang Tài liệu; 6) Custom hook useHocLieuTienTrinh trích xuất toàn bộ tọa độ và nạp nội dung thực tế (HTML/JSON) từ Google Drive.',
+        purpose: 'Bộ chọn Học liệu & Tiến trình độc lập dùng chung cho cả Giáo viên và Học sinh, phân quyền chỉ chọn an toàn, mở rộng mặc định và đồng bộ siêu tốc',
+        icon: FolderLock,
+        tags: ['Module Dùng Chung', 'BoChonHocLieuTienTrinh', 'Dùng cho GV & HS', 'Mặc định mở rộng', 'Môn và Lớp rỗng', 'Chế độ chỉ chọn', 'Đồng bộ siêu tốc như Tài liệu', 'useHocLieuTienTrinh'],
+      },
+    ],
+  },
 ];
 
 export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, onNavigateToView }) => {
-  // Phân quyền bảo vệ: Phần sau chỉ superadmin mới thấy: Trợ giúp (Sơ đồ cây module, phân tích lệnh; kho prompt chuẩn)
   if (currentRole && currentRole !== 'superadmin') {
     return (
       <div id="guide-tree-restricted" className="p-8 text-center max-w-lg mx-auto my-12 bg-white rounded-2xl border border-indigo-200 shadow-sm space-y-4">
@@ -424,7 +442,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
     setExpandedNodes(allCollapsed);
   };
 
-  // Filter logic
   const filteredData = useMemo(() => {
     return MODULE_TREE_DATA.filter(moduleItem => {
       if (selectedModuleFilter !== 'all' && moduleItem.id !== selectedModuleFilter) {
@@ -469,7 +486,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
     return MODULE_TREE_DATA.reduce((acc, curr) => acc + curr.submodules.length, 0);
   }, []);
 
-  // Selected submodule detail for explorer mode
   const selectedSubmoduleData = useMemo(() => {
     for (const m of MODULE_TREE_DATA) {
       const found = m.submodules.find(s => s.id === selectedSubmoduleId);
@@ -480,7 +496,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
 
   return (
     <div id="huong-dan-web-container" className="space-y-6">
-      {/* Top Header Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-6 sm:p-7 border border-slate-800 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -564,7 +579,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       </div>
 
-      {/* Filter & Search Toolbar */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         <div className="relative flex-1">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -595,7 +609,7 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
             className="text-xs font-semibold bg-slate-100 border border-slate-200 rounded-xl py-2 px-3 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer text-slate-700"
           >
             <option value="all">Tất cả ({MODULE_TREE_DATA.length} Module)</option>
-            <option value="ModuleHocSinh">Phân hệ Học sinh (4)</option>
+            <option value="ModuleHocSinh">Phân hệ Học sinh (3)</option>
             <option value="ModuleGiaoVien">Phân hệ Giáo viên (4)</option>
             <option value="ModuleQuanTri">Phân hệ Quản trị (3)</option>
             <option value="ModuleGiaoDien">Phân hệ Giao diện (5)</option>
@@ -604,10 +618,8 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       </div>
 
-      {/* CHẾ ĐỘ 1: MENU CÂY LỒNG NHAU LIỀN MẠCH (NESTED TREE VIEW) */}
       {viewMode === 'nested-tree' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
-          {/* Node gốc (Root Item) */}
           <div className="px-5 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold">
@@ -635,7 +647,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
             </div>
           </div>
 
-          {/* Danh sách các Module cha & con lồng nhau */}
           <div className="p-4 sm:p-6 space-y-3">
             {filteredData.map((moduleNode, modIdx) => {
               const isExpanded = expandedNodes[moduleNode.id] ?? true;
@@ -644,76 +655,65 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
 
               return (
                 <div key={moduleNode.id} className="relative">
-                  {/* Đường kẻ gióng dọc liên kết giữa các Module cha */}
                   {!isLastModule && (
                     <div className="absolute left-4 top-10 bottom-0 w-0.5 bg-slate-200 pointer-events-none -z-0" />
                   )}
 
-                  {/* Menu Cha Cấp 1 (Parent Module Row) */}
                   <div
                     onClick={() => toggleNode(moduleNode.id)}
-                    className={`relative z-10 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 p-3 sm:p-3.5 rounded-xl border transition-all cursor-pointer select-none ${
+                    className={`relative z-10 flex items-center justify-between p-3.5 rounded-2xl border transition-all cursor-pointer ${
                       isExpanded
                         ? `${moduleNode.themeColor.bg} ${moduleNode.themeColor.border} shadow-2xs`
-                        : 'bg-white hover:bg-slate-50 border-slate-200'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-3">
                       <button
                         type="button"
-                        aria-label={isExpanded ? 'Thu gọn' : 'Mở rộng'}
-                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-transform shrink-0 ${
-                          isExpanded ? 'text-slate-800 bg-white shadow-2xs' : 'text-slate-400 bg-slate-100'
-                        }`}
+                        className="w-6 h-6 rounded-lg bg-white/80 flex items-center justify-center text-slate-500 hover:text-slate-900 transition-colors"
                       >
                         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </button>
 
                       <div
-                        className={`w-8 h-8 rounded-lg ${moduleNode.themeColor.accent} flex items-center justify-center shrink-0 shadow-2xs`}
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold shadow-2xs ${moduleNode.themeColor.accent}`}
                       >
-                        <IconComp className="w-4 h-4" />
+                        <IconComp className="w-5 h-5" />
                       </div>
 
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-sm text-slate-900 truncate">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold text-sm sm:text-base text-slate-900">
                             {moduleNode.name}
+                          </h3>
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${moduleNode.themeColor.badge}`}
+                          >
+                            {moduleNode.submodules.length} Module con
                           </span>
-                          <code className="text-[11px] font-mono px-2 py-0.5 rounded bg-white/90 border border-slate-200/80 text-slate-600 font-semibold">
-                            {moduleNode.code}
-                          </code>
                         </div>
-                        <p className="text-xs text-slate-500 truncate mt-0.5">
-                          {moduleNode.roleDescription}
-                        </p>
+                        <p className="text-xs text-slate-600 mt-0.5">{moduleNode.roleDescription}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-                      <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border ${moduleNode.themeColor.badge}`}>
-                        {moduleNode.submodules.length} Module con
-                      </span>
+                    <div className="text-xs font-mono text-slate-400 hidden sm:block">
+                      {moduleNode.code}
                     </div>
                   </div>
 
-                  {/* Nhánh Menu Con Cấp 2 Lồng Nhau (Nested Submodules) */}
                   {isExpanded && (
                     <div className="relative ml-4 sm:ml-6 pl-5 sm:pl-7 pt-2 pb-1 border-l-2 border-dashed border-indigo-200/80 space-y-2">
-                      {moduleNode.submodules.map((sub, subIdx) => {
+                      {moduleNode.submodules.map((sub) => {
                         const SubIcon = sub.icon;
                         const hasNavigation = Boolean(sub.viewId && onNavigateToView);
-                        const isLastSub = subIdx === moduleNode.submodules.length - 1;
 
                         return (
                           <div
                             key={sub.id}
                             className="relative group flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl bg-slate-50/70 hover:bg-indigo-50/40 border border-slate-200/80 hover:border-indigo-300 transition-all shadow-2xs"
                           >
-                            {/* Cành nhánh ngang kết nối (Branch arm ├─) */}
                             <div className="absolute -left-5 sm:-left-7 top-1/2 -translate-y-1/2 w-5 sm:w-7 h-0.5 bg-indigo-200 pointer-events-none" />
 
-                            {/* Cột thông tin chính: Icon, Tên, Mô tả ngắn */}
                             <div className="flex items-start gap-3 min-w-0">
                               <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 text-indigo-600 flex items-center justify-center shrink-0 shadow-2xs mt-0.5 group-hover:bg-indigo-600 group-hover:text-white group-hover:border-indigo-600 transition-colors">
                                 <SubIcon className="w-4 h-4" />
@@ -732,7 +732,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
                                   </span>
                                 </div>
 
-                                {/* Mô tả ngắn gọn module con làm gì */}
                                 <p className="text-xs text-slate-600 leading-relaxed">
                                   {sub.description}
                                 </p>
@@ -750,7 +749,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
                               </div>
                             </div>
 
-                            {/* Nút hành động mở xem */}
                             <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
                               {hasNavigation && sub.viewId && onNavigateToView ? (
                                 <button
@@ -780,10 +778,8 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       )}
 
-      {/* CHẾ ĐỘ 2: TRÌNH KHÁM PHÁ 2 CỘT (SPLIT EXPLORER VIEW) */}
       {viewMode === 'split-explorer' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden grid grid-cols-1 lg:grid-cols-12 min-h-[500px]">
-          {/* Cột Trái: Cây Menu Lồng Nhau (Collapsible Tree Navigation) */}
           <div className="lg:col-span-5 border-r border-slate-200 p-4 bg-slate-50/50 space-y-2 overflow-y-auto max-h-[650px]">
             <div className="text-xs font-bold uppercase tracking-wider text-slate-400 px-2 pb-2 border-b border-slate-200 flex items-center justify-between">
               <span>Cây Thư Mục Hệ Thống</span>
@@ -796,7 +792,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
 
               return (
                 <div key={moduleNode.id} className="space-y-1">
-                  {/* Module Cha */}
                   <div
                     onClick={() => toggleNode(moduleNode.id)}
                     className="flex items-center justify-between p-2 rounded-xl hover:bg-white cursor-pointer select-none text-xs font-bold text-slate-800 transition-colors"
@@ -813,7 +808,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
                     </span>
                   </div>
 
-                  {/* Module Con lồng nhau */}
                   {isExpanded && (
                     <div className="ml-5 pl-3 border-l-2 border-slate-200 space-y-1">
                       {moduleNode.submodules.map(sub => {
@@ -853,7 +847,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
             })}
           </div>
 
-          {/* Cột Phải: Bảng Chi Tiết Module Con Đang Chọn */}
           <div className="lg:col-span-7 p-6 sm:p-8 flex flex-col justify-between space-y-6">
             <div className="space-y-5">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -909,7 +902,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
               </div>
             </div>
 
-            {/* Thao tác chuyển tới view */}
             <div className="pt-4 border-t border-slate-100 flex items-center justify-between">
               <span className="text-xs text-slate-500">
                 {selectedSubmoduleData.submodule.viewId
@@ -932,7 +924,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       )}
 
-      {/* CHẾ ĐỘ 3: BẢNG DANH MỤC TOÀN DIỆN (TABLE VIEW) */}
       {viewMode === 'table' && (
         <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
@@ -1012,7 +1003,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       )}
 
-      {/* CHẾ ĐỘ 4: TRỢ LÝ PHÂN TÍCH & TẠO CÂU LỆNH AI SIÊU TỐC & KHO PROMPT LỆNH CHUẨN */}
       {viewMode === 'prompt-assistant' && (
         <div className="space-y-8">
           <PhanTichLenh
@@ -1026,7 +1016,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       )}
 
-      {/* Box Hướng Dẫn Cấu Hình Vercel & Firebase Authorized Domains */}
       <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-2xl p-5 border border-indigo-700/50 space-y-4 shadow-lg">
         <div className="flex items-center justify-between pb-3 border-b border-indigo-800/60">
           <div className="flex items-center gap-2.5">
@@ -1048,7 +1037,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-          {/* Cấu hình 1: Thêm Biến Môi Trường Vercel */}
           <div className="bg-slate-950/70 p-4 rounded-xl border border-indigo-900/60 space-y-2">
             <div className="flex items-center gap-2 font-bold text-indigo-300">
               <KeyRound className="w-4 h-4 text-amber-400" />
@@ -1070,7 +1058,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
             </p>
           </div>
 
-          {/* Cấu hình 2: Ủy quyền Tên miền Firebase Authorized Domains */}
           <div className="bg-slate-950/70 p-4 rounded-xl border border-indigo-900/60 space-y-2">
             <div className="flex items-center gap-2 font-bold text-indigo-300">
               <Network className="w-4 h-4 text-emerald-400" />
@@ -1096,7 +1083,6 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
         </div>
       </div>
 
-      {/* Box Tóm Tắt Quy Chuẩn Kiến Trúc */}
       <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
@@ -1121,4 +1107,3 @@ export const HuongDanWebView: React.FC<HuongDanWebViewProps> = ({ currentRole, o
     </div>
   );
 };
-

@@ -15,8 +15,9 @@ import {
   loadChuyenDeContentFromDrive,
   LoadChuyenDeResult,
   connectGoogleDrive,
+  deduplicateItemsBySlug,
 } from '../../../ConnectData/ConnectDrive/googleDriveService';
-export { loadChuyenDeContentFromDrive, ensureValidDriveToken, connectGoogleDrive };
+export { loadChuyenDeContentFromDrive, ensureValidDriveToken, connectGoogleDrive, deduplicateItemsBySlug };
 export type { LoadChuyenDeResult };
 import {
   DongBoDriveDocData,

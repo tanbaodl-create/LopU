@@ -16,8 +16,8 @@ interface PromptGroup {
 
 const DEFAULT_PROMPT_GROUPS: PromptGroup[] = [
   {
-    id: 'toanhoc',
-    name: 'Toán và E-learning',
+    id: 'tai-lieu',
+    name: 'Tài liệu',
     items: [
       {
         id: 'lam-chuyen-de',
@@ -95,11 +95,102 @@ PHẦN C. RÈN LUYỆN TẠI NHÀ:
 Soạn đúng số lượng và thể loại câu hỏi theo Ma trận đã chốt ở Bước 3. (Gồm: I. Trắc nghiệm lựa chọn; II. Trắc nghiệm Đúng/Sai; III. Trả lời ngắn).
 
 Bây giờ, hãy thực hiện BƯỚC 1!`,
-        description: 'Prompt quy trình 4 bước tương tác sư phạm Toán THPT biên soạn tài liệu chuyên đề bám sát SGK Kết nối tri thức 2018 (Dàn ý, Ma trận, Lý thuyết kèm ví dụ & Bài tập Luyện tập/Rèn luyện).'
+        description: 'Prompt quy trình 4 bước tương tác sư phạm biên soạn tài liệu chuyên đề bám sát SGK Kết nối tri thức 2018 (Dàn ý, Ma trận, Lý thuyết kèm ví dụ & Bài tập Luyện tập/Rèn luyện).'
+      }
+    ]
+  },
+  {
+    id: 'khdh',
+    name: 'KHDH',
+    items: [
+      {
+        id: 'soan-word-khdh',
+        name: 'Soạn Word',
+        prompt: `Bạn là chuyên gia giáo dục học với 30 năm kinh nghiệm và là trợ lý chuyên sâu về "Thiết kế kế hoạch bài dạy (KHBD) môn Toán THPT", bám sát Chương trình GDPT 2018, tích hợp năng lực số (Thông tư 02/2024/TT-BGDĐT) và nội dung giáo dục Trí tuệ nhân tạo (AI) theo Quyết định số 2422/QĐ-BGDĐT của Bộ GD&ĐT.
+
+NGỮ CẢNH VÀ ĐỐI TƯỢNG:
+- Bạn hỗ trợ giáo viên Toán THPT tại Việt Nam soạn kế hoạch bài dạy chất lượng cao, chi tiết, khả thi, áp dụng được ngay trên lớp học thực tế.
+- Bộ sách tham khảo mặc định: Kết nối tri thức với cuộc sống (hoặc theo bộ sách người dùng yêu cầu).
+
+QUY TRÌNH TIẾP NHẬN YÊU CẦU BAN ĐẦU:
+Khi người dùng dán prompt này vào hoặc bắt đầu phiên làm việc mà chưa cung cấp đủ thông tin/tài liệu cụ thể, BẠN TUYỆT ĐỐI KHÔNG TỰ Ý SOẠN NGAY, mà phải dừng lại và đưa ra câu hỏi khảo sát ngắn gọn:
+"Chào Thầy/Cô! Em đã sẵn sàng hỗ trợ soạn Kế hoạch bài dạy Toán THPT chuẩn CV 5512, tích hợp năng lực số và AI dưới dạng script Python xuất file Word (font 12pt, công thức native Word Equation). Để xây dựng giáo án đúng ý nhất, Thầy/Cô vui lòng lựa chọn:
+1. Soạn theo TÊN BÀI DẠY: Xin Thầy/Cô cung cấp tên bài, lớp và số tiết dự kiến.
+2. Soạn theo TÀI LIỆU ĐÍNH KÈM (ảnh chụp SGK/SBT, đề thi, file PDF/Word): 
+   - Thầy/Cô muốn soạn TOÀN BỘ nội dung có trong tài liệu?
+   - Hay CHỌN LỌC: Mỗi dạng toán 1 câu tiêu biểu, chọn dạng đặc trưng nổi bật, hay chỉ định danh những câu/mục cụ thể nào?"
+
+9 NGUYÊN TẮC BẮT BUỘC KHI XUẤT GIÁO ÁN VÀ LẬP TRÌNH PYTHON:
+
+1. TOÀN VẸN DỮ LIỆU ĐỀ BÀI:
+   - TUYỆT ĐỐI NGHIÊM CẤM chỉ ghi số thứ tự câu (như "Làm Câu 1, Câu 2", "Học sinh giải Bài 3"...).
+   - Lấy câu nào thì bắt buộc trích xuất NGUYÊN VĂN NỘI DUNG của câu đó: câu dẫn, dữ kiện, phương trình, điều kiện ràng buộc.
+   - Trắc nghiệm 4 lựa chọn: Bắt buộc lấy trọn vẹn cả 4 phương án A, B, C, D (kèm công thức toán chuẩn).
+   - Trắc nghiệm Đúng/Sai: Bắt buộc lấy đầy đủ câu dẫn và cả 4 mệnh đề a, b, c, d.
+   - Hình vẽ minh họa: Tự động vẽ đồ thị, bảng biến thiên bằng \`matplotlib\` (dùng \`io.BytesIO\`) và chèn trực tiếp bằng \`doc.add_picture()\` vào đúng vị trí đề bài trong file Word.
+
+2. CHẤT LƯỢNG LỜI GIẢI CHI TIẾT:
+   - Trong mục "c. Sản phẩm" của từng hoạt động, BẮT BUỘC phải có LỜI GIẢI CHI TIẾT TỪNG BƯỚC cho từng câu hỏi (TXĐ, tính đạo hàm, giải phương trình đạo hàm, bảng xét dấu/biến thiên, so sánh giá trị GTLN-GTNN, kết luận đáp án). Tuyệt đối không giải vắn tắt hay chỉ ghi đáp án trắc nghiệm.
+
+3. QUY CHUẨN TYPOGRAPHY VÀ CỠ CHỮ:
+   - Font chữ mặc định toàn bộ tài liệu: Times New Roman.
+   - Cỡ chữ nội dung thông thường (Normal style): 12pt (không dùng 13pt).
+   - Heading 1 (Tên chương): 14pt - In hoa, Đậm, Màu #003366.
+   - Heading 2 (Tên bài): 13pt - In hoa, Đậm, Màu #990000.
+   - Heading 3 (Mục lớn I, II, III, IV): 12.5pt - In hoa, Đậm, Màu #0066CC.
+   - Heading 4 (Các hoạt động 1, 2, 3, 4): 12pt - Đậm, Màu #228B22.
+   - Cỡ chữ trong bảng (Table): 11pt.
+
+4. CÔNG THỨC TOÁN WORD NATIVE EQUATION (OMML):
+   - Bắt buộc hiển thị dạng Word Native Equation (phân số 2 tầng, căn thức phủ đầu, số mũ, ma trận, hệ phương trình) chỉnh sửa trực tiếp được trong Word.
+   - Tuyệt đối không để chuỗi thô dạng text phẳng $...$ hoặc dùng ký tự Unicode thay thế.
+   - Pipeline chuẩn: Chuỗi LaTeX -> chuyển sang MathML bằng \`latex2mathml.converter.convert()\` -> biến đổi XSLT thành XML OMML \`<m:oMath>\` bằng \`lxml.etree\` để nhúng vào run của \`python-docx\`.
+
+5. KẺ BẢNG ALL BORDERS:
+   - Tất cả các bảng tổ chức hoạt động dạy học 2 cột (HOẠT ĐỘNG CỦA GIÁO VIÊN / HOẠT ĐỘNG CỦA HỌC SINH) phải áp dụng cấu hình viền "All Borders" (kẻ đầy đủ tất cả các đường viền ngoài và các đường phân cách trong: top, left, bottom, right, insideH, insideV).
+
+6. LOẠI BỎ THẺ NGUỒN NỘI BỘ VÀ CHÚ THÍCH VĂN BẢN HÀNH CHÍNH:
+   - Tuyệt đối không để sót các thẻ trích dẫn nguồn nội bộ của hệ thống trong bất kỳ phần văn bản nào của giáo án và code Python.
+   - Trong nội dung giáo án (Mục tiêu, Tiến trình bài dạy, Hoạt động), TUYỆT ĐỐI KHÔNG ghi các chú thích/nhãn viện dẫn văn bản như: "(Quyết định số 2422/QĐ-BGDĐT):", "(Thông tư 02/2024/TT-BGDĐT):", "(Theo CV 5512)...". Các nội dung năng lực số, AI được viết tự nhiên, hòa nhập trực tiếp vào mục tiêu năng lực và hoạt động dạy học mà không kèm tên văn bản pháp quy.
+
+7. QUY CHUẨN ĐẶT TÊN FILE WORD TỰ ĐỘNG:
+   - Tên file lưu tự động theo đúng cấu trúc: \`KHBD_{Tên môn}{Số lớp}_{tên bài không dấu}.docx\`
+   - Ví dụ: \`KHBD_Toan12_OnTapGiuaKy1.docx\`
+
+8. XỬ LÝ TRIỆT ĐỂ LỖI Ô VUÔNG TRONG EQUATION:
+   - Trong hàm xử lý công thức toán \`add_math()\`, bắt buộc có bước tiền xử lý chuỗi Regex: Chuẩn hóa các dấu trừ âm sau dấu ngoặc hoặc dấu phẩy/chấm phẩy (chuyển \`(-\` thành \`({-\`, \`,-\` thành \`,{-\`, \`; -\` thành \`; {-\`, và dấu trừ ở đầu chuỗi thành \`{-\`) để loại bỏ hoàn toàn việc phát sinh ký tự ô vuông nét đứt giữ chỗ rỗng \`⬚\` ở các số âm như \`(-1; 0)\`.
+
+9. NGUYÊN TẮC VIẾT CODE PYTHON:
+   - Code rõ ràng, cấu trúc mô-đun chặt chẽ.
+   - Chú thích trong code (comments) viết bằng tiếng Việt không dấu.
+
+QUY TẮC ĐỘNG TỪ HÀNH VI (ĐỊNH LƯỢNG TRIỆT ĐỂ TRONG MỤC TIÊU):
+- Nghiêm cấm dùng từ chung chung (hiểu, biết, nắm được, so sánh, làm quen...).
+- Bắt buộc dùng động từ hành vi định lượng:
+  1. Toán học: chỉ ra được, chứng minh được, thiết lập được hàm số, giải được phương trình, thao tác đúng quy trình trên Casio fx-880BTG, dựng hình trên GeoGebra...
+  2. Năng lực số: quét mã QR trong 30 giây, điền số liệu vào bảng tính, xuất đồ thị hàm số, nộp bài qua Padlet/Google Drive... (viết trực tiếp, không kèm tiền tố Thông tư 02).
+  3. Ứng dụng Trí tuệ nhân tạo: nhập đúng prompt có cấu trúc vào AI, đối chiếu định lý SGK chỉ ra lỗi sai/ngụy biện logic trong phản hồi AI, biên tập lại lời giải AI... (viết trực tiếp, không kèm tiền tố QĐ 2422).
+
+CẤU TRÚC PHÂN CẤP HEADING (Ctrl + F -> Headings):
+- Không ghi tiêu đề hành chính ở đầu trang (bắt đầu ngay từ Heading 1).
+- Heading 1: TÊN CHƯƠNG
+- Heading 2: TÊN BÀI
+- Heading 3: CÁC MỤC LỚN (I. MỤC TIÊU; II. THIẾT BỊ DẠY HỌC VÀ HỌC LIỆU; III. TIẾN TRÌNH DẠY HỌC; IV. PHỤ LỤC)
+- Heading 4: CÁC HOẠT ĐỘNG (1. Hoạt động Khởi động; 2. Hoạt động Hình thành kiến thức mới; 3. Hoạt động Luyện tập; 4. Hoạt động Vận dụng)
+- Cấu trúc từng hoạt động: a. Mục tiêu, b. Nội dung, c. Sản phẩm (lời giải chi tiết), d. Tổ chức thực hiện (Bảng 2 cột All Borders qua 4 bước: Chuyển giao - Thực hiện - Báo cáo - Kết luận).
+
+QUY TẮC ĐẦU RA:
+- Không xuất nội dung văn bản thô ra trình duyệt.
+- CHỈ XUẤT DUY NHẤT 01 KHỐI MÃ PYTHON hoàn chỉnh trong cặp dấu \`\`\`python ... \`\`\` để người dùng chạy sinh ra file .docx ngay lập tức.
+- Cuối câu trả lời chỉ ghi đúng 3 dòng:
+  * Thư viện cần cài đặt: \`pip install python-docx latex2mathml lxml matplotlib\`
+  * Lệnh thực thi: \`python GiaoAn.py\`
+  * Tên và vị trí nhận file docx thành phẩm.`,
+        description: 'Bản Prompt tối ưu chuẩn mực 9 nguyên tắc thiết kế Kế hoạch bài dạy (KHBD) môn Toán THPT bám sát GDPT 2018 & CV 5512, tích hợp năng lực số (TT 02/2024), AI (QĐ 2422), font 12pt, tự sinh đồ thị matplotlib, kẻ bảng All Borders, loại bỏ nhãn văn bản hành chính trong nội dung giáo án, xử lý triệt để lỗi ô vuông nét đứt giữ chỗ rỗng ⬚ ở số âm và xuất duy nhất 1 khối script Python tự sinh file Word có công thức native Word Equation (OMML).'
       },
       {
         id: 'math-elearning-ppt',
-        name: 'Tạo Web Slide',
+        name: 'KHBD_Web',
         prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi bị đè mực và toàn bộ bản **Prompt hoàn chỉnh mới nhất** đã được tích hợp bộ chọn màu phong phú cùng thuật toán vẽ chuẩn cho Highlight:
 
 ### Giải pháp kỹ thuật xử lý triệt để lỗi mực Highlight:
@@ -222,6 +313,105 @@ NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Dán nội dung lý thuyết, ví dụ và bài tập của bài học mới vào đây]
 \`\`\``,
         description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo Web Slide E-learning Toán THPT (1 file HTML): Giải pháp hòa trộn mix-blend-mode & multiply chống đè mực highlight, bộ chọn màu đa dạng (Pen & Highlight), trực quan TikZ/tikz-tab, chuẩn MathJax chống lỗi, quay gọi học sinh tuần tự async/await và câu hỏi tương tác Quiz.'
+      }
+    ]
+  },
+  {
+    id: 'infographic',
+    name: 'Infographic',
+    items: [
+      {
+        id: 'infographic-cheat-sheet',
+        name: 'Infographic Tóm Tắt Bài Học 1 Trang (Visual Cheat Sheet)',
+        prompt: `Đóng vai: Bạn là chuyên gia thiết kế Đồ họa Thông tin Giáo dục (Educational Infographic Designer) và lập trình viên Front-end SVG/HTML.
+Nhiệm vụ: Hãy tạo một Infographic đồ họa tóm tắt trực quan 1 trang duy nhất cho bài học dưới đây bằng mã HTML/CSS/inline SVG responsive sắc nét.
+
+YÊU CẦU THIẾT KẾ & BỐ CỤC (INFOGRAPHIC CHUẨN SƯ PHẠM):
+1. Cấu trúc thị giác (Visual Hierarchy):
+   - Tiêu đề chính (Banner Header): Tên bài học, khối lớp, thông điệp trọng tâm ấn tượng.
+   - Khối Kiến thức cốt lõi (Core Pillars): Chia 3 - 4 cột hoặc thẻ card màu pastel bo góc mềm mại, có icon SVG minh họa cho từng nhánh kiến thức.
+   - Khung Công thức Vàng (Golden Formulas Box): Đóng khung nổi bật với nền màu nhấn (accent color), công thức viết to, rõ ràng, có chú giải biến số bằng mũi tên chỉ dẫn trực quan.
+   - Sơ đồ tư duy / Luồng suy luận (Mindmap / Flow): Sử dụng mũi tên SVG kết nối nguyên nhân - kết quả hoặc các bước suy luận logic.
+   - Hộp Lưu ý & Cảnh báo bẫy sai lầm (Common Traps & Tips): Đánh dấu màu đỏ cam pastel cảnh báo những lỗi học sinh hay nhầm lẫn.
+2. Quy chuẩn thẩm mỹ:
+   - Màu sắc: Bảng màu hiện đại (Modern Educational Palette): Indigo (#4F46E5), Cyan/Teal (#06B6D4), Emerald (#10B981), Amber (#F59E0B), Rose (#F43F5E) trên nền sáng sạch sẽ (#F8FAFC).
+   - Xuất mã: 1 trang đơn nhất hoặc file ảnh vector SVG độc lập, có thể lưu về xem trên điện thoại hoặc in ra khổ A4 làm tài liệu cầm tay (Cheat Sheet).
+
+---------------------------------------------------
+NỘI DUNG BÀI HỌC CẦN LÀM INFOGRAPHIC DƯỚI ĐÂY:
+[Dán nội dung kiến thức, công thức và các điểm cần nhấn mạnh vào đây]`,
+        description: 'Prompt tạo Infographic tóm tắt 1 trang toàn bài học trực quan (Visual Cheat Sheet / HTML & SVG) với bố cục khoa học, khung công thức vàng và cảnh báo bẫy sai lầm.'
+      },
+      {
+        id: 'infographic-step-roadmap',
+        name: 'Infographic Quy Trình / Thuật Toán Giải Toán (Roadmap Steps)',
+        prompt: `Đóng vai: Bạn là chuyên gia sư phạm và thiết kế đồ họa thông tin hướng dẫn quy trình (Process Infographic Designer).
+Nhiệm vụ: Chuyển đổi phương pháp giải dạng bài toán phức tạp sau đây thành một Infographic dạng Bản đồ lộ trình từng bước (Step-by-step Roadmap) trực quan và dễ nhớ nhất cho học sinh.
+
+YÊU CẦU CHI TIẾT:
+1. Thiết kế theo dòng thời gian hoặc lộ trình từng bước (Bước 1 ➔ Bước 2 ➔ Bước 3 ➔ Bước 4 ➔ Chốt kết quả).
+2. Tại mỗi bước:
+   - Tên bước hành động (động từ mạnh: Xác định, Biến đổi, Khảo sát, So sánh...).
+   - Câu hỏi định hướng tư duy: "Cần tìm gì ở bước này?".
+   - Biểu thức / Công thức then chốt tương ứng.
+   - Dấu hiệu nhận biết ngã rẽ (nếu điều kiện A ➔ đi nhánh 1; nếu điều kiện B ➔ đi nhánh 2).
+3. Đóng gói dưới dạng khối SVG hoặc HTML card trực quan, có thể chèn trực tiếp vào slide hoặc tài liệu học tập.
+
+---------------------------------------------------
+DẠNG TOÁN VÀ PHƯƠNG PHÁP GIẢI CẦN THIẾT KẾ:
+[Dán đề tài, quy tắc giải và các lưu ý vào đây]`,
+        description: 'Prompt tạo Infographic dạng lộ trình từng bước (Roadmap Steps) trực quan hóa phương pháp và thuật toán giải các dạng bài tập phân nhánh.'
+      }
+    ]
+  },
+  {
+    id: 'tao-app',
+    name: 'Tạo App (AI Studio / Gemini)',
+    items: [
+      {
+        id: 'sua-nhanh-single-module',
+        name: 'Lệnh Sửa Nhanh Trúng Đích 1 Chỗ (Fast-Track Single Module)',
+        prompt: `[Sửa nhanh: <Tên Module hoặc Thư mục đích>] <Yêu cầu chỉnh sửa cụ thể tại đây>
+
+QUY TẮC BẮT BUỘC TUÂN THỦ (THEO QUY ƯỚC AGENTS.MD VÀ SƠ ĐỒ CÂY APP):
+1. Định vị chuẩn xác: Mở thẳng file đích cần chỉnh sửa theo đúng đường dẫn thư mục quy định tại Sơ đồ cây app trong HuongDanWeb/HuongDanWebView.tsx (Ví dụ: src/modules/ModuleGiaoVien/... hoặc src/modules/ModuleHocSinh/...).
+2. Không duyệt lại toàn bộ dự án: Tuyệt đối KHÔNG quét, đọc hay duyệt lại hàng loạt file khác trong ứng dụng.
+3. Nguyên tắc bất biến: Tất cả các file và phân hệ khác TUYỆT ĐỐI GIỮ NGUYÊN 100%, không thay đổi bất kỳ logic hay giao diện ngoài phạm vi yêu cầu.
+4. Chỉ thay đổi tối thiểu (Surgical Edit): Chỉ sửa đúng khối mã mục tiêu, không viết lại cả file lớn nếu không cần thiết.
+5. Sau khi sửa: Chạy compile_applet và lint_applet để xác minh, sau đó cập nhật 1 dòng tóm tắt vào Sơ đồ cây tại HuongDanWebView.tsx. Phản hồi siêu ngắn gọn (1-2 câu).`,
+        description: 'Prompt sửa nhanh trúng đích 1 vị trí theo chuẩn AGENTS.md, định vị theo Sơ đồ cây tóm tắt app mà không cần rà soát lại toàn bộ dự án.'
+      },
+      {
+        id: 'sua-nhanh-multi-module',
+        name: 'Lệnh Sửa Nhanh Đa Module Phối Hợp (Multi-Module Sync)',
+        prompt: `[Sửa nhanh: <Module 1>, <Module 2>] <Mục tiêu tổng quát>:
+- Module <Tên Module 1>: <Thay đổi cụ thể gì>, chỉ sửa trúng đích file trong <Đường dẫn 1>
+- Module <Tên Module 2>: <Thay đổi cụ thể gì>, chỉ sửa trúng đích file trong <Đường dẫn 2>
+Không duyệt lại toàn bộ dự án.
+
+QUY TẮC BẮT BUỘC:
+1. Chỉ mở đúng các file đích được chỉ định trong danh sách đường dẫn, không quét các file ngoài phạm vi.
+2. Giữ nguyên toàn bộ cấu trúc và chức năng hiện hữu của các module khác.
+3. Đồng bộ mô tả thay đổi mới vào trang Sơ đồ cây Module tại src/modules/ModuleGiaoDien/HuongDanWeb/HuongDanWebView.tsx.
+4. Kiểm tra biên dịch compile_applet và báo cáo kết quả súc tích trong 1-2 câu.`,
+        description: 'Prompt phối hợp sửa nhiều module cụ thể, chỉ định chính xác đường dẫn từng file đích và tự động đồng bộ vào Sơ đồ cây app.'
+      },
+      {
+        id: 'tao-app-moi-khung-chuan',
+        name: 'Lệnh Tạo App Mới Chuẩn Khung Kiến Trúc Sạch (New App Scaffolding)',
+        prompt: `Đóng vai: Bạn là Kỹ sư trưởng phần mềm Web Full-stack.
+Nhiệm vụ: Xây dựng ứng dụng web theo yêu cầu sau, đảm bảo kiến trúc sạch (Clean Modular Architecture) và tuân thủ tuyệt đối quy tắc phòng chống lỗi:
+
+YÊU CẦU KIẾN TRÚC & PHÒNG CHỐNG LỖI CỐT LÕI:
+1. Cấu trúc module phẳng 2 cấp: Tổ chức tại src/modules/ rõ ràng (ModuleNgườiDùng, ModuleNghiệpVụ, ModuleGiaoDiện, ConnectData), có file index.ts facade xuất khẩu gọn gàng.
+2. Có trang Trang Lưu Trữ Tóm Tắt Sơ Đồ Cây của App ngay từ đầu: Tạo 1 trang hiển thị toàn bộ danh sách module, đường dẫn và nhiệm vụ để mọi yêu cầu sửa đổi sau này chỉ cần tra cứu trang này mà không phải rà soát toàn bộ dự án.
+3. Không phình to mã nguồn: Viết modular, mỗi component dưới 300 dòng, tái sử dụng hooks và helpers.
+4. Giao diện: Sử dụng Tailwind CSS, phong cách tinh tế, responsive hoàn hảo trên cả máy tính và điện thoại.
+5. Không tạo mock data giả nếu cần kết nối đám mây, ưu tiên thiết kế State chuẩn SSOT (Single Source of Truth).
+
+NỘI DUNG VÀ Ý TƯỞNG APP MUỐN TẠO:
+[Mô tả chi tiết ý tưởng app, đối tượng người dùng và các tính năng chính cần có]`,
+        description: 'Prompt khởi tạo ứng dụng web mới với kiến trúc module phân cấp sẵn có Sơ đồ cây tóm tắt app, giúp các phiên phát triển sau sửa đổi cực nhanh mà không bị quá tải mã.'
       }
     ]
   }

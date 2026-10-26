@@ -354,6 +354,9 @@ export function saveStoredHierarchy(data: HierarchyStore, overrideEmail?: string
     const key = getHierarchyStorageKey(overrideEmail);
     const sanitized = sanitizeHierarchyStore(data);
     localStorage.setItem(key, JSON.stringify(sanitized));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('lopu_hierarchy_updated', { detail: sanitized }));
+    }
   } catch (e) {
     console.error('Failed to save hierarchy data:', e);
   }

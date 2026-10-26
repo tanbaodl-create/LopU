@@ -162,6 +162,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   const isConnected = Boolean(isDriveConnected || firebaseUser);
   const activeConnectedAccount = firebaseUser?.email || currentUserProfile?.email || (isDriveConnected ? driveEmail : '') || 'tanbaodl@gmail.com';
+  // Ẩn đuôi @gmail.com (ví dụ: tanbaodl@gmail.com --> tanbaodl)
+  const displayAccountName = activeConnectedAccount.replace(/@gmail\.com$/i, '');
 
   // Danh sách các vai trò trải nghiệm trong hệ thống
   const availableRoles: UserRole[] = useMemo(() => {
@@ -175,7 +177,8 @@ export const Header: React.FC<HeaderProps> = ({
     >
       <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         {/* Left: Hamburger Button (3 gạch) & Logo & Active View Title */}
-        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        {/* Left: Hamburger Button (3 gạch) & Logo & Active View Title */}
+        <div className="flex items-center gap-2.5 sm:gap-3 shrink-0">
           <button
             id="btn-hamburger-menu"
             onClick={onOpenSidebar}
@@ -186,48 +189,45 @@ export const Header: React.FC<HeaderProps> = ({
             <Menu className="w-6 h-6 stroke-[2.2]" />
           </button>
 
-          {/* LopU Logo Icon & Brand */}
-          <div className="flex items-center gap-2.5 shrink-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white shadow-xs">
-              <School className="w-5 h-5" />
-            </div>
-            <div className="hidden sm:block">
-              <span className="font-extrabold text-lg tracking-tight text-slate-900 font-sans">
-                Lop<span className="text-indigo-600">U</span>
-              </span>
-            </div>
+          {/* LopU Brand (Đã bỏ biểu tượng trước chữ LopU theo yêu cầu) */}
+          <div className="flex items-center shrink-0">
+            <span className="font-extrabold text-lg tracking-tight text-slate-900 font-sans">
+              Lop<span className="text-indigo-600">U</span>
+            </span>
           </div>
 
           {/* Breadcrumb Separator */}
-          <span className="hidden md:inline-block text-slate-300">/</span>
+          <span className="text-slate-300">/</span>
 
-          {/* Current Active View Title & Category */}
-          <div className="min-w-0 flex flex-col justify-center">
-            <div className="flex items-center gap-2">
-              <span className="hidden md:inline-block text-xs font-semibold text-slate-600">
-                {meta.category}
-              </span>
-              <span className="hidden md:inline-block text-slate-300">•</span>
-              <h1 className="text-sm sm:text-base font-bold text-slate-900 truncate">
-                {meta.title}
+          {/* Current Active View Category & Title */}
+          <div className="flex items-center gap-2 shrink-0">
+            {activeView === 'teaching-interactive' ? (
+              // Khi vào trang lên lớp: Ẩn chữ Giảng dạy sau chữ LopU, hiện lại chữ Lên lớp
+              <h1 className="text-xs sm:text-sm font-bold text-slate-800 shrink-0">
+                Lên lớp
               </h1>
-            </div>
+            ) : (
+              <>
+                <span className="text-xs font-bold text-slate-700">
+                  {meta.category}
+                </span>
+                <span className="hidden md:inline-block text-slate-300">•</span>
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 truncate">
+                  {meta.title}
+                </h1>
+              </>
+            )}
           </div>
         </div>
 
+        {/* Middle: Slot Menu Lên Lớp Thu Gọn - Nằm sau chữ Giảng dạy và trước hộp thoại tên tài khoản */}
+        <div
+          id="header-minimized-menulenlop-slot"
+          className="flex-1 min-w-0 flex items-center justify-start overflow-x-auto no-scrollbar mx-1 sm:mx-2"
+        />
+
         {/* Right: Cụm gôm các nút: Drive [tài khoản kết nối], Kim cương, Tim, Dropdown vai trò, Đăng xuất */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Firestore indicator: Bấm để mở Cấu hình & Đồng bộ Firebase LopU */}
-          <button
-            id="badge-firestore-status"
-            onClick={onOpenFirebaseModal}
-            title={isFirestoreLive ? 'Firebase LopU: Đang kết nối thời gian thực. Bấm để quản lý cấu hình & đồng bộ dữ liệu' : 'Firebase LopU: Chế độ offline-first. Bấm để cấu hình & đồng bộ'}
-            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200 transition-colors cursor-pointer"
-          >
-            <Database className="w-3.5 h-3.5 text-amber-600" />
-            <span>Firebase LopU</span>
-            <span className={`w-1.5 h-1.5 rounded-full ${isFirestoreLive ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
-          </button>
 
           {/* Nút Đăng nhập Google Drive nhanh khi chưa kết nối */}
           {!isConnected && (
@@ -274,7 +274,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Biểu tượng hình người */}
               <User className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
               <span className="font-bold truncate max-w-[120px] sm:max-w-[180px]">
-                {activeConnectedAccount}
+                {displayAccountName}
               </span>
               <ChevronDown className={`w-3.5 h-3.5 text-slate-500 transition-transform ${showAccountDropdown ? 'rotate-180' : ''}`} />
             </button>

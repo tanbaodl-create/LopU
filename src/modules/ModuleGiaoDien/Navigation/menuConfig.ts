@@ -17,22 +17,24 @@ import {
   BookMarked,
   Coins,
   FileText,
+  Laptop,
+  Tv,
+  Presentation,
 } from 'lucide-react';
 
 export type ViewId =
   | 'learning-classes'
   | 'learning-seating'
   | 'learning-schedule'
-  | 'learning-join'
   | 'teaching-soanthao'
-  | 'teaching-management'
-  | 'teaching-documents'
   | 'teaching-drive'
   | 'teaching-monetization'
+  | 'teaching-interactive'
   | 'teaching-students'
   | 'reports-progress'
   | 'settings-users'
   | 'settings-permissions'
+  | 'settings-devices'
   | 'guide-tree'
   | 'guide-prompt-assistant'
   | 'guide-prompts-saved';
@@ -62,17 +64,17 @@ export const MENU_GROUPS: MenuGroup[] = [
     subItems: [
       {
         id: 'learning-classes',
-        label: 'Lớp học & Bài giảng',
+        label: 'Lớp học',
         badge: 'Chính',
         icon: BookOpen,
-        description: 'Tích hợp dropdown chọn lớp, xem bài giảng mở khóa và tiến độ cá nhân',
+        description: 'Tích hợp dropdown chọn lớp, nút Tham gia lớp mới mã PIN, xem bài giảng mở khóa và tiến độ cá nhân',
       },
       {
         id: 'learning-seating',
         label: 'Sơ đồ lớp',
-        badge: 'Drive',
+        badge: 'Sơ đồ bàn',
         icon: LayoutGrid,
-        description: 'Bản đồ vị trí chỗ ngồi học sinh trực quan và đồng bộ Google Drive',
+        description: 'Sơ đồ vị trí chỗ ngồi học sinh, phân công chức danh VTM và đồng bộ cấu hình bàn ghế',
       },
       {
         id: 'learning-schedule',
@@ -80,13 +82,6 @@ export const MENU_GROUPS: MenuGroup[] = [
         badge: 'Lịch tuần',
         icon: Calendar,
         description: 'Lịch học các tiết trong tuần, phòng học và giáo viên phụ trách',
-      },
-      {
-        id: 'learning-join',
-        label: 'Tìm lớp & Đăng ký',
-        badge: 'PIN',
-        icon: Search,
-        description: 'Tra cứu mã lớp và nhập mã bảo mật PIN để tham gia lớp học mới',
       },
     ],
   },
@@ -97,6 +92,13 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: Users,
     subItems: [
       {
+        id: 'settings-permissions',
+        label: 'Quản lý Lớp dạy',
+        badge: 'Mở lớp & PIN',
+        icon: KeyRound,
+        description: 'Giáo viên mở lớp mới, quản lý danh sách lớp, cấu hình mã PIN bảo mật và duyệt học sinh vào lớp',
+      },
+      {
         id: 'teaching-soanthao',
         label: 'Tài liệu',
         badge: 'Word 💎',
@@ -104,25 +106,18 @@ export const MENU_GROUPS: MenuGroup[] = [
         description: 'Trình soạn thảo tài liệu khoa học kiểu Word, công thức Toán LaTeX, bảng biểu và lưu Drive phân cấp',
       },
       {
-        id: 'teaching-management',
-        label: 'Quản lý lớp dạy & Sơ đồ lớp',
-        badge: 'Excel & Sơ đồ',
-        icon: ClipboardList,
-        description: 'Xếp chỗ sơ đồ, duyệt mã PIN tham gia và thêm học sinh bằng Excel chống trùng lặp',
-      },
-      {
-        id: 'teaching-documents',
-        label: 'Tài liệu & Tủ sách cá nhân',
-        badge: 'Drive cá nhân',
-        icon: FolderLock,
-        description: 'Tủ sách cá nhân & Phát hành bài giảng - lưu trữ Google Drive cá nhân',
-      },
-      {
         id: 'teaching-monetization',
-        label: 'Thương mại & Phát hành tài liệu',
+        label: 'Phát hành tài liệu',
         badge: 'Kim Cương 💎',
         icon: Coins,
         description: 'Cấu hình giá bán Kim Cương, phát hành tài liệu lớp học miễn phí và theo dõi doanh thu',
+      },
+      {
+        id: 'teaching-interactive',
+        label: 'Lên lớp',
+        badge: 'TV / Live 📺',
+        icon: Tv,
+        description: 'Cửa sổ Lên lớp chọn Tài liệu & Nội dung dạy học, Bảng cuộn vô hạn, chiếu TV (Extend Mode) & Dạy Trực Tuyến Live',
       },
       {
         id: 'teaching-students',
@@ -162,11 +157,11 @@ export const MENU_GROUPS: MenuGroup[] = [
         description: 'Quản trị viên thêm trước tài khoản, import Excel chống trùng lặp email/mã HS',
       },
       {
-        id: 'settings-permissions',
-        label: 'Cấu hình mã PIN & Phân quyền',
-        badge: 'Bảo mật',
-        icon: KeyRound,
-        description: 'Cấu hình mã PIN lớp học, thời hạn và phân quyền hệ thống',
+        id: 'settings-devices',
+        label: 'Quản lý thiết bị & HĐH',
+        badge: '1 Thiết bị/HĐH',
+        icon: Laptop,
+        description: 'Kiểm soát 1 thiết bị/HĐH, tối đa 2 lượt đổi máy/tháng và reset lượt Admin',
       },
     ],
   },
@@ -213,7 +208,7 @@ export function getViewMeta(viewId: ViewId): { title: string; category: string; 
     }
   }
   return {
-    title: 'Lớp học & Bài giảng',
+    title: 'Lớp học',
     category: 'Học tập',
     description: 'Quản lý lớp học thông minh LopU',
   };

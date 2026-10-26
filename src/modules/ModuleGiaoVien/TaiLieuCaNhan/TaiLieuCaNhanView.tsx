@@ -3127,7 +3127,13 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 pb-2">
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
-                <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
+                <span
+                  title="module BoChonHocLieuTienTrinh (Module dùng chung)"
+                  className="inline-flex items-center cursor-help"
+                >
+                  <FolderLock className="w-3.5 h-3.5 text-indigo-600 hover:text-indigo-800 transition-colors shrink-0" />
+                </span>
+                TÀI LIỆU
               </span>
               <button
                 type="button"
@@ -3650,7 +3656,13 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 <div className="flex items-center justify-between border-b border-indigo-100 pb-2 flex-wrap gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
-                      <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
+                      <span
+                        title="module BoChonHocLieuTienTrinh (Module dùng chung)"
+                        className="inline-flex items-center cursor-help"
+                      >
+                        <FolderLock className="w-3.5 h-3.5 text-indigo-600 hover:text-indigo-800 transition-colors shrink-0" />
+                      </span>
+                      TÀI LIỆU
                     </span>
                     <button
                       type="button"

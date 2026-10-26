@@ -1,0 +1,1 @@
+export { QuanLyThietBiView } from './QuanLyThietBiView';

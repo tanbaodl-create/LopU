@@ -114,14 +114,24 @@ export const ThuongMaiTaiLieuView: React.FC = () => {
     if (!originalDoc) return;
 
     // Chuẩn hóa giá bán nếu bật tính phí
-    const finalPrice = config.isForSale ? Math.max(5, config.priceDiamonds) : 0;
+    const finalPrice = config.isForSale ? Math.max(0, config.priceDiamonds) : 0;
+    const hasDiamondPrice = config.isForSale && finalPrice > 0;
+
+    let finalClasses = config.publishedToClasses || [];
+    if (hasDiamondPrice) {
+      if (!finalClasses.includes('open-library')) {
+        finalClasses = [...finalClasses, 'open-library'];
+      }
+    } else {
+      finalClasses = finalClasses.filter(id => id !== 'open-library');
+    }
 
     const updatedDoc: TeacherDocument = {
       ...originalDoc,
-      isForSale: config.isForSale,
+      isForSale: config.isForSale && finalPrice > 0,
       priceDiamonds: finalPrice,
-      publishedToClasses: config.publishedToClasses,
-      isPublished: config.publishedToClasses.length > 0,
+      publishedToClasses: finalClasses,
+      isPublished: finalClasses.length > 0 || Boolean(originalDoc.isPublished),
       updatedAt: new Date().toLocaleString('vi-VN'),
     };
 

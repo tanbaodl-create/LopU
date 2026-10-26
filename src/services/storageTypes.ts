@@ -213,6 +213,22 @@ export interface PinJoinRequest {
   updatedAt?: string;
 }
 
+export type GranularNodePublishStatus = 'inherit' | 'published' | 'unpublished';
+
+export interface ClassPublishSchedule {
+  startDate?: string; // Thời gian bắt đầu phát hành ("YYYY-MM-DDTHH:mm")
+  endDate?: string;   // Thời gian kết thúc phát hành ("YYYY-MM-DDTHH:mm")
+  nodeOverrides?: Record<string, GranularNodePublishStatus>; // Tùy chỉnh phát hành theo từng cấp con (Chương, Bài, Vấn đề, Chuyên đề, Bài đánh giá, Luyện tập, KTDG)
+}
+
+export interface NodePublishConfig {
+  isPublished?: boolean;
+  isForSale?: boolean;
+  priceDiamonds?: number;
+  publishedToClasses?: string[]; // Danh sách các lớp nhận riêng tài liệu ở cấp độ này
+  classSchedules?: Record<string, ClassPublishSchedule>; // Hạn giờ mở phát hành theo lớp cho riêng cấp độ này
+}
+
 export interface TeacherDocument {
   id: string;
   title: string;
@@ -230,6 +246,9 @@ export interface TeacherDocument {
   updatedAt: string;
   isPublished: boolean;
   publishedToClasses: string[];
+  classSchedules?: Record<string, ClassPublishSchedule>; // Lịch bắt đầu/kết thúc phát hành cho từng lớp (hoặc open-library)
+  globalNodeOverrides?: Record<string, GranularNodePublishStatus>; // Ghi đè phát hành cấp nút mặc định chung
+  nodeConfigs?: Record<string, NodePublishConfig>; // Cấu hình phát hành & bán Kim Cương riêng cho từng vị trí / cấp độ (Chương, Bài, Vấn đề, KTDG, ...)
   driveFileId?: string;
   driveSynced: boolean;
   fileSize: string;

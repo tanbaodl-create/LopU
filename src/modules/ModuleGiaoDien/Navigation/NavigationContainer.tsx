@@ -14,6 +14,8 @@ import {
   TaiLieuCaNhanView,
   TheoDoiHocSinhView,
   ThuongMaiTaiLieuView,
+  PhatHanhTaiLieuView,
+  DayHocInteractiveView,
   QuanLyDriveView,
   createByPath,
   deleteByPath,
@@ -28,6 +30,7 @@ import {
   BaoCaoGiamSatView,
   QuanLyNguoiDungView,
   PhanQuyenLopHocView,
+  QuanLyThietBiView,
 } from '../../ModuleQuanTri';
 import { HuongDanWebView, PhanTichLenh, LuuPromptChuanView } from '../HuongDanWeb';
 import { MathTypeEditorModal } from '../../ModuleGiaoVien/TaiLieuCaNhan/MathTypeEditorModal';
@@ -110,6 +113,7 @@ import {
   ensureValidDriveToken,
   isRealGoogleOAuthToken,
   loadChuyenDeContentFromDrive,
+  deduplicateItemsBySlug,
 } from '../../ConnectData/ConnectDrive/googleDriveService';
 import {
   PptSlideViewer,
@@ -163,9 +167,11 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
     const handleTokenExpired = () => {
       if (isTeacherOrHigher(currentRole)) {
         setIsReauthenticating(true);
-        ensureValidDriveToken(undefined, true).finally(() => {
-          setIsReauthenticating(false);
-        });
+        ensureValidDriveToken(undefined, true)
+          .catch((err) => console.warn('Lỗi kiểm tra token Drive:', err))
+          .finally(() => {
+            setIsReauthenticating(false);
+          });
       }
     };
     window.addEventListener('lopu_drive_auth_change', handleAuthChange);
@@ -319,8 +325,9 @@ const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole })
       if (item) {
         updated = customKienThucList.map(x => (x === item ? cleanName : x));
       } else {
-        updated = Array.from(new Set([...customKienThucList, cleanName]));
+        updated = [cleanName, ...customKienThucList];
       }
+      updated = deduplicateItemsBySlug(updated);
       setCustomKienThucList(updated);
       localStorage.setItem('lopu_custom_kienthuc_list', JSON.stringify(updated));
       setSelectedKienThucName(cleanName);
@@ -3928,7 +3935,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               if (fileName.toLowerCase().startsWith('kienthuc_') && fileName.toLowerCase().endsWith('.html')) {
                 const raw = fileName.slice('KienThuc_'.length, -'.html'.length);
                 if (raw && raw.toLowerCase() !== 'lythuyettrongtam') {
-                  setCustomKienThucList(prev => prev.includes(raw) ? prev : [raw, ...prev]);
+                  let friendlyName = raw;
+                  if (raw.toLowerCase() === 'tomtatcongthuc') friendlyName = 'Tóm tắt công thức';
+                  setCustomKienThucList(prev => deduplicateItemsBySlug([friendlyName, ...prev]));
                 }
               }
             }
@@ -5762,7 +5771,13 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             <div className="w-full md:w-[40%] bg-white p-4 rounded-2xl border border-indigo-200 shadow-xs space-y-3 shrink-0">
               <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
                 <span className="text-[11px] font-black uppercase text-indigo-900 tracking-wider flex items-center gap-1.5">
-                  <FolderLock className="w-3.5 h-3.5 text-indigo-600" /> TÀI LIỆU
+                  <span
+                    title="module BoChonHocLieuTienTrinh (Module dùng chung)"
+                    className="inline-flex items-center cursor-help"
+                  >
+                    <FolderLock className="w-3.5 h-3.5 text-indigo-600 hover:text-indigo-800 transition-colors shrink-0" />
+                  </span>
+                  TÀI LIỆU
                 </span>
                 <span className="text-[10px] text-indigo-600 font-semibold">Môn học + Khối lớp ➔ Tên tài liệu</span>
               </div>
@@ -8790,7 +8805,7 @@ export function isViewAllowedForRole(viewId: ViewId, role: UserRole): boolean {
   }
 
   // 2. Phân hệ Quản trị & Báo cáo (settings-*, reports-*): Superadmin và Admin
-  if (viewId === 'settings-users' || viewId === 'settings-permissions' || viewId === 'reports-progress') {
+  if (viewId === 'settings-users' || viewId === 'reports-progress') {
     return role === 'superadmin' || role === 'admin';
   }
 
@@ -8801,8 +8816,7 @@ export function isViewAllowedForRole(viewId: ViewId, role: UserRole): boolean {
   }
 
   if (
-    viewId === 'teaching-management' ||
-    viewId === 'teaching-documents' ||
+    viewId === 'settings-permissions' ||
     viewId === 'teaching-monetization' ||
     viewId === 'teaching-students'
   ) {
@@ -8955,27 +8969,16 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
       return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
     case 'learning-schedule':
       return <ThoiKhoaBieuView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
-    case 'learning-join':
-      return <DangKyLopView />;
 
     // Module 2: Nghiệp vụ Giảng dạy & Lớp học (ModuleGiaoVien)
     case 'teaching-soanthao':
       return <WordSoanThaoView currentRole={currentRole} />;
-    case 'teaching-management':
-      return <QuanLyLopDayView currentRole={currentRole} />;
-    case 'teaching-documents':
-      return (
-        <TaiLieuCaNhanView
-          currentRole={currentRole}
-          onChangeRole={onChangeRole}
-          driveEmail={driveEmail}
-          onOpenDriveConnect={onOpenDriveConnect}
-        />
-      );
     case 'teaching-drive':
       return <QuanLyDriveView />;
     case 'teaching-monetization':
-      return <ThuongMaiTaiLieuView />;
+      return <PhatHanhTaiLieuView />;
+    case 'teaching-interactive':
+      return <DayHocInteractiveView />;
     case 'teaching-students':
       return <TheoDoiHocSinhView />;
 
@@ -8994,6 +8997,8 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
       );
     case 'settings-permissions':
       return <PhanQuyenLopHocView currentRole={currentRole} />;
+    case 'settings-devices':
+      return <QuanLyThietBiView />;
 
     default:
       return <LopHocView />;
