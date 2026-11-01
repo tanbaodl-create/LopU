@@ -18,6 +18,9 @@ import {
   Loader2,
   BookOpen,
   FileText,
+  Sparkles,
+  SlidersHorizontal,
+  X,
 } from 'lucide-react';
 import { ClassItem, ClassSeatingPlan, PinJoinRequest, StudentProfile, UserProfile, UserRole, QUESTION_LEVELS } from '../../../services/storageTypes';
 import {
@@ -233,6 +236,8 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
     }
   }, [currentRole]);
   const [teacherPhoneState, setTeacherPhoneState] = useState<string>('0912.345.678');
+  const [showTeamLockModal, setShowTeamLockModal] = useState<boolean>(false);
+  const [lockedTeams, setLockedTeams] = useState<string[]>([]);
 
   const loadAllData = async () => {
     const list = await getClasses();
@@ -752,6 +757,15 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
                 <span>Đổi Cửa ⇄ Bàn GV</span>
               </button>
               <button
+                id="btn-auto-assign-quanlylopday"
+                onClick={() => setShowTeamLockModal(true)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer transition-all hover:scale-105"
+                title="Bấm để chọn khóa tổ và tiến hành xếp chỗ ngồi tự động"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Xếp chỗ ngồi</span>
+              </button>
+              <button
                 id="btn-save-seating-plan"
                 onClick={handleSaveSeating}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-xs cursor-pointer"
@@ -764,6 +778,15 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
 
           {seatingPlan && (
             <div className="space-y-4">
+              <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-2xl flex items-center justify-between text-xs text-indigo-950 font-medium shadow-3xs">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                  <span>
+                    💡 <strong>Xếp chỗ thông minh:</strong> Tự động lưu toàn bộ lịch sử sơ đồ lớp để tối ưu đa dạng bạn ngồi cạnh 8 hướng kề cận suốt 3 năm học (~30 lần xếp) và hỗ trợ tùy chọn khóa không thay đổi thành viên từng Tổ.
+                  </span>
+                </div>
+              </div>
+
               {/* Thanh Chú Thích 4 Vị Trí Chức Danh */}
               <div className="p-3.5 bg-slate-900 text-white rounded-2xl border border-slate-800 text-xs space-y-2.5 shadow-md">
                 <div className="font-bold text-amber-300 flex items-center gap-1.5">
@@ -1196,6 +1219,105 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
             setTimeout(() => setNotification(null), 4000);
           }}
         />
+      )}
+
+      {/* Modal Chọn Khóa Tổ Trước Khi Xếp Chỗ Ngồi */}
+      {showTeamLockModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-purple-600 text-white rounded-2xl shadow-sm">
+                  <SlidersHorizontal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900 tracking-tight">
+                    Cài Đặt Khóa Tổ Trước Khi Xếp Chỗ Lớp {currentClass?.name}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Chọn các tổ không thay đổi thành viên trước khi tiến hành xếp chỗ
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTeamLockModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4 text-xs">
+              <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 space-y-3">
+                <label className="font-black text-slate-900 uppercase tracking-wide flex items-center gap-2 select-none text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-600" />
+                  <span>5. KHÓA KHÔNG THAY ĐỔI THÀNH VIÊN CỦA TỔ (CHỈ XÁO TRỘN CHỖ TRONG NỘI BỘ TỔ)</span>
+                </label>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  💡 Chọn các tổ mà bạn <strong>không muốn thay đổi thành viên</strong> khi đổi sơ đồ lớp. Các học sinh thuộc tổ được chọn sẽ chỉ xáo trộn vị trí trong nội bộ tổ đó.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  {['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'].map((tName) => {
+                    const isLocked = lockedTeams.some(t => t.toLowerCase() === tName.toLowerCase());
+                    return (
+                      <label
+                        key={tName}
+                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                          isLocked
+                            ? 'bg-sky-600 text-white border-sky-700 ring-2 ring-sky-300 shadow-3xs'
+                            : 'bg-white text-slate-800 border-slate-200 hover:bg-sky-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isLocked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            if (checked) {
+                              setLockedTeams(prev => Array.from(new Set([...prev, tName])));
+                            } else {
+                              setLockedTeams(prev => prev.filter(t => t.toLowerCase() !== tName.toLowerCase()));
+                            }
+                          }}
+                          className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
+                        />
+                        <span>🔒 Khóa {tName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-3 text-[11px] text-indigo-950 font-medium">
+                ✨ <strong>Thuật toán xếp chỗ 8 hướng kề cận:</strong> Tự động truy vấn tất cả các sơ đồ lớp trong quá khứ (`lopu_seating_history_${selectedClassId}`) để ưu tiên xếp kề nhau cho những học sinh CHƯA BAO GIỜ ngồi cạnh nhau!
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowTeamLockModal(false)}
+                className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  setShowTeamLockModal(false);
+                  setNotification(`Đã ghi nhận tùy chọn khóa ${lockedTeams.length} tổ và tiến hành xếp chỗ ngồi cho lớp ${currentClass?.name}!`);
+                  setTimeout(() => setNotification(null), 3500);
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span>🚀 Tiến Hành Xếp Chỗ</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

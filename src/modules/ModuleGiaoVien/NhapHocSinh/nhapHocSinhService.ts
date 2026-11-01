@@ -121,12 +121,16 @@ export interface SeatingRulesConfig {
   avoidNearStudents: string; // VD: "Bảo - Tuấn; Cường - Dũng - Giảng" (các nhóm học sinh không được gần nhau)
   fixedSeatRules: StudentFixedSeatRule[];
   studyPairs: string; // VD: "HS1 - HS2; HS3 - HS4" (Cặp đôi cùng tiến)
+  showViolationWarnings?: boolean; // Tùy chọn hiển thị cảnh báo vi phạm điều kiện xếp chỗ & nút tự động sửa vi phạm
+  lockedTeams?: string[]; // Danh sách các tổ được khóa giữ nguyên thành viên (VD: ['Tổ 1', 'Tổ 2'])
 }
 
 export const DEFAULT_SEATING_RULES: SeatingRulesConfig = {
   avoidNearStudents: '',
   fixedSeatRules: [],
   studyPairs: '',
+  showViolationWarnings: true,
+  lockedTeams: [],
 };
 
 /**
@@ -172,6 +176,20 @@ export function formatAvoidNearGroups(groups: string[][]): string {
     .map(g => g.filter(Boolean).join(' - '))
     .filter(Boolean)
     .join('; ');
+}
+
+/**
+ * Kiểm tra 2 vị trí chỗ ngồi có vi phạm điều kiện "không được gần nhau"
+ * (Không được ngồi chung bàn, hoặc bàn liền trên, hoặc bàn liền dưới trên cùng dãy)
+ */
+export function isAvoidNearViolation(
+  c1: { row: number; desk: number },
+  c2: { row: number; desk: number }
+): boolean {
+  if (c1.row === c2.row && Math.abs(c1.desk - c2.desk) <= 1) {
+    return true;
+  }
+  return false;
 }
 
 

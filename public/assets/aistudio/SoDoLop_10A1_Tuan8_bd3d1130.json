@@ -1,0 +1,716 @@
+{
+  "headerInfo": {
+    "department": "Sở GD&ĐT TP. Hồ Chí Minh",
+    "schoolName": "THPT Chuyên Nguyễn Trãi",
+    "className": "Lớp 10A1",
+    "academicYear": "2026 - 2027",
+    "applyWeek": "Tuần 12 (Áp dụng từ 15/11)",
+    "teacherName": "Đỗ Tấn Bảo",
+    "teacherPhone": "039 447 9986"
+  },
+  "seatsPerDesk": 3,
+  "customDeskSeats": {
+    "Tổ 1_3": 4,
+    "Tổ 4_6": 4,
+    "Tổ 4_5": 3
+  },
+  "applyWeekNum": 8,
+  "viewPerspective": "up",
+  "paperOrientation": "landscape",
+  "doorOnLeft": true,
+  "teamsConfig": [
+    {
+      "id": "team_1",
+      "name": "Tổ 1",
+      "desks": [
+        1,
+        2,
+        3
+      ],
+      "rowLabel": "Dãy 1 - Bàn 1 đến 3"
+    },
+    {
+      "id": "team_3",
+      "name": "Tổ 3",
+      "desks": [
+        1,
+        2,
+        3
+      ],
+      "rowLabel": "Dãy 2 - Bàn 1 đến 3"
+    },
+    {
+      "id": "team_2",
+      "name": "Tổ 2",
+      "desks": [
+        4,
+        5,
+        6
+      ],
+      "rowLabel": "Dãy 1 - Bàn 4 đến 6"
+    },
+    {
+      "id": "team_4",
+      "name": "Tổ 4",
+      "desks": [
+        4,
+        5,
+        6
+      ],
+      "rowLabel": "Dãy 2 - Bàn 4 đến 6"
+    }
+  ],
+  "students": [
+    {
+      "id": "hs_1",
+      "code": "HS10A1_01",
+      "name": "Nguyễn Gia An",
+      "nickname": "Gia An",
+      "gender": "Nữ",
+      "team": "Tổ 2",
+      "desk": 5,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_2",
+      "code": "HS10A1_02",
+      "name": "Trần Thị Thuận An",
+      "nickname": "Thuận An",
+      "gender": "Nữ",
+      "team": "Tổ 4",
+      "desk": 5,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_3",
+      "code": "HS10A1_03",
+      "name": "Đặng Lê Hà Anh",
+      "nickname": "Hà Anh",
+      "gender": "Nữ",
+      "team": "Tổ 2",
+      "desk": 5,
+      "seatCol": 2,
+      "roles": [
+        "BT"
+      ],
+      "titles": [
+        "BT",
+        "TT"
+      ]
+    },
+    {
+      "id": "hs_4",
+      "code": "HS10A1_04",
+      "name": "Võ Chí Bảo",
+      "nickname": "Chí Bảo",
+      "gender": "Nam",
+      "team": "Tổ 1",
+      "desk": 3,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_5",
+      "code": "HS10A1_05",
+      "name": "Lê Nguyễn Kim Chi",
+      "nickname": "Kim Chi",
+      "gender": "Nữ",
+      "team": "Tổ 4",
+      "desk": 4,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_6",
+      "code": "HS10A1_06",
+      "name": "Nguyễn Duy Dũng",
+      "nickname": "Duy Dũng",
+      "gender": "Nam",
+      "team": "Tổ 1",
+      "desk": 1,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_7",
+      "code": "HS10A1_07",
+      "name": "Nguyễn Tấn Dũng",
+      "nickname": "Tấn Dũng",
+      "gender": "Nam",
+      "team": "Tổ 4",
+      "desk": 6,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_8",
+      "code": "HS10A1_08",
+      "name": "Nguyễn Đặng Hải",
+      "nickname": "Đặng Hải",
+      "gender": "Nam",
+      "team": "Tổ 4",
+      "desk": 6,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_9",
+      "code": "HS10A1_09",
+      "name": "Lương Ngọc Hân",
+      "nickname": "Ngọc Hân",
+      "gender": "Nữ",
+      "team": "Tổ 3",
+      "desk": 3,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_10",
+      "code": "HS10A1_10",
+      "name": "Nguyễn Duy Hoàng",
+      "nickname": "Duy Hoàng",
+      "gender": "Nam",
+      "team": "Tổ 1",
+      "desk": 1,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_11",
+      "code": "HS10A1_11",
+      "name": "Bùi Tấn Khang",
+      "nickname": "Tấn Khang",
+      "gender": "Nam",
+      "team": "Tổ 2",
+      "desk": 4,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_12",
+      "code": "HS10A1_12",
+      "name": "Võ Hoàng Duy Khang",
+      "nickname": "Duy Khang",
+      "gender": "Nam",
+      "team": "Tổ 2",
+      "desk": 6,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_13",
+      "code": "HS10A1_13",
+      "name": "Nguyễn Anh Khoa",
+      "nickname": "Nguyễn Khoa",
+      "gender": "Nam",
+      "team": "Tổ 2",
+      "desk": 6,
+      "seatCol": 3,
+      "roles": [
+        "LT"
+      ],
+      "titles": [
+        "LT"
+      ]
+    },
+    {
+      "id": "hs_14",
+      "code": "HS10A1_14",
+      "name": "Trần Đoàn Anh Khoa",
+      "nickname": "Trần Khoa",
+      "gender": "Nam",
+      "team": "Tổ 4",
+      "desk": 5,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "TT"
+      ]
+    },
+    {
+      "id": "hs_15",
+      "code": "HS10A1_15",
+      "name": "Nguyễn Tú Loan",
+      "nickname": "Tú Loan",
+      "gender": "Nữ",
+      "team": "Tổ 1",
+      "desk": 2,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_16",
+      "code": "HS10A1_16",
+      "name": "Nguyễn Ngô Gia Long",
+      "nickname": "Gia Long",
+      "gender": "Nam",
+      "team": "Tổ 3",
+      "desk": 2,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_17",
+      "code": "HS10A1_17",
+      "name": "Nguyễn Tuấn Mạnh",
+      "nickname": "Tuấn Mạnh",
+      "gender": "Nam",
+      "team": "Tổ 4",
+      "desk": 6,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_18",
+      "code": "HS10A1_18",
+      "name": "Trương Nguyễn Ánh Ngọc",
+      "nickname": "Ánh Ngọc",
+      "gender": "Nữ",
+      "team": "Tổ 1",
+      "desk": 2,
+      "seatCol": 2,
+      "roles": [
+        "VTM",
+        "UV"
+      ],
+      "titles": [
+        "VTM",
+        "UV"
+      ]
+    },
+    {
+      "id": "hs_19",
+      "code": "HS10A1_19",
+      "name": "Lê Trung Nguyên",
+      "nickname": "Trung Nguyên",
+      "gender": "Nam",
+      "team": "Tổ 3",
+      "desk": 2,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_20",
+      "code": "HS10A1_20",
+      "name": "Phạm Thanh Nguyên",
+      "nickname": "Thanh Nguyên",
+      "gender": "Nam",
+      "team": "Tổ 3",
+      "desk": 3,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_21",
+      "code": "HS10A1_21",
+      "name": "Võ Đặng Thảo Nguyên",
+      "nickname": "Thảo Nguyên",
+      "gender": "Nữ",
+      "team": "Tổ 3",
+      "desk": 1,
+      "seatCol": 1,
+      "roles": [
+        "TQ"
+      ],
+      "titles": [
+        "TQ"
+      ]
+    },
+    {
+      "id": "hs_22",
+      "code": "HS10A1_22",
+      "name": "Nguyễn Thị Hồng Nhung",
+      "nickname": "Hồng Nhung",
+      "gender": "Nữ",
+      "team": "Tổ 3",
+      "desk": 3,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_23",
+      "code": "HS10A1_23",
+      "name": "Nguyễn Lê Quỳnh Như",
+      "nickname": "Ng.Lê Như",
+      "gender": "Nữ",
+      "team": "Tổ 2",
+      "desk": 4,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_24",
+      "code": "HS10A1_24",
+      "name": "Nguyễn Quỳnh Như",
+      "nickname": "Ng Quỳnh Như",
+      "gender": "Nữ",
+      "team": "Tổ 4",
+      "desk": 4,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_25",
+      "code": "HS10A1_25",
+      "name": "Trần Phương Như",
+      "nickname": "Phương Như",
+      "gender": "Nữ",
+      "team": "Tổ 3",
+      "desk": 1,
+      "seatCol": 2,
+      "roles": [
+        "PBT"
+      ],
+      "titles": [
+        "PBT"
+      ]
+    },
+    {
+      "id": "hs_26",
+      "code": "HS10A1_26",
+      "name": "Nguyễn Tấn Phát",
+      "nickname": "Tấn Phát",
+      "gender": "Nam",
+      "team": "Tổ 2",
+      "desk": 6,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_27",
+      "code": "HS10A1_27",
+      "name": "Phạm Duy Phúc",
+      "nickname": "Duy Phúc",
+      "gender": "Nam",
+      "team": "Tổ 1",
+      "desk": 3,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "TT"
+      ]
+    },
+    {
+      "id": "hs_28",
+      "code": "HS10A1_28",
+      "name": "Nguyễn Bá Ngọc Quỳnh",
+      "nickname": "Ngọc Quỳnh",
+      "gender": "Nữ",
+      "team": "Tổ 3",
+      "desk": 1,
+      "seatCol": 3,
+      "roles": [
+        "PHT"
+      ],
+      "titles": [
+        "PHT",
+        "TT"
+      ]
+    },
+    {
+      "id": "hs_29",
+      "code": "HS10A1_29",
+      "name": "Nguyễn Phan Như Quỳnh",
+      "nickname": "Như Quỳnh",
+      "gender": "Nữ",
+      "team": "Tổ 4",
+      "desk": 5,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_30",
+      "code": "HS10A1_30",
+      "name": "Mai Nguyễn Minh Sa",
+      "nickname": "Minh Sa",
+      "gender": "Nữ",
+      "team": "Tổ 2",
+      "desk": 4,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_31",
+      "code": "HS10A1_31",
+      "name": "Nguyễn Võ Nhật Tân",
+      "nickname": "Nhật Tân",
+      "gender": "Nam",
+      "team": "Tổ 2",
+      "desk": 5,
+      "seatCol": 1,
+      "roles": [
+        "CĐ"
+      ],
+      "titles": [
+        "CĐ"
+      ]
+    },
+    {
+      "id": "hs_32",
+      "code": "HS10A1_32",
+      "name": "Võ Phạm Phương Thảo",
+      "nickname": "Phương Thảo",
+      "gender": "Nữ",
+      "team": "Tổ 1",
+      "desk": 3,
+      "seatCol": 4,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_33",
+      "code": "HS10A1_33",
+      "name": "Nguyễn Bảo Thi",
+      "nickname": "Bảo Thi",
+      "gender": "Nữ",
+      "team": "Tổ 1",
+      "desk": 3,
+      "seatCol": 3,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_34",
+      "code": "HS10A1_34",
+      "name": "Huỳnh Phương Tiến",
+      "nickname": "Phương Tiến",
+      "gender": "Nam",
+      "team": "Tổ 1",
+      "desk": 1,
+      "seatCol": 2,
+      "roles": [
+        "PLĐ"
+      ],
+      "titles": [
+        "PLĐ"
+      ]
+    },
+    {
+      "id": "hs_35",
+      "code": "HS10A1_35",
+      "name": "Nguyễn Xuân Tiến",
+      "nickname": "Xuân Tiến",
+      "gender": "Nam",
+      "team": "Tổ 3",
+      "desk": 2,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_36",
+      "code": "HS10A1_36",
+      "name": "Lê Thị Thanh Trúc",
+      "nickname": "Thanh Trúc",
+      "gender": "Nữ",
+      "team": "Tổ 1",
+      "desk": 2,
+      "seatCol": 1,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    },
+    {
+      "id": "hs_37",
+      "code": "HS10A1_37",
+      "name": "Đỗ Đặng Kiều Vy",
+      "nickname": "Kiều Vy",
+      "gender": "Nữ",
+      "team": "Tổ 4",
+      "desk": 4,
+      "seatCol": 2,
+      "roles": [
+        "student"
+      ],
+      "titles": [
+        "Thành viên"
+      ]
+    }
+  ],
+  "rawStudentsText": "Nguyễn Gia An; Gia An; Nữ; Tổ 1; , , , \nTrần Thị Thuận An; Thuận An; Nữ; Tổ 4; , , , \nĐặng Lê Hà Anh; Hà Anh; Nữ; Tổ 2; , BT, TT, \nVõ Chí Bảo; Chí Bảo; Nam; Tổ 1; , , , \nLê Nguyễn Kim Chi; Kim Chi; Nữ; Tổ 4; , , , \nNguyễn Duy Dũng; Duy Dũng; Nam; Tổ 1; , , , \nNguyễn Tấn Dũng; Tấn Dũng; Nam; Tổ 4; , , , \nNguyễn Đặng Hải; Đặng Hải; Nam; Tổ 4; , , , \nLương Ngọc Hân; Ngọc Hân; Nữ; Tổ 3; , , , \nNguyễn Duy Hoàng; Duy Hoàng; Nam; Tổ 3; , , , \nBùi Tấn Khang; Tấn Khang; Nam; Tổ 2; , , , \nVõ Hoàng Duy Khang; Duy Khang; Nam; Tổ 2; , , , \nNguyễn Anh Khoa; Nguyễn Khoa; Nam; Tổ 2; LT, , , \nTrần Đoàn Anh Khoa; Trần Khoa; Nam; Tổ 4; , , TT, \nNguyễn Tú Loan; Tú Loan; Nữ; Tổ 1; , , , \nNguyễn Ngô Gia Long; Gia Long; Nam; Tổ 3; , , , \nNguyễn Tuấn Mạnh; Tuấn Mạnh; Nam; Tổ 4; , , , \nTrương Nguyễn Ánh Ngọc; Ánh Ngọc; Nữ; Tổ 1; VTM, UV, , \nLê Trung Nguyên; Trung Nguyên; Nam; Tổ 2; , , , \nPhạm Thanh Nguyên; Thanh Nguyên; Nam; Tổ 3; , , , \nVõ Đặng Thảo Nguyên; Thảo Nguyên; Nữ; Tổ 3; TQ, , , \nNguyễn Thị Hồng Nhung; Hồng Nhung; Nữ; Tổ 3; , , , \nNguyễn Lê Quỳnh Như; Ng.Lê Như; Nữ; Tổ 4; , , , \nNguyễn Quỳnh Như; Ng Quỳnh Như; Nữ; Tổ 2; , , , \nTrần Phương Như; Phương Như; Nữ; Tổ 3; , PBT, , \nNguyễn Tấn Phát; Tấn Phát; Nam; Tổ 2; , , , \nPhạm Duy Phúc; Duy Phúc; Nam; Tổ 1; , , TT, \nNguyễn Bá Ngọc Quỳnh; Ngọc Quỳnh; Nữ; Tổ 3; PHT, , TT, \nNguyễn Phan Như Quỳnh; Như Quỳnh; Nữ; Tổ 4; , , , \nMai Nguyễn Minh Sa; Minh Sa; Nữ; Tổ 2; , , , \nNguyễn Võ Nhật Tân; Nhật Tân; Nam; Tổ 4; CĐ, , , \nVõ Phạm Phương Thảo; Phương Thảo; Nữ; Tổ 2; , , , \nNguyễn Bảo Thi; Bảo Thi; Nữ; Tổ 1; , , , \nHuỳnh Phương Tiến; Phương Tiến; Nam; Tổ 1; PLĐ, , , \nNguyễn Xuân Tiến; Xuân Tiến; Nam; Tổ 3; , , , \nLê Thị Thanh Trúc; Thanh Trúc; Nữ; Tổ 1; , , , \nĐỗ Đặng Kiều Vy; Kiều Vy; Nữ; Tổ 4; , , , ",
+  "seatingRules": {
+    "avoidNearStudents": "",
+    "fixedSeatRules": [
+      {
+        "studentNickname": "Hà Anh",
+        "positions": [
+          {
+            "desk": 5,
+            "row": 1,
+            "seatCol": 1,
+            "label": "bàn 5-dãy 1-G1"
+          },
+          {
+            "desk": 5,
+            "row": 2,
+            "seatCol": 2,
+            "label": "bàn 5-dãy 2-G2"
+          },
+          {
+            "desk": 6,
+            "row": 2,
+            "seatCol": 2,
+            "label": "bàn 6-dãy 2-G2"
+          },
+          {
+            "desk": 6,
+            "row": 2,
+            "seatCol": 3,
+            "label": "bàn 6-dãy 2-G3"
+          },
+          {
+            "desk": 6,
+            "row": 1,
+            "seatCol": 1,
+            "label": "bàn 6-dãy 1-G1"
+          },
+          {
+            "desk": 6,
+            "row": 1,
+            "seatCol": 2,
+            "label": "bàn 6-dãy 1-G2"
+          },
+          {
+            "desk": 5,
+            "row": 1,
+            "seatCol": 2,
+            "label": "bàn 5-dãy 1-G2"
+          }
+        ],
+        "rawText": "bàn 5-dãy 1-G1; bàn 5-dãy 2-G2; bàn 6-dãy 2-G2; bàn 6-dãy 2-G3; bàn 6-dãy 1-G1; bàn 6-dãy 1-G2; bàn 5-dãy 1-G2"
+      }
+    ],
+    "studyPairs": ""
+  }
+}

@@ -55,6 +55,7 @@ import {
   validateAndSyncFixedSeatPositions,
   parseAvoidNearGroups,
   formatAvoidNearGroups,
+  isAvoidNearViolation,
 } from '../../ModuleGiaoVien/NhapHocSinh/nhapHocSinhService';
 import { read, utils, write } from 'xlsx';
 import ExcelJS from 'exceljs';
@@ -273,6 +274,88 @@ const DOAN_TITLES = ['BT', 'PBT', 'UV'];            // Công tác Đoàn (Dark B
 const TEAM_TITLES = ['TT', 'TP'];                   // Cán sự Tổ (Green)
 const SUBJECT_TITLES = ['TOÁN', 'LÝ', 'HÓA', 'SINH', 'TIN', 'ANH', 'VĂN', 'SỬ', 'ĐỊA', 'KTPL', 'TOAN', 'LY', 'HOA']; // Cán sự Bộ Môn (Orange/Purple)
 
+// Helper lấy tọa độ ma trận lớp học (Row, Col) để tính 8 hướng kề cận
+export const getSeatGridCoords = (row: number, desk: number, seatCol: number) => {
+  const r = desk; // Hàng 1..6
+  const c = row === 1 ? seatCol : 10 + seatCol; // Dãy 1 (1..4), Dãy 2 (11..14)
+  return { r, c };
+};
+
+// Kiểm tra xem 2 ghế có thuộc 1 trong 8 hướng kề cận (Đông, Tây, Nam, Bắc, ĐB, ĐN, TB, TN)
+export const is8DirectionNeighbor = (
+  p1: { row: number; desk: number; seatCol: number },
+  p2: { row: number; desk: number; seatCol: number }
+): boolean => {
+  const g1 = getSeatGridCoords(p1.row, p1.desk, p1.seatCol);
+  const g2 = getSeatGridCoords(p2.row, p2.desk, p2.seatCol);
+  return Math.abs(g1.r - g2.r) <= 1 && Math.abs(g1.c - g2.c) <= 1 && !(g1.r === g2.r && g1.c === g2.c);
+};
+
+// Đọc lịch sử các sơ đồ lớp đã lưu của lớp hiện tại để đếm số lần 2 học sinh đã từng ngồi cạnh nhau (8 hướng)
+export const getHistoricalPairNeighborMap = (classId: string): Map<string, number> => {
+  const map = new Map<string, number>();
+  try {
+    const raw = localStorage.getItem(`lopu_seating_history_${classId}`);
+    if (!raw) return map;
+    const historyList = JSON.parse(raw);
+    if (!Array.isArray(historyList)) return map;
+
+    for (const snap of historyList) {
+      if (!snap.positions || typeof snap.positions !== 'object') continue;
+      const entries = Object.entries(snap.positions) as [string, { row: number; desk: number; seatCol: number }][];
+      for (let i = 0; i < entries.length; i++) {
+        for (let j = i + 1; j < entries.length; j++) {
+          const [idA, posA] = entries[i];
+          const [idB, posB] = entries[j];
+          if (posA && posB && posA.desk > 0 && posB.desk > 0) {
+            if (is8DirectionNeighbor(posA, posB)) {
+              const pairKey = idA < idB ? `${idA}_${idB}` : `${idB}_${idA}`;
+              map.set(pairKey, (map.get(pairKey) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Lỗi đọc lịch sử sơ đồ lớp:', err);
+  }
+  return map;
+};
+
+// Lưu snapshot sơ đồ lớp hiện tại vào lịch sử
+export const recordCurrentSeatingToHistory = (classId: string, studentsList: StudentCardData[], classNameStr: string) => {
+  try {
+    const raw = localStorage.getItem(`lopu_seating_history_${classId}`);
+    let historyList: any[] = [];
+    if (raw) {
+      try { historyList = JSON.parse(raw); } catch { historyList = []; }
+    }
+    const positions: Record<string, { row: number; desk: number; seatCol: number; team: string }> = {};
+    studentsList.forEach(s => {
+      if (s.desk > 0) {
+        const teamLower = (s.team || '').toLowerCase();
+        const row = (teamLower.includes('tổ 3') || teamLower.includes('tổ 4') || teamLower.includes('to 3') || teamLower.includes('to 4')) ? 2 : 1;
+        positions[s.id] = { row, desk: s.desk, seatCol: s.seatCol, team: s.team };
+      }
+    });
+
+    const newSnap = {
+      id: `snap_${Date.now()}`,
+      timestamp: Date.now(),
+      dateStr: new Date().toLocaleString('vi-VN'),
+      className: classNameStr,
+      positions,
+    };
+
+    historyList.unshift(newSnap);
+    if (historyList.length > 50) historyList = historyList.slice(0, 50);
+
+    localStorage.setItem(`lopu_seating_history_${classId}`, JSON.stringify(historyList));
+  } catch (e) {
+    console.error('Lỗi ghi lịch sử sơ đồ lớp:', e);
+  }
+};
+
 export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   currentStudentId = 'hs_2',
   currentRole,
@@ -303,7 +386,16 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   // Cài đặt điều kiện xếp chỗ của Giáo viên
   const [seatingRules, setSeatingRules] = useState<SeatingRulesConfig>(() => getClassSeatingRules('class_10a1'));
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [showTeamLockModalBeforeAssign, setShowTeamLockModalBeforeAssign] = useState<boolean>(false);
   const [activeViolations, setActiveViolations] = useState<SeatingViolation[]>([]);
+  const [showViolationWarnings, setShowViolationWarnings] = useState<boolean>(
+    () => localStorage.getItem('lopu_show_violation_warnings') !== 'false'
+  );
+
+  const handleToggleShowViolationWarnings = (checked: boolean) => {
+    setShowViolationWarnings(checked);
+    localStorage.setItem('lopu_show_violation_warnings', String(checked));
+  };
 
   // Kiểm tra quyền giáo viên
   const resolvedRole = currentRole || localStorage.getItem('lopu_current_role') || (localStorage.getItem('lopu_auth_user') ? JSON.parse(localStorage.getItem('lopu_auth_user') || '{}').role : 'teacher');
@@ -899,11 +991,11 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             const dy = Math.abs(st1.coords.y - st2.coords.y);
             const isSameRow = st1.coords.row === st2.coords.row;
 
-            if (isSameRow && dx <= 1 && dy <= 1) {
+            if (isAvoidNearViolation(st1.coords, st2.coords)) {
               const groupLabel = avoidGroups.length > 1 ? ` (Nhóm ${groupIdx + 1})` : '';
               violations.push({
                 type: 'avoid_near',
-                message: `Học sinh "${st1.s.nickname || st1.s.name}" và "${st2.s.nickname || st2.s.name}"${groupLabel} không được ngồi gần nhau! (Hiện ngồi kề nhau tại Bàn ${st1.s.desk}-Dãy ${st1.coords.row} và Bàn ${st2.s.desk}-Dãy ${st2.coords.row})`,
+                message: `Học sinh "${st1.s.nickname || st1.s.name}" và "${st2.s.nickname || st2.s.name}"${groupLabel} không được ngồi gần nhau! (Ngồi chung bàn hoặc bàn liền trên/dưới tại Bàn ${st1.s.desk}-Dãy ${st1.coords.row} và Bàn ${st2.s.desk}-Dãy ${st2.coords.row})`,
                 studentNames: [st1.s.nickname || st1.s.name, st2.s.nickname || st2.s.name],
               });
             }
@@ -974,11 +1066,36 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
     setActiveViolations(v);
   }, [students, seatingRules]);
 
-  // Phân tự động thông minh theo điều kiện cài đặt
+  // Phân tự động thông minh theo 5 điều kiện cài đặt
   const handleAutoAssignWithRules = () => {
-    const copy = students.map(s => ({ ...s, team: '', desk: 0, seatCol: 0 }));
+    // Lưu sơ đồ hiện tại vào lịch sử trước khi tạo sơ đồ mới
+    recordCurrentSeatingToHistory(selectedClassId, students, headerInfo.className);
 
-    // Khởi tạo tất cả vị trí ghế trống trong phòng học (2 Dãy, Bàn 1..6, Ghế 1..seatsPerDesk)
+    const copy = students.map(s => ({ ...s, team: s.team || '', desk: 0, seatCol: 0 }));
+
+    // Helper xáo trộn mảng ngẫu nhiên (Fisher-Yates Shuffle) giúp mỗi lần kích nút "Xếp chỗ ngồi" tạo 1 phương án mới
+    const shuffleArray = <T,>(arr: T[]): T[] => {
+      const res = [...arr];
+      for (let i = res.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [res[i], res[j]] = [res[j], res[i]];
+      }
+      return res;
+    };
+
+    // Helper kiểm tra học sinh là Tổ trưởng (TT) hoặc Tổ phó (TP)
+    const isLeaderOrSub = (s: StudentCardData) => {
+      const allRoles = [...(s.roles || []), ...(s.titles || [])].map(r => r.trim().toUpperCase());
+      return allRoles.includes('TT') || allRoles.includes('TP');
+    };
+
+    // Helper kiểm tra giới tính Nữ
+    const isFemaleStudent = (s: StudentCardData) => {
+      const g = (s.gender || '').trim().toLowerCase();
+      return g === 'nữ' || g === 'nu';
+    };
+
+    // Khởi tạo tất cả vị trí ghế trống trong phòng học
     interface SeatSlot {
       row: number; // 1 hoặc 2
       desk: number; // 1..6
@@ -998,7 +1115,8 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         } else {
           teamName = d <= 3 ? 'Tổ 3' : 'Tổ 4';
         }
-        for (let g = 1; g <= seatsPerDesk; g++) {
+        const cap = getDeskSeatCount(d, r);
+        for (let g = 1; g <= cap; g++) {
           allSlots.push({
             row: r,
             desk: d,
@@ -1014,7 +1132,121 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
     const assignedIds = new Set<string>();
 
-    // BƯỚC 1: XẾP HỌC SINH CÓ VỊ TRÍ BÀN CỐ ĐỊNH
+    // Đọc lịch sử 8 hướng để tối ưu đa dạng bạn ngồi cạnh nhau trong 3 năm học (~30 lần đổi)
+    const historicalNeighborMap = getHistoricalPairNeighborMap(selectedClassId);
+
+    // Helper kiểm tra xem slot có bị dành riêng cho học sinh vị trí cố định khác chưa xếp không
+    const isReservedForFixedSeat = (sl: SeatSlot, st: StudentCardData): boolean => {
+      if (!seatingRules.fixedSeatRules || seatingRules.fixedSeatRules.length === 0) return false;
+      for (const rule of seatingRules.fixedSeatRules) {
+        const targetNick = rule.studentNickname.trim().toLowerCase();
+        const isOwner = (st.nickname || '').toLowerCase() === targetNick || st.name.toLowerCase() === targetNick || st.name.toLowerCase().includes(targetNick);
+        if (isOwner) continue;
+
+        const isFixedForOther = rule.positions.some(p => p.desk === sl.desk && p.row === sl.row && p.seatCol === sl.seatCol);
+        if (isFixedForOther) {
+          const otherSt = copy.find(s => ((s.nickname || '').toLowerCase() === targetNick || s.name.toLowerCase() === targetNick || s.name.toLowerCase().includes(targetNick)));
+          if (otherSt && !assignedIds.has(otherSt.id)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    // Helper kiểm tra vi phạm điều kiện "Không gần nhau" hoặc vị trí cố định
+    const avoidGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+    const checkAvoidViolation = (st: StudentCardData, slot: SeatSlot): boolean => {
+      if (isReservedForFixedSeat(slot, st)) return true;
+      if (avoidGroups.length === 0) return false;
+
+      const stNameLower = st.name.toLowerCase();
+      const stNickLower = (st.nickname || '').toLowerCase();
+
+      for (const group of avoidGroups) {
+        const lowerGroup = group.map(n => n.trim().toLowerCase());
+        const isInGroup = lowerGroup.some(
+          n => n === stNickLower || n === stNameLower || stNameLower.includes(n)
+        );
+        if (!isInGroup) continue;
+
+        // Kiểm tra xem slot có nằm kề bàn/cùng bàn hoặc kề 8 hướng với thành viên khác trong cùng nhóm
+        for (const otherSlot of allSlots) {
+          if (!otherSlot.occupiedBy || otherSlot.occupiedBy.id === st.id) continue;
+          const other = otherSlot.occupiedBy;
+          const otherNameLower = other.name.toLowerCase();
+          const otherNickLower = (other.nickname || '').toLowerCase();
+
+          const isOtherInGroup = lowerGroup.some(
+            n => n === otherNickLower || n === otherNameLower || otherNameLower.includes(n)
+          );
+          if (isOtherInGroup) {
+            const isNearDesk = isAvoidNearViolation(slot, otherSlot);
+            const is8Dir = is8DirectionNeighbor(
+              { row: slot.row, desk: slot.desk, seatCol: slot.seatCol },
+              { row: otherSlot.row, desk: otherSlot.desk, seatCol: otherSlot.seatCol }
+            );
+            if (isNearDesk || is8Dir) {
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    };
+
+    // Tính điểm số trùng lặp bạn ngồi cạnh 8 hướng trong quá khứ đối với 1 slot cụ thể (Loại bỏ tuyệt đối ô vi phạm)
+    const calculateNeighborOverlapScore = (st: StudentCardData, sl: SeatSlot): number => {
+      if (checkAvoidViolation(st, sl)) {
+        return 99999; // Phạt điểm tuyệt đối nếu vi phạm quy tắc không gần nhau hoặc vị trí cố định
+      }
+      let totalOverlap = 0;
+      let zeroCount = 0;
+      allSlots.forEach(otherSl => {
+        if (otherSl.occupiedBy && otherSl.occupiedBy.id !== st.id) {
+          if (is8DirectionNeighbor({ row: sl.row, desk: sl.desk, seatCol: sl.seatCol }, { row: otherSl.row, desk: otherSl.desk, seatCol: otherSl.seatCol })) {
+            const idA = st.id;
+            const idB = otherSl.occupiedBy.id;
+            const pairKey = idA < idB ? `${idA}_${idB}` : `${idB}_${idA}`;
+            const pastCount = historicalNeighborMap.get(pairKey) || 0;
+            if (pastCount === 0) {
+              zeroCount += 1;
+            } else {
+              totalOverlap += pastCount * 100;
+            }
+          }
+        }
+      });
+      return totalOverlap - (zeroCount * 1000) + Math.random() * 0.5;
+    };
+
+    const getBestAvailableSlots = (candidateSlots: SeatSlot[], st: StudentCardData): SeatSlot[] => {
+      return [...candidateSlots]
+        .filter(sl => !sl.occupiedBy && !checkAvoidViolation(st, sl))
+        .sort((a, b) => calculateNeighborOverlapScore(st, a) - calculateNeighborOverlapScore(st, b));
+    };
+
+    // BƯỚC 0: XẾP THÀNH VIÊN CÁC TỔ ĐANG BỊ KHÓA (LOCKED TEAMS)
+    const lockedTeamsList = (seatingRules.lockedTeams || []).map(t => t.toLowerCase());
+    if (lockedTeamsList.length > 0) {
+      for (const tName of lockedTeamsList) {
+        const teamMembers = shuffleArray(copy.filter(s => !assignedIds.has(s.id) && s.team && s.team.toLowerCase() === tName));
+        const teamSlots = shuffleArray(allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === tName));
+        for (const st of teamMembers) {
+          const sortedSlots = getBestAvailableSlots(teamSlots, st);
+          const validSlot = sortedSlots[0] || getBestAvailableSlots(allSlots, st)[0];
+          if (validSlot) {
+            validSlot.occupiedBy = st;
+            st.team = validSlot.teamName;
+            st.desk = validSlot.desk;
+            st.seatCol = validSlot.seatCol;
+            assignedIds.add(st.id);
+          }
+        }
+      }
+    }
+
+    // BƯỚC 1: XẾP HỌC SINH CÓ VỊ TRÍ BÀN CỐ ĐỊNH (RULE 2 & RULE 5)
     if (seatingRules.fixedSeatRules && seatingRules.fixedSeatRules.length > 0) {
       for (const rule of seatingRules.fixedSeatRules) {
         const targetNick = rule.studentNickname.trim().toLowerCase();
@@ -1022,28 +1254,32 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
           s => !assignedIds.has(s.id) && ((s.nickname || '').toLowerCase() === targetNick || s.name.toLowerCase() === targetNick || s.name.toLowerCase().includes(targetNick))
         );
         if (student && rule.positions.length > 0) {
-          // Tìm slot trống đầu tiên khớp với một trong các vị trí cố định
-          for (const pos of rule.positions) {
+          for (const pos of shuffleArray(rule.positions)) {
             const slot = allSlots.find(
               sl => !sl.occupiedBy && sl.desk === pos.desk && sl.row === pos.row && sl.seatCol === pos.seatCol
             );
             if (slot) {
-              slot.occupiedBy = student;
-              student.team = slot.teamName;
-              student.desk = slot.desk;
-              student.seatCol = slot.seatCol;
-              assignedIds.add(student.id);
-              break;
+              if (isLeaderOrSub(student) && student.team && slot.teamName.toLowerCase() !== student.team.toLowerCase()) {
+                continue;
+              }
+              if (!checkAvoidViolation(student, slot)) {
+                slot.occupiedBy = student;
+                student.team = slot.teamName;
+                student.desk = slot.desk;
+                student.seatCol = slot.seatCol;
+                assignedIds.add(student.id);
+                break;
+              }
             }
           }
         }
       }
     }
 
-    // BƯỚC 2: XẾP CÁC CẶP ĐÔI CÙNG TIẾN (CÙNG BÀN, LIỀN KỀ)
+    // BƯỚC 2: XẾP CÁC CẶP ĐÔI CÙNG TIẾN (RULE 3 - RANDOM BÀN GHẾ)
     if (seatingRules.studyPairs.trim()) {
       const pairTokens = seatingRules.studyPairs.split(/[;,]+/).map(p => p.trim()).filter(Boolean);
-      for (const pToken of pairTokens) {
+      for (const pToken of shuffleArray(pairTokens)) {
         const parts = pToken.split(/[-–—]/).map(x => x.trim().toLowerCase());
         if (parts.length === 2) {
           const [n1, n2] = parts;
@@ -1051,27 +1287,35 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
           const st2 = copy.find(s => !assignedIds.has(s.id) && ((s.nickname || '').toLowerCase() === n2 || s.name.toLowerCase() === n2 || s.name.toLowerCase().includes(n2)));
 
           if (st1 && st2) {
-            // Tìm bàn có ít nhất 2 ghế trống kề nhau
             let placed = false;
-            for (let r = 1; r <= 2 && !placed; r++) {
-              for (let d = 1; d <= 6 && !placed; d++) {
+            for (const r of shuffleArray([1, 2])) {
+              if (placed) break;
+              for (const d of shuffleArray([1, 2, 3, 4, 5, 6])) {
+                if (placed) break;
                 const deskSlots = allSlots.filter(sl => sl.row === r && sl.desk === d);
                 for (let g = 0; g < deskSlots.length - 1; g++) {
-                  if (!deskSlots[g].occupiedBy && !deskSlots[g + 1].occupiedBy) {
-                    deskSlots[g].occupiedBy = st1;
-                    st1.team = deskSlots[g].teamName;
-                    st1.desk = deskSlots[g].desk;
-                    st1.seatCol = deskSlots[g].seatCol;
-                    assignedIds.add(st1.id);
+                  const sl1 = deskSlots[g];
+                  const sl2 = deskSlots[g + 1];
+                  if (!sl1.occupiedBy && !sl2.occupiedBy) {
+                    if (isLeaderOrSub(st1) && st1.team && sl1.teamName.toLowerCase() !== st1.team.toLowerCase()) continue;
+                    if (isLeaderOrSub(st2) && st2.team && sl2.teamName.toLowerCase() !== st2.team.toLowerCase()) continue;
 
-                    deskSlots[g + 1].occupiedBy = st2;
-                    st2.team = deskSlots[g + 1].teamName;
-                    st2.desk = deskSlots[g + 1].desk;
-                    st2.seatCol = deskSlots[g + 1].seatCol;
-                    assignedIds.add(st2.id);
+                    if (!checkAvoidViolation(st1, sl1) && !checkAvoidViolation(st2, sl2)) {
+                      sl1.occupiedBy = st1;
+                      st1.team = sl1.teamName;
+                      st1.desk = sl1.desk;
+                      st1.seatCol = sl1.seatCol;
+                      assignedIds.add(st1.id);
 
-                    placed = true;
-                    break;
+                      sl2.occupiedBy = st2;
+                      st2.team = sl2.teamName;
+                      st2.desk = sl2.desk;
+                      st2.seatCol = sl2.seatCol;
+                      assignedIds.add(st2.id);
+
+                      placed = true;
+                      break;
+                    }
                   }
                 }
               }
@@ -1081,78 +1325,159 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       }
     }
 
-    // BƯỚC 3: XẾP HỌC SINH KHÔNG ĐƯỢC GẦN NHAU (TÁCH XA NHAU TỐI ĐA TRONG TỪNG NHÓM)
-    if (seatingRules.avoidNearStudents.trim()) {
-      const avoidGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+    // BƯỚC 3: XẾP TỔ TRƯỞNG, TỔ PHÓ CHƯA XẾP (RULE 5)
+    const unassignedLeaders = shuffleArray(copy.filter(s => !assignedIds.has(s.id) && isLeaderOrSub(s) && s.team));
+    for (const leader of unassignedLeaders) {
+      const leaderTeamName = leader.team;
+      const teamSlots = shuffleArray(
+        allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === leaderTeamName.toLowerCase())
+      );
+      const sortedSlots = getBestAvailableSlots(teamSlots, leader);
+      const validSlot = sortedSlots[0] || getBestAvailableSlots(allSlots, leader)[0];
+      if (validSlot) {
+        validSlot.occupiedBy = leader;
+        leader.desk = validSlot.desk;
+        leader.seatCol = validSlot.seatCol;
+        assignedIds.add(leader.id);
+      }
+    }
 
-      for (const groupNames of avoidGroups) {
+    // BƯỚC 4: XẾP HỌC SINH KHÔNG ĐƯỢC GẦN NHAU CÒN LẠI (RULE 1)
+    if (seatingRules.avoidNearStudents.trim()) {
+      for (const groupNames of shuffleArray(avoidGroups)) {
         const avoidNames = groupNames.map(n => n.trim().toLowerCase()).filter(Boolean);
         if (avoidNames.length < 2) continue;
 
-        const groupStudents = copy.filter(
-          s => !assignedIds.has(s.id) && avoidNames.some(name => name === (s.nickname || '').toLowerCase() || s.name.toLowerCase() === name || s.name.toLowerCase().includes(name))
+        const groupStudents = shuffleArray(
+          copy.filter(
+            s => !assignedIds.has(s.id) && avoidNames.some(name => name === (s.nickname || '').toLowerCase() || s.name.toLowerCase() === name || s.name.toLowerCase().includes(name))
+          )
         );
 
         for (const st of groupStudents) {
-          let bestSlot: SeatSlot | null = null;
-          let maxMinDist = -1;
-
-          const freeSlots = allSlots.filter(sl => !sl.occupiedBy);
-          const placedGroupSlots = allSlots.filter(
-            sl => sl.occupiedBy && avoidNames.some(name => (sl.occupiedBy?.nickname || '').toLowerCase() === name || (sl.occupiedBy?.name || '').toLowerCase().includes(name))
-          );
-
-          for (const slot of freeSlots) {
-            if (placedGroupSlots.length === 0) {
-              bestSlot = slot;
-              break;
-            }
-
-            let minDist = 999;
-            for (const pSlot of placedGroupSlots) {
-              const isSameRow = slot.row === pSlot.row;
-              const dx = Math.abs(slot.x - pSlot.x);
-              const dy = Math.abs(slot.y - pSlot.y);
-              const dist = isSameRow ? Math.max(dx, dy) : Math.sqrt(dx * dx + dy * dy) + 5;
-              if (dist < minDist) minDist = dist;
-            }
-
-            if (minDist > maxMinDist) {
-              maxMinDist = minDist;
-              bestSlot = slot;
-            }
-          }
-
-          if (bestSlot) {
-            bestSlot.occupiedBy = st;
-            st.team = bestSlot.teamName;
-            st.desk = bestSlot.desk;
-            st.seatCol = bestSlot.seatCol;
+          const sortedSlots = getBestAvailableSlots(allSlots, st);
+          if (sortedSlots.length > 0) {
+            const slot = sortedSlots[0];
+            slot.occupiedBy = st;
+            st.team = slot.teamName;
+            st.desk = slot.desk;
+            st.seatCol = slot.seatCol;
             assignedIds.add(st.id);
           }
         }
       }
     }
 
-    // BƯỚC 4: XẾP CÁC HỌC SINH CÒN LẠI VÀO CÁC CHỖ TRỐNG THEO TỔ
-    const remainingStudents = copy.filter(s => !assignedIds.has(s.id));
-    let remIdx = 0;
+    // BƯỚC 5: XẾP HỌC SINH CÒN LẠI CÂN BẰNG NAM NỮ GIỮA CÁC TỔ
+    const teamNames = ['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'];
+    const remainingUnassigned = copy.filter(s => !assignedIds.has(s.id));
+    const femalesToAssign = shuffleArray(remainingUnassigned.filter(isFemaleStudent));
+    const malesToAssign = shuffleArray(remainingUnassigned.filter(s => !isFemaleStudent(s)));
 
-    for (const slot of allSlots) {
-      if (!slot.occupiedBy && remIdx < remainingStudents.length) {
-        const st = remainingStudents[remIdx++];
-        slot.occupiedBy = st;
-        st.team = slot.teamName;
-        st.desk = slot.desk;
-        st.seatCol = slot.seatCol;
+    const getTeamGenderCounts = () => {
+      const counts: Record<string, { female: number; male: number }> = {};
+      teamNames.forEach(tn => { counts[tn] = { female: 0, male: 0 }; });
+      allSlots.forEach(sl => {
+        if (sl.occupiedBy && counts[sl.teamName]) {
+          if (isFemaleStudent(sl.occupiedBy)) {
+            counts[sl.teamName].female++;
+          } else {
+            counts[sl.teamName].male++;
+          }
+        }
+      });
+      return counts;
+    };
+
+    // Phân bổ Nữ
+    for (const fSt of femalesToAssign) {
+      const counts = getTeamGenderCounts();
+      const sortedTeams = [...teamNames].sort((a, b) => counts[a].female - counts[b].female);
+
+      let placed = false;
+      for (const tName of sortedTeams) {
+        const freeSlots = allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === tName.toLowerCase());
+        const sortedSlots = getBestAvailableSlots(freeSlots, fSt);
+        if (sortedSlots[0]) {
+          const validSlot = sortedSlots[0];
+          validSlot.occupiedBy = fSt;
+          fSt.team = validSlot.teamName;
+          fSt.desk = validSlot.desk;
+          fSt.seatCol = validSlot.seatCol;
+          assignedIds.add(fSt.id);
+          placed = true;
+          break;
+        }
+      }
+
+      if (!placed) {
+        const anySlots = getBestAvailableSlots(allSlots, fSt);
+        if (anySlots[0]) {
+          anySlots[0].occupiedBy = fSt;
+          fSt.team = anySlots[0].teamName;
+          fSt.desk = anySlots[0].desk;
+          fSt.seatCol = anySlots[0].seatCol;
+          assignedIds.add(fSt.id);
+        }
+      }
+    }
+
+    // Phân bổ Nam
+    for (const mSt of malesToAssign) {
+      const counts = getTeamGenderCounts();
+      const sortedTeams = [...teamNames].sort((a, b) => counts[a].male - counts[b].male);
+
+      let placed = false;
+      for (const tName of sortedTeams) {
+        const freeSlots = allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === tName.toLowerCase());
+        const sortedSlots = getBestAvailableSlots(freeSlots, mSt);
+        if (sortedSlots[0]) {
+          const validSlot = sortedSlots[0];
+          validSlot.occupiedBy = mSt;
+          mSt.team = validSlot.teamName;
+          mSt.desk = validSlot.desk;
+          mSt.seatCol = validSlot.seatCol;
+          assignedIds.add(mSt.id);
+          placed = true;
+          break;
+        }
+      }
+
+      if (!placed) {
+        const anySlots = getBestAvailableSlots(allSlots, mSt);
+        if (anySlots[0]) {
+          anySlots[0].occupiedBy = mSt;
+          mSt.team = anySlots[0].teamName;
+          mSt.desk = anySlots[0].desk;
+          mSt.seatCol = anySlots[0].seatCol;
+          assignedIds.add(mSt.id);
+        }
       }
     }
 
     setStudents(copy);
+
+    // Cập nhật lại rawStudentsText với danh sách tổ viên mới
+    if (rawStudentsText.trim()) {
+      const lines = rawStudentsText.split('\n');
+      const updatedLines = lines.map((line, idx) => {
+        const parts = line.split(';').map(p => p.trim());
+        if (parts.length >= 4) {
+          const st = copy.find(s => s.id === `hs_${idx + 1}` || s.name.trim().toLowerCase() === parts[0].trim().toLowerCase());
+          if (st && st.team) {
+            parts[3] = st.team;
+            return parts.join('; ');
+          }
+        }
+        return line;
+      });
+      setRawStudentsText(updatedLines.join('\n'));
+    }
+
     const newViolations = validateSeatingViolations(copy, seatingRules);
     setActiveViolations(newViolations);
 
-    setSyncMessage('Đã tự động phân bổ sơ đồ lớp thông minh theo toàn bộ điều kiện cài đặt của Giáo viên!');
+    setSyncMessage('Đã tự động đổi phương án xếp chỗ ngồi mới đáp ứng 5 điều kiện cài đặt!');
     setTimeout(() => setSyncMessage(null), 3500);
   };
 
@@ -1701,7 +2026,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   const handleApplyDriveFile = async (file: DriveStoredFile) => {
     try {
-      setSyncMessage(`Đang đọc nội dung file ${file.name} từ Google Drive...`);
+      setSyncMessage(`Đang nạp trực tiếp file ${file.name} từ Google Drive vào app...`);
       const content = await fetchDriveFileJsonContent(file.id, file.content);
       if (!content) {
         alert(`Không thể đọc được nội dung của file ${file.name}. Vui lòng kiểm tra lại kết nối Drive.`);
@@ -1710,16 +2035,33 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       const data = content as SoDoLopSaveData;
       loadDataIntoState(data);
 
-      // Tải file JSON về máy tính của người dùng
-      downloadFileJson({ ...file, content: data });
-
-      setSyncMessage(`Đã nạp sơ đồ & Tải file ${file.name} về máy thành công!`);
+      setSyncMessage(`Đã nạp trực tiếp sơ đồ lớp "${file.name}" vào app thành công!`);
       setDriveFilesModalOpen(false);
       setTimeout(() => setSyncMessage(null), 3500);
     } catch (err) {
       console.error(err);
       alert('Đã xảy ra lỗi khi nạp dữ liệu từ file Drive.');
     }
+  };
+
+  const handleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        const data = JSON.parse(text) as SoDoLopSaveData;
+        loadDataIntoState(data);
+        setSyncMessage(`Đã nạp trực tiếp file JSON "${file.name}" vào app thành công!`);
+        setTimeout(() => setSyncMessage(null), 3500);
+      } catch (err) {
+        console.error(err);
+        alert('File JSON không hợp lệ hoặc bị lỗi định dạng!');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   const handleDeleteDriveFile = (file: DriveStoredFile) => {
@@ -2037,12 +2379,28 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 onChange={handleExcelUpload}
               />
 
+              <label
+                htmlFor="json-upload-input"
+                className="text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-3xs"
+                title="Nạp trực tiếp file JSON sơ đồ lớp từ máy tính vào ứng dụng"
+              >
+                <Zap className="w-3 h-3" />
+                <span>Nạp file JSON</span>
+              </label>
+              <input
+                type="file"
+                id="json-upload-input"
+                accept=".json"
+                className="hidden"
+                onChange={handleJsonFileUpload}
+              />
+
               {/* Nút Xếp chỗ ngồi tự động theo điều kiện */}
               <button
                 id="btn-auto-assign-with-rules"
-                onClick={handleAutoAssignWithRules}
+                onClick={() => setShowTeamLockModalBeforeAssign(true)}
                 className="text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-3xs"
-                title="Tự động phân bổ thông minh theo điều kiện: Không gần nhau, Vị trí cố định, Cặp đôi cùng tiến"
+                title="Tự động phân bổ thông minh: Chọn khóa tổ và xếp chỗ ngồi"
               >
                 <SlidersHorizontal className="w-3 h-3 text-purple-600" />
                 <span>Xếp chỗ ngồi</span>
@@ -2100,6 +2458,17 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 {paperOrientation === 'landscape' ? '📄 A4 Ngang' : '📄 A4 Dọc'}
               </button>
 
+              {/* Nút Xếp chỗ ngồi đáp ứng 5 điều kiện cài đặt */}
+              <button
+                id="btn-auto-assign-seating-rules"
+                onClick={() => setShowTeamLockModalBeforeAssign(true)}
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer transition-all hover:scale-105 active:scale-95"
+                title="Bấm để chọn khóa tổ và tiến hành xếp chỗ ngồi tự động"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-purple-200" />
+                <span>Xếp chỗ ngồi</span>
+              </button>
+
               {/* Đổi vị trí Cửa ⇄ Bàn GV */}
               <button
                 type="button"
@@ -2125,8 +2494,8 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         </div>
       </div>
 
-      {/* CẢNH BÁO VI PHẠM ĐIỀU KIỆN XẾP CHỖ (NẾU CÓ) */}
-      {activeViolations.length > 0 && (
+      {/* CẢNH BÁO VI PHẠM ĐIỀU KIỆN XẾP CHỖ (NẾU CÓ & KHI TÙY CHỌN BẬT) */}
+      {showViolationWarnings && activeViolations.length > 0 && (
         <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 shadow-sm space-y-2 animate-in fade-in print:hidden">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-rose-800 font-black text-xs uppercase tracking-wide">
@@ -2154,456 +2523,29 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         </div>
       )}
 
-      {/* CHÍNH: BỐ CỤC KHỔ A4 & THANH CHƯA XẾP CHỖ BÊN PHẢI */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-start">
-        
-        {/* VÙNG SƠ ĐỒ LỚP HỌC (CHỈ DUY NHẤT KHUNG NÀY ĐƯỢC XUẤT THÀNH FILE PNG) */}
-        <div
-          id="seating-diagram-only"
-          className={`bg-white p-6 rounded-none border-4 border-slate-950 shadow-2xs space-y-4 ${
-            isExportingPNG ? 'lg:col-span-4 w-full' : 'lg:col-span-3'
-          }`}
-          style={isExportingPNG ? {
-            width: paperOrientation === 'landscape' ? '1285px' : '850px',
-            minHeight: paperOrientation === 'landscape' ? '850px' : '1285px',
-            padding: '40px',
-            boxSizing: 'border-box',
-            backgroundColor: '#ffffff',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between'
-          } : undefined}
-        >
-          {/* TIÊU ĐỀ SƠ ĐỒ LỚP, CỬA RA VÀO, BẢNG & BÀN GIÁO VIÊN (LUÔN CỐ ĐỊNH Ở TRÊN CÙNG) */}
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-            {/* CỬA RA VÀO BLOCK */}
-            {(() => {
-              const DoorBlock = (
-                <div key="door-block" className="py-2.5 px-3.5 rounded-xl bg-slate-100 border-2 border-slate-300 text-slate-900 text-center font-black text-xs uppercase tracking-wider print:bg-white print:border-black print:text-black shadow-2xs shrink-0">
-                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
-                    🚪 CỬA RA VÀO
-                  </div>
-                </div>
-              );
-
-              const TeacherDeskBlock = (
-                <div key="teacher-block" className="py-2 px-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-center font-black text-xs uppercase tracking-wider print:bg-white print:border-black print:text-black shadow-2xs shrink-0">
-                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
-                    <div>💼 BÀN GIÁO VIÊN</div>
-                    {isExportingPNG ? (
-                      <div className="text-[10px] text-amber-900 font-bold normal-case mt-0.5 print:text-black flex flex-col gap-0.5">
-                        <div>GVCN: {headerInfo.teacherName}</div>
-                        <div>SĐT: {headerInfo.teacherPhone}</div>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center justify-center gap-1.5 text-[10px] text-amber-900 font-bold normal-case mt-0.5">
-                        <div className="flex items-center gap-1">
-                          <span>GVCN:</span>
-                          <input
-                            type="text"
-                            value={headerInfo.teacherName}
-                            onChange={e => setHeaderInfo(prev => ({ ...prev, teacherName: e.target.value }))}
-                            className="w-24 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
-                            title="Bấm để sửa tên GVCN"
-                          />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span>SĐT:</span>
-                          <input
-                            type="text"
-                            value={headerInfo.teacherPhone}
-                            onChange={e => setHeaderInfo(prev => ({ ...prev, teacherPhone: e.target.value }))}
-                            className="w-24 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
-                            title="Bấm để sửa SĐT GVCN"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-
-              const BoardBlock = (
-                <div key="board-block" className="flex-1 max-w-md text-center px-1">
-                  <div className="py-2 px-3 rounded-xl bg-slate-50/90 border-2 border-dashed border-slate-300 text-slate-800 text-center shadow-2xs print:bg-white print:border-black">
-                    <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
-                      <div className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-0.5 print:text-black">
-                        ━━━ 📌 BẢNG ━━━
-                      </div>
-                      <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-900 print:text-black flex items-center justify-center gap-1.5 flex-wrap">
-                        {isExportingPNG ? (
-                          <span>LỚP {headerInfo.className.replace(/^Lớp\s*/i, '').trim().toUpperCase()} - NĂM HỌC {getDynamicAcademicYear()}</span>
-                        ) : (
-                          <div className="flex items-center gap-1">
-                            <span>LỚP</span>
-                            <input
-                              type="text"
-                              value={headerInfo.className.replace(/^Lớp\s*/i, '')}
-                              onChange={e => setHeaderInfo(prev => ({ ...prev, className: `Lớp ${e.target.value}` }))}
-                              className="w-20 bg-white border border-indigo-300 rounded px-1.5 py-0.5 text-xs font-black text-indigo-950 uppercase text-center focus:outline-hidden"
-                              title="Bấm để sửa tên Lớp"
-                            />
-                            <span>- NĂM HỌC {getDynamicAcademicYear()}</span>
-                          </div>
-                        )}
-                      </span>
-
-                      {/* Chổ tuần áp dụng */}
-                      <div className="mt-1 text-[11px] text-slate-600 font-extrabold flex items-center justify-center gap-1.5 print:text-black">
-                        <span>Áp dụng từ tuần</span>
-                        {isExportingPNG ? (
-                          <span className="font-black text-indigo-950 text-xs px-1">{applyWeekNum}</span>
-                        ) : (
-                          <input
-                            type="number"
-                            min={1}
-                            max={52}
-                            value={applyWeekNum}
-                            onChange={e => setApplyWeekNum(Math.max(1, parseInt(e.target.value) || 1))}
-                            className="w-11 bg-white border border-slate-300 rounded-md px-1 py-0.5 text-center font-black text-indigo-950 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 shadow-2xs print:border-none print:w-auto"
-                            title="Thay đổi số tuần áp dụng"
-                          />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-
-              return doorOnLeft ? [DoorBlock, BoardBlock, TeacherDeskBlock] : [TeacherDeskBlock, BoardBlock, DoorBlock];
-            })()}
+      {/* THANH BỔ SUNG TRÊN CÙNG: KHU VỰC HỦY CHỖ NGỒI & DANH SÁCH HS CHƯA XẾP CHẾ ĐỘ RỘNG MÀN HÌNH NGHANG */}
+      {!isExportingPNG && (
+        <div className="bg-white p-3.5 rounded-2xl border-2 border-slate-900 shadow-xs flex flex-wrap items-center justify-between gap-3 print:hidden">
+          {/* Vùng Thả Hủy Chỗ */}
+          <div
+            onDragOver={handleDragOver}
+            onDrop={handleDropToUnassigned}
+            className="px-4 py-2 border-2 border-dashed border-amber-400 bg-amber-50 hover:bg-amber-100 rounded-xl text-amber-900 font-bold text-xs flex items-center gap-2 transition-colors cursor-pointer shrink-0 shadow-3xs"
+            title="Kéo thả học sinh từ bàn học vào đây để HỦY chỗ ngồi"
+          >
+            <XCircle className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Kéo học sinh vào đây để HỦY chỗ ngồi</span>
           </div>
 
-          {/* BỐ CỤC CÁC TỔ & SỐ BÀN (KHỔ A4 NGANG / DỌC) */}
-          <div className={`grid ${paperOrientation === 'landscape' ? 'grid-cols-1 md:grid-cols-2 gap-4' : 'grid-cols-1 gap-4'}`}>
-            {teamsConfig.map(teamConf => {
-              const teamName = teamConf.name;
-              const teamStudents = students.filter(s => s.team.toLowerCase() === teamName.toLowerCase());
-
-              // Render Tiêu đề Tổ
-              const renderTeamHeaderUI = () => (
-                <div className={viewPerspective === 'down' ? 'pt-2 border-t border-slate-100' : 'pb-2 border-b border-slate-100'}>
-                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
-                  <div>
-                    {editingTeamId === teamConf.id ? (
-                      <div className="bg-indigo-50/90 border border-indigo-200 p-2.5 rounded-xl space-y-2 my-1 shadow-sm w-full max-w-xs">
-                        <div className="flex items-center justify-between text-[11px] font-black text-indigo-900">
-                          <span>ĐỔI TÊN {teamConf.name.toUpperCase()}:</span>
-                          <button
-                            onClick={() => setEditingTeamId(null)}
-                            className="text-slate-400 hover:text-slate-600 text-xs font-bold"
-                          >
-                            ✕
-                          </button>
-                        </div>
-
-                        {/* Chọn từ phân tổ dữ liệu học sinh */}
-                        {classDataTeams.length > 0 && (
-                          <div className="space-y-1">
-                            <label className="text-[10px] font-extrabold text-slate-600 block">
-                              Chọn từ phân tổ lớp:
-                            </label>
-                            <select
-                              onChange={e => {
-                                if (e.target.value) {
-                                  setEditingTeamName(e.target.value);
-                                }
-                              }}
-                              className="w-full text-xs font-bold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                            >
-                              <option value="">-- Danh sách phân tổ trong dữ liệu --</option>
-                              {classDataTeams.map(ct => (
-                                <option key={ct} value={ct}>
-                                  📌 {ct} ({students.filter(s => s.team.toLowerCase() === ct.toLowerCase()).length} thành viên)
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
-
-                        {/* Hoặc nhập tên ngoài */}
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-extrabold text-slate-600 block">
-                            Hoặc nhập tên ngoài:
-                          </label>
-                          <input
-                            type="text"
-                            value={editingTeamName}
-                            onChange={e => setEditingTeamName(e.target.value)}
-                            placeholder="Nhập tên tổ..."
-                            className="w-full text-xs font-extrabold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500"
-                            autoFocus
-                          />
-                        </div>
-
-                        {/* Nút lưu & đồng bộ */}
-                        <div className="flex items-center gap-1.5 pt-1">
-                          <button
-                            onClick={() => handleSaveTeamNameAndSync(teamConf.id, teamConf.name, editingTeamName)}
-                            className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black cursor-pointer shadow-xs transition-colors"
-                          >
-                            Lưu & Đồng bộ
-                          </button>
-                          <button
-                            onClick={() => setEditingTeamId(null)}
-                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors"
-                          >
-                            Hủy
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <h3
-                        onClick={() => {
-                          setEditingTeamId(teamConf.id);
-                          setEditingTeamName(teamConf.name);
-                        }}
-                        className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 cursor-pointer hover:text-indigo-600 group"
-                        title="Bấm để chọn hoặc chỉnh sửa tên Tổ"
-                      >
-                        <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
-                        <span>{teamName}</span>
-                        {!isExportingPNG && <Edit3 className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 opacity-80 transition-opacity" />}
-                      </h3>
-                    )}
-                  </div>
-
-                  {!isExportingPNG && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2 py-0.5 rounded-full">
-                        {teamStudents.length} học sinh
-                      </span>
-
-                      <button
-                        onClick={() => handleResetTeamSeating(teamName)}
-                        className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer print:hidden"
-                        title={`Xóa chỗ ngồi tất cả học sinh trong ${teamName}`}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                        <span>Xếp lại</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-              );
-
-              return (
-                <div
-                  key={teamConf.id}
-                  className="bg-white rounded-2xl border-3 border-slate-950 shadow-xs p-3.5 space-y-3 flex flex-col justify-between print:border-3 print:border-black print:shadow-none"
-                >
-                  {/* Nhãn Tổ: Góc nhìn LÊN -> hiển thị trước các bàn */}
-                  {viewPerspective === 'up' && renderTeamHeaderUI()}
-
-                  {/* CÁC BÀN CỦA TỔ */}
-                  <div className="space-y-2.5 flex-1">
-                    {teamConf.desks.map(deskNum => {
-                      const deskStudents = teamStudents.filter(s => s.desk === deskNum);
-                      const deskKey = `${teamName}_${deskNum}`;
-                      const currentDeskSeats = customDeskSeats[deskKey] || seatsPerDesk;
-
-                      return (
-                        <div
-                          key={`desk_${teamName}_${deskNum}`}
-                          className="p-2 rounded-xl bg-slate-50/20 border-2 border-dashed border-slate-900 space-y-1.5 shadow-2xs print:bg-white print:border-2 print:border-dashed print:border-black"
-                        >
-                          {!isExportingPNG && (
-                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase px-1 print:hidden">
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-amber-900 font-extrabold">Bàn {deskNum}</span>
-                                <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-md px-1 py-0.5 shadow-2xs">
-                                  <span className="text-[9px] font-extrabold text-amber-900">Số ghế:</span>
-                                  <select
-                                    value={currentDeskSeats}
-                                    onChange={e => {
-                                      const val = parseInt(e.target.value);
-                                      setCustomDeskSeats(prev => ({ ...prev, [deskKey]: val }));
-                                    }}
-                                    className="bg-transparent text-amber-900 text-[10px] font-black focus:outline-hidden cursor-pointer"
-                                    title="Đổi số ghế của riêng bàn này"
-                                  >
-                                    <option value={2}>2</option>
-                                    <option value={3}>3</option>
-                                    <option value={4}>4</option>
-                                    <option value={5}>5</option>
-                                    <option value={6}>6</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <span className="text-slate-500 font-mono font-bold">{deskStudents.length}/{currentDeskSeats} ghế</span>
-                            </div>
-                          )}
-
-                          {/* MỖI BÀN LÀ 1 HÀNG NGANG VỚI SỐ GHẾ ĐỘNG (2, 3, 4, 5, 6 GHẾ) */}
-                           <div className={`grid ${getDeskGridColsClass(currentDeskSeats)} gap-1.5 items-center`}>
-                            {(() => {
-                              const items = currentDeskSeats === 2 ? [1, 'spacer', 2] : Array.from({ length: currentDeskSeats }, (_, i) => i + 1);
-                              return items.map((item, idx) => {
-                                if (item === 'spacer') {
-                                  return (
-                                    <div
-                                      key={`spacer_${teamName}_${deskNum}_${idx}`}
-                                      className="h-full pointer-events-none"
-                                    />
-                                  );
-                                }
-
-                                const colNum = item as number;
-                                const student = deskStudents.find(
-                                  s => s.seatCol === colNum || (!s.seatCol && deskStudents.indexOf(s) === colNum - 1)
-                                );
-
-                                const isSelected =
-                                  selectedSeat?.team.toLowerCase() === teamName.toLowerCase() &&
-                                  selectedSeat?.desk === deskNum &&
-                                  selectedSeat?.seatCol === colNum;
-
-                                if (student) {
-                                  const isMe = student.id === currentStudentId;
-                                  const isFemale = student.gender.toLowerCase() === 'nữ' || student.gender.toLowerCase() === 'nu';
-
-                                  const execBadge = student.titles.find(t => EXEC_TITLES.includes(t.toUpperCase()));
-                                  const doanBadge = student.titles.find(t => DOAN_TITLES.includes(t.toUpperCase()));
-                                  const teamBadge = student.titles.find(t => TEAM_TITLES.includes(t.toUpperCase()));
-                                  const subjectBadge = student.titles.find(t =>
-                                    SUBJECT_TITLES.some(st => t.toUpperCase().includes(st))
-                                  );
-
-                                  return (
-                                    <div
-                                      key={student.id}
-                                      draggable={!isExportingPNG}
-                                      onDragStart={e => handleDragStart(e, student.id)}
-                                      onClick={() => !isExportingPNG && handleSelectSeat(teamName, deskNum, colNum)}
-                                      className={`w-full rounded-2xl p-0.5 ${!isExportingPNG ? 'cursor-pointer transition-all' : ''} ${
-                                        isSelected && !isExportingPNG
-                                          ? 'ring-4 ring-indigo-600 shadow-md scale-105 bg-indigo-100/80 z-10'
-                                          : !isExportingPNG ? 'hover:ring-2 hover:ring-indigo-400' : ''
-                                      }`}
-                                      title={!isExportingPNG ? "Bấm để đổi học sinh hoặc hủy xếp chỗ" : undefined}
-                                    >
-                                      <StudentCardBox
-                                        isFemale={isFemale}
-                                        dieuHanh={execBadge}
-                                        to={teamBadge}
-                                        doan={doanBadge}
-                                        mon={subjectBadge}
-                                        nickname={student.nickname || student.name.trim().split(/\s+/).pop() || student.name}
-                                        fullName={student.name}
-                                        isMe={isMe}
-                                        rotate180={viewPerspective === 'down'}
-                                      />
-                                    </div>
-                                  );
-                                }
-
-                                // Nếu đang xuất PNG: trả về khung ghế trống sạch sẽ không chữ
-                                if (isExportingPNG) {
-                                  return (
-                                    <div
-                                      key={`empty_${teamName}_${deskNum}_col_${colNum}`}
-                                      className="min-h-[92px] border-2 border-dashed border-amber-200/50 rounded-2xl bg-white/50"
-                                    />
-                                  );
-                                }
-
-                                // Nếu ghế trống trong chế độ sửa: Bấm vào để mở Thanh Nổi hoặc Kéo thả vào
-                                return (
-                                  <div
-                                    key={`empty_${teamName}_${deskNum}_col_${colNum}`}
-                                    onDragOver={handleDragOver}
-                                    onDrop={e => handleDropOnSeat(e, teamName, deskNum, colNum)}
-                                    onClick={() => handleSelectSeat(teamName, deskNum, colNum)}
-                                    className={`min-h-[95px] border-2 border-dashed rounded-2xl transition-all flex flex-col items-center justify-center p-1 text-center cursor-pointer group ${
-                                      isSelected
-                                        ? 'border-indigo-600 bg-indigo-100/90 ring-4 ring-indigo-500 shadow-md animate-pulse'
-                                        : 'border-slate-300 bg-white/80 hover:bg-indigo-50/70 hover:border-indigo-400'
-                                    }`}
-                                    title={`Ghế ${colNum} bàn ${deskNum} trống (Bấm để chọn học sinh)`}
-                                  >
-                                    <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-indigo-600">
-                                      G{colNum}
-                                    </span>
-                                    <span className="text-slate-300 group-hover:text-indigo-500 text-xl font-light">
-                                      +
-                                    </span>
-                                    <span className="text-[9px] font-bold text-indigo-600 group-hover:underline">
-                                      Chọn HS
-                                    </span>
-                                  </div>
-                                );
-                              });
-                            })()}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Nhãn Tổ: Góc nhìn XUỐNG -> hiển thị sau bàn cuối */}
-                  {viewPerspective === 'down' && renderTeamHeaderUI()}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* LỀ PHẢI: DANH SÁCH HỌC SINH CHƯA XẾP CHỖ (STICKY SIDEBAR) */}
-        {!isExportingPNG && (
-          <div className="lg:col-span-1 bg-white border border-slate-200 rounded-2xl p-4 shadow-xs space-y-4 sticky top-4 print:hidden">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <h3 className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5">
-              <UserRound className="w-4 h-4 text-amber-600" />
-              <span>Chưa Xếp Chỗ</span>
-            </h3>
-            <span className="text-xs font-black bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full">
-              [{unassignedStudents.length}]
-            </span>
-          </div>
-
-          {/* VÙNG CHỈ DẪN KHI ĐANG CHỌN GHẾ TRÊN SƠ ĐỒ */}
-          {selectedSeat ? (
-            <div className="p-3 bg-indigo-600 text-white rounded-xl text-xs space-y-2 shadow-sm animate-in fade-in duration-200">
-              <div className="flex items-center justify-between">
-                <span className="font-black uppercase tracking-wider text-[11px] text-amber-300">
-                  🎯 Đang chọn vị trí:
-                </span>
-                <button
-                  onClick={() => setSelectedSeat(null)}
-                  className="text-white hover:text-rose-200 text-xs font-bold underline cursor-pointer"
-                >
-                  Bỏ chọn
-                </button>
-              </div>
-              <div className="text-sm font-extrabold bg-indigo-700 p-2 rounded-lg border border-indigo-500 text-center">
-                {selectedSeat.team} • Bàn {selectedSeat.desk} • Ghế {selectedSeat.seatCol}
-              </div>
-              <p className="text-[10px] text-indigo-100 text-center">
-                Bấm vào học sinh bên dưới để xếp ngay vào vị trí này!
-              </p>
-            </div>
-          ) : (
-            <div
-              onDragOver={handleDragOver}
-              onDrop={handleDropToUnassigned}
-              className="p-3 border-2 border-dashed border-amber-300 bg-amber-50/50 rounded-xl text-center text-xs text-amber-800 space-y-1 hover:bg-amber-100/60 transition-colors cursor-pointer"
-            >
-              <XCircle className="w-5 h-5 text-amber-600 mx-auto" />
-              <p className="font-bold text-[11px]">Kéo thả học sinh vào đây để HỦY chỗ ngồi</p>
-            </div>
-          )}
-
-          {/* DANH SÁCH THẺ HỌC SINH CHƯA XẾP CHỖ */}
-          <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
+          {/* Danh sách học sinh chưa xếp (dạng thanh ngang cuộn) */}
+          <div className="flex-1 flex items-center gap-2 overflow-x-auto py-1 px-1 min-w-[200px]">
             {unassignedStudents.length === 0 ? (
-              <div className="p-4 text-center text-xs text-slate-400 italic bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                Tất cả học sinh đã có chỗ ngồi trên sơ đồ!
-              </div>
+              <span className="text-xs font-semibold text-slate-500 italic bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                ✨ Tất cả học sinh đã có chỗ ngồi trên sơ đồ!
+              </span>
             ) : (
               unassignedStudents.map(st => {
                 const isFemale = st.gender.toLowerCase() === 'nữ' || st.gender.toLowerCase() === 'nu';
-
                 return (
                   <div
                     key={st.id}
@@ -2614,32 +2556,25 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                         handleAssignStudentToSelectedSeat(st.id);
                       }
                     }}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between shadow-2xs transition-all cursor-pointer group ${
+                    className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 shrink-0 shadow-3xs transition-all cursor-pointer ${
                       selectedSeat
-                        ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-300 ring-2 ring-indigo-400/50'
-                        : 'bg-slate-50 hover:bg-indigo-50/70 border-slate-200 hover:border-indigo-300 cursor-grab active:cursor-grabbing'
+                        ? 'bg-indigo-50 border-indigo-300 ring-2 ring-indigo-400'
+                        : 'bg-slate-50 hover:bg-indigo-50 border-slate-200 hover:border-indigo-300'
                     }`}
+                    title="Kéo vào bàn hoặc bấm chọn để xếp"
                   >
-                    <div className="flex items-center gap-2 overflow-hidden">
-                      <div className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0">
-                        {isFemale ? (
-                          <IconNu className="w-7 h-7 text-rose-600" />
-                        ) : (
-                          <IconNam className="w-7 h-7 text-indigo-700" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-bold text-xs text-slate-900 truncate">
-                          {st.nickname || st.name}
-                        </div>
-                        <div className="text-[10px] text-slate-400 truncate">
-                          {st.name}
-                        </div>
-                      </div>
+                    <div className="w-6 h-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shrink-0">
+                      {isFemale ? (
+                        <IconNu className="w-5 h-5 text-rose-600" />
+                      ) : (
+                        <IconNam className="w-5 h-5 text-indigo-700" />
+                      )}
                     </div>
-
-                    <span className="text-[10px] text-indigo-700 font-extrabold shrink-0 bg-white px-2 py-1 rounded-md border border-indigo-200 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                      {selectedSeat ? 'Xếp vào ô' : 'Kéo vào bàn'}
+                    <span className="text-xs font-black text-slate-900 truncate max-w-[100px]">
+                      {st.nickname || st.name}
+                    </span>
+                    <span className="text-[10px] font-bold text-indigo-700 bg-white px-1.5 py-0.5 rounded border border-indigo-200">
+                      {selectedSeat ? 'Xếp vào ô' : 'Kéo'}
                     </span>
                   </div>
                 );
@@ -2647,19 +2582,407 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             )}
           </div>
 
-          {/* NÚT TỰ ĐỘNG XẾP CHỖ CHO CÁC HS CHƯA CÓ BÀN */}
+          {/* Nút Xếp Tự Động các HS chưa xếp */}
           {unassignedStudents.length > 0 && (
             <button
               onClick={handleAutoAssignSeating}
-              className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-colors"
+              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-3xs cursor-pointer flex items-center gap-1.5 transition-colors shrink-0"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              <span>Xếp Tự Động {unassignedStudents.length} Học Sinh</span>
+              <span>Xếp tự động ({unassignedStudents.length})</span>
             </button>
           )}
         </div>
       )}
 
+      {/* VÙNG SƠ ĐỒ LỚP HỌC KHỔ RỘNG TOÀN MÀN HÌNH NGHANG (100% WIDTH) */}
+      <div
+        id="seating-diagram-only"
+        className="w-full bg-white p-6 rounded-none border-4 border-slate-950 shadow-2xs space-y-4"
+        style={isExportingPNG ? {
+          width: paperOrientation === 'landscape' ? '1285px' : '850px',
+          minHeight: paperOrientation === 'landscape' ? '850px' : '1285px',
+          padding: '40px',
+          boxSizing: 'border-box',
+          backgroundColor: '#ffffff',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between'
+        } : undefined}
+      >
+        {/* TIÊU ĐỀ SƠ ĐỒ LỚP, CỬA RA VÀO, BẢNG & BÀN GIÁO VIÊN (LUÔN CỐ ĐỊNH Ở TRÊN CÙNG) */}
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+          {/* CỬA RA VÀO BLOCK */}
+          {(() => {
+            const DoorBlock = (
+              <div key="door-block" className="py-2.5 px-3.5 rounded-xl bg-slate-100 border-2 border-slate-300 text-slate-900 text-center font-black text-xs uppercase tracking-wider print:bg-white print:border-black print:text-black shadow-2xs shrink-0">
+                <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                  🚪 CỬA RA VÀO
+                </div>
+              </div>
+            );
+
+            const TeacherDeskBlock = (
+              <div key="teacher-block" className="py-2 px-3.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-center font-black text-xs uppercase tracking-wider print:bg-white print:border-black print:text-black shadow-2xs shrink-0">
+                <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                  <div>💼 BÀN GIÁO VIÊN</div>
+                  {isExportingPNG ? (
+                    <div className="text-[10px] text-amber-900 font-bold normal-case mt-0.5 print:text-black flex flex-col gap-0.5">
+                      <div>GVCN: {headerInfo.teacherName}</div>
+                      <div>SĐT: {headerInfo.teacherPhone}</div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center gap-1.5 text-[10px] text-amber-900 font-bold normal-case mt-0.5">
+                      <div className="flex items-center gap-1">
+                        <span>GVCN:</span>
+                        <input
+                          type="text"
+                          value={headerInfo.teacherName}
+                          onChange={e => setHeaderInfo(prev => ({ ...prev, teacherName: e.target.value }))}
+                          className="w-24 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
+                          title="Bấm để sửa tên GVCN"
+                        />
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span>SĐT:</span>
+                        <input
+                          type="text"
+                          value={headerInfo.teacherPhone}
+                          onChange={e => setHeaderInfo(prev => ({ ...prev, teacherPhone: e.target.value }))}
+                          className="w-24 bg-white/90 border border-amber-300 rounded px-1 py-0.5 text-[10px] font-black text-amber-950 focus:outline-hidden"
+                          title="Bấm để sửa SĐT GVCN"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+
+            const BoardBlock = (
+              <div key="board-block" className="flex-1 max-w-md text-center px-1">
+                <div className="py-2 px-3 rounded-xl bg-slate-50/90 border-2 border-dashed border-slate-300 text-slate-800 text-center shadow-2xs print:bg-white print:border-black">
+                  <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                    <div className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-0.5 print:text-black">
+                      ━━━ 📌 BẢNG ━━━
+                    </div>
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-indigo-900 print:text-black flex items-center justify-center gap-1.5 flex-wrap">
+                      {isExportingPNG ? (
+                        <span>LỚP {headerInfo.className.replace(/^Lớp\s*/i, '').trim().toUpperCase()} - NĂM HỌC {getDynamicAcademicYear()}</span>
+                      ) : (
+                        <div className="flex items-center gap-1">
+                          <span>LỚP</span>
+                          <input
+                            type="text"
+                            value={headerInfo.className.replace(/^Lớp\s*/i, '')}
+                            onChange={e => setHeaderInfo(prev => ({ ...prev, className: `Lớp ${e.target.value}` }))}
+                            className="w-20 bg-white border border-indigo-300 rounded px-1.5 py-0.5 text-xs font-black text-indigo-950 uppercase text-center focus:outline-hidden"
+                            title="Bấm để sửa tên Lớp"
+                          />
+                          <span>- NĂM HỌC {getDynamicAcademicYear()}</span>
+                        </div>
+                      )}
+                    </span>
+
+                    {/* Chổ tuần áp dụng */}
+                    <div className="mt-1 text-[11px] text-slate-600 font-extrabold flex items-center justify-center gap-1.5 print:text-black">
+                      <span>Áp dụng từ tuần</span>
+                      {isExportingPNG ? (
+                        <span className="font-black text-indigo-950 text-xs px-1">{applyWeekNum}</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min={1}
+                          max={52}
+                          value={applyWeekNum}
+                          onChange={e => setApplyWeekNum(Math.max(1, parseInt(e.target.value) || 1))}
+                          className="w-11 bg-white border border-slate-300 rounded-md px-1 py-0.5 text-center font-black text-indigo-950 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 shadow-2xs print:border-none print:w-auto"
+                          title="Thay đổi số tuần áp dụng"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+
+            return doorOnLeft ? [DoorBlock, BoardBlock, TeacherDeskBlock] : [TeacherDeskBlock, BoardBlock, DoorBlock];
+          })()}
+        </div>
+
+        {/* BỐ CỤC CÁC TỔ & SỐ BÀN (KHỔ A4 NGANG / DỌC) */}
+        <div className={`grid ${paperOrientation === 'landscape' ? 'grid-cols-1 md:grid-cols-2 gap-4' : 'grid-cols-1 gap-4'}`}>
+          {teamsConfig.map(teamConf => {
+            const teamName = teamConf.name;
+            const teamStudents = students.filter(s => s.team.toLowerCase() === teamName.toLowerCase());
+
+            // Render Tiêu đề Tổ
+            const renderTeamHeaderUI = () => (
+              <div className={viewPerspective === 'down' ? 'pt-2 border-t border-slate-100' : 'pb-2 border-b border-slate-100'}>
+                <div className={`transition-transform duration-300 ${viewPerspective === 'down' ? 'rotate-180' : ''}`}>
+                <div>
+                  {editingTeamId === teamConf.id ? (
+                    <div className="bg-indigo-50/90 border border-indigo-200 p-2.5 rounded-xl space-y-2 my-1 shadow-sm w-full max-w-xs">
+                      <div className="flex items-center justify-between text-[11px] font-black text-indigo-900">
+                        <span>ĐỔI TÊN {teamConf.name.toUpperCase()}:</span>
+                        <button
+                          onClick={() => setEditingTeamId(null)}
+                          className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* Chọn từ phân tổ dữ liệu học sinh */}
+                      {classDataTeams.length > 0 && (
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-extrabold text-slate-600 block">
+                            Chọn từ phân tổ lớp:
+                          </label>
+                          <select
+                            onChange={e => {
+                              if (e.target.value) {
+                                setEditingTeamName(e.target.value);
+                              }
+                            }}
+                            className="w-full text-xs font-bold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="">-- Danh sách phân tổ trong dữ liệu --</option>
+                            {classDataTeams.map(ct => (
+                              <option key={ct} value={ct}>
+                                📌 {ct} ({students.filter(s => s.team.toLowerCase() === ct.toLowerCase()).length} thành viên)
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {/* Hoặc nhập tên ngoài */}
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-extrabold text-slate-600 block">
+                          Hoặc nhập tên ngoài:
+                        </label>
+                        <input
+                          type="text"
+                          value={editingTeamName}
+                          onChange={e => setEditingTeamName(e.target.value)}
+                          placeholder="Nhập tên tổ..."
+                          className="w-full text-xs font-extrabold p-1.5 border border-indigo-300 rounded-lg bg-white text-slate-900 focus:ring-2 focus:ring-indigo-500"
+                          autoFocus
+                        />
+                      </div>
+
+                      {/* Nút lưu & đồng bộ */}
+                      <div className="flex items-center gap-1.5 pt-1">
+                        <button
+                          onClick={() => handleSaveTeamNameAndSync(teamConf.id, teamConf.name, editingTeamName)}
+                          className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-black cursor-pointer shadow-xs transition-colors"
+                        >
+                          Lưu & Đồng bộ
+                        </button>
+                        <button
+                          onClick={() => setEditingTeamId(null)}
+                          className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+                        >
+                          Hủy
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <h3
+                      onClick={() => {
+                        setEditingTeamId(teamConf.id);
+                        setEditingTeamName(teamConf.name);
+                      }}
+                      className="font-extrabold text-sm text-slate-900 flex items-center gap-1.5 cursor-pointer hover:text-indigo-600 group"
+                      title="Bấm để chọn hoặc chỉnh sửa tên Tổ"
+                    >
+                      <span className="w-2.5 h-2.5 rounded-full bg-indigo-600" />
+                      <span>{teamName}</span>
+                      {!isExportingPNG && <Edit3 className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 opacity-80 transition-opacity" />}
+                    </h3>
+                  )}
+                </div>
+
+                {!isExportingPNG && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200/80 px-2 py-0.5 rounded-full">
+                      {teamStudents.length} học sinh
+                    </span>
+
+                    <button
+                      onClick={() => handleResetTeamSeating(teamName)}
+                      className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer print:hidden"
+                      title={`Xóa chỗ ngồi tất cả học sinh trong ${teamName}`}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Xếp lại</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+            );
+
+            return (
+              <div
+                key={teamConf.id}
+                className="bg-white rounded-2xl border-3 border-slate-950 shadow-xs p-3.5 space-y-3 flex flex-col justify-between print:border-3 print:border-black print:shadow-none"
+              >
+                {/* Nhãn Tổ: Góc nhìn LÊN -> hiển thị trước các bàn */}
+                {viewPerspective === 'up' && renderTeamHeaderUI()}
+
+                {/* CÁC BÀN CỦA TỔ */}
+                <div className="space-y-2.5 flex-1">
+                  {teamConf.desks.map(deskNum => {
+                    const deskStudents = teamStudents.filter(s => s.desk === deskNum);
+                    const deskKey = `${teamName}_${deskNum}`;
+                    const currentDeskSeats = customDeskSeats[deskKey] || seatsPerDesk;
+
+                    return (
+                      <div
+                        key={`desk_${teamName}_${deskNum}`}
+                        className="p-2 rounded-xl bg-slate-50/20 border-2 border-dashed border-slate-900 space-y-1.5 shadow-2xs print:bg-white print:border-2 print:border-dashed print:border-black"
+                      >
+                        {!isExportingPNG && (
+                          <div className="flex items-center justify-between text-[10px] font-bold text-slate-500 uppercase px-1 print:hidden">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-amber-900 font-extrabold">Bàn {deskNum}</span>
+                              <div className="flex items-center gap-1 bg-white border border-amber-300 rounded-md px-1 py-0.5 shadow-2xs">
+                                <span className="text-[9px] font-extrabold text-amber-900">Số ghế:</span>
+                                <select
+                                  value={currentDeskSeats}
+                                  onChange={e => {
+                                    const val = parseInt(e.target.value);
+                                    setCustomDeskSeats(prev => ({ ...prev, [deskKey]: val }));
+                                  }}
+                                  className="bg-transparent text-amber-900 text-[10px] font-black focus:outline-hidden cursor-pointer"
+                                  title="Đổi số ghế của riêng bàn này"
+                                >
+                                  <option value={2}>2</option>
+                                  <option value={3}>3</option>
+                                  <option value={4}>4</option>
+                                  <option value={5}>5</option>
+                                  <option value={6}>6</option>
+                                </select>
+                              </div>
+                            </div>
+                            <span className="text-slate-500 font-mono font-bold">{deskStudents.length}/{currentDeskSeats} ghế</span>
+                          </div>
+                        )}
+
+                        {/* MỖI BÀN LÀ 1 HÀNG NGANG VỚI SỐ GHẾ ĐỘNG (2, 3, 4, 5, 6 GHẾ) */}
+                         <div className={`grid ${getDeskGridColsClass(currentDeskSeats)} gap-1.5 items-center`}>
+                          {(() => {
+                            const items = currentDeskSeats === 2 ? [1, 'spacer', 2] : Array.from({ length: currentDeskSeats }, (_, i) => i + 1);
+                            return items.map((item, idx) => {
+                              if (item === 'spacer') {
+                                return (
+                                  <div
+                                    key={`spacer_${teamName}_${deskNum}_${idx}`}
+                                    className="h-full pointer-events-none"
+                                  />
+                                );
+                              }
+
+                              const colNum = item as number;
+                              const student = deskStudents.find(
+                                s => s.seatCol === colNum || (!s.seatCol && deskStudents.indexOf(s) === colNum - 1)
+                              );
+
+                              const isSelected =
+                                selectedSeat?.team.toLowerCase() === teamName.toLowerCase() &&
+                                selectedSeat?.desk === deskNum &&
+                                selectedSeat?.seatCol === colNum;
+
+                              if (student) {
+                                const isMe = student.id === currentStudentId;
+                                const isFemale = student.gender.toLowerCase() === 'nữ' || student.gender.toLowerCase() === 'nu';
+
+                                const execBadge = student.titles.find(t => EXEC_TITLES.includes(t.toUpperCase()));
+                                const doanBadge = student.titles.find(t => DOAN_TITLES.includes(t.toUpperCase()));
+                                const teamBadge = student.titles.find(t => TEAM_TITLES.includes(t.toUpperCase()));
+                                const subjectBadge = student.titles.find(t =>
+                                  SUBJECT_TITLES.some(st => t.toUpperCase().includes(st))
+                                );
+
+                                return (
+                                  <div
+                                    key={student.id}
+                                    draggable={!isExportingPNG}
+                                    onDragStart={e => handleDragStart(e, student.id)}
+                                    onClick={() => !isExportingPNG && handleSelectSeat(teamName, deskNum, colNum)}
+                                    className={`w-full rounded-2xl p-0.5 ${!isExportingPNG ? 'cursor-pointer transition-all' : ''} ${
+                                      isSelected && !isExportingPNG
+                                        ? 'ring-4 ring-indigo-600 shadow-md scale-105 bg-indigo-100/80 z-10'
+                                        : !isExportingPNG ? 'hover:ring-2 hover:ring-indigo-400' : ''
+                                    }`}
+                                    title={!isExportingPNG ? "Bấm để đổi học sinh hoặc hủy xếp chỗ" : undefined}
+                                  >
+                                    <StudentCardBox
+                                      isFemale={isFemale}
+                                      dieuHanh={execBadge}
+                                      to={teamBadge}
+                                      doan={doanBadge}
+                                      mon={subjectBadge}
+                                      nickname={student.nickname || student.name.trim().split(/\s+/).pop() || student.name}
+                                      fullName={student.name}
+                                      isMe={isMe}
+                                      rotate180={viewPerspective === 'down'}
+                                    />
+                                  </div>
+                                );
+                              }
+
+                              // Nếu đang xuất PNG: trả về khung ghế trống sạch sẽ không chữ
+                              if (isExportingPNG) {
+                                return (
+                                  <div
+                                    key={`empty_${teamName}_${deskNum}_col_${colNum}`}
+                                    className="min-h-[92px] border-2 border-dashed border-amber-200/50 rounded-2xl bg-white/50"
+                                  />
+                                );
+                              }
+
+                              // Nếu ghế trống trong chế độ sửa: Bấm vào để mở Thanh Nổi hoặc Kéo thả vào
+                              return (
+                                <div
+                                  key={`empty_${teamName}_${deskNum}_col_${colNum}`}
+                                  onDragOver={handleDragOver}
+                                  onDrop={e => handleDropOnSeat(e, teamName, deskNum, colNum)}
+                                  onClick={() => handleSelectSeat(teamName, deskNum, colNum)}
+                                  className={`min-h-[95px] border-2 border-dashed rounded-2xl transition-all flex flex-col items-center justify-center p-1 text-center cursor-pointer group ${
+                                    isSelected
+                                      ? 'border-indigo-600 bg-indigo-100/90 ring-4 ring-indigo-500 shadow-md animate-pulse'
+                                      : 'border-slate-300 bg-white/80 hover:bg-indigo-50/70 hover:border-indigo-400'
+                                  }`}
+                                  title={`Ghế ${colNum} bàn ${deskNum} trống (Bấm để chọn học sinh)`}
+                                >
+                                  <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-indigo-600">
+                                    G{colNum}
+                                  </span>
+                                  <span className="text-slate-300 group-hover:text-indigo-500 text-xl font-light">
+                                    +
+                                  </span>
+                                  <span className="text-[9px] font-bold text-indigo-600 group-hover:underline">
+                                    Chọn HS
+                                  </span>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Nhãn Tổ: Góc nhìn XUỐNG -> hiển thị sau bàn cuối */}
+                {viewPerspective === 'down' && renderTeamHeaderUI()}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* FOOTER CỐ ĐỊNH THỐNG KÊ LỚP HỌC */}
@@ -2893,7 +3216,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             {/* List */}
             <div className="p-4 overflow-y-auto space-y-2.5 flex-1">
               <p className="text-xs text-slate-500 font-medium">
-                Thư mục mặc định: <span className="font-bold text-slate-700">myApp\LopU\SoDoLop</span>. Chọn file JSON để nạp dữ liệu và tải về máy:
+                Thư mục mặc định: <span className="font-bold text-slate-700">myApp\LopU\SoDoLop</span>. Chọn file sơ đồ lớp trên Drive để nạp trực tiếp vào ứng dụng:
               </p>
 
               {isLoadingDriveFiles ? (
@@ -2926,10 +3249,18 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => handleApplyDriveFile(file)}
-                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[11px] font-black cursor-pointer shadow-3xs transition-colors flex items-center gap-1"
+                          className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[11px] font-black cursor-pointer shadow-3xs transition-colors flex items-center gap-1"
+                          title="Nạp dữ liệu sơ đồ lớp này trực tiếp vào ứng dụng"
                         >
-                          <Download className="w-3 h-3" />
-                          <span>Tải về & Nạp</span>
+                          <Zap className="w-3.5 h-3.5" />
+                          <span>🚀 Nạp vào app ngay</span>
+                        </button>
+                        <button
+                          onClick={() => downloadFileJson({ ...file })}
+                          className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors border border-transparent hover:border-indigo-200"
+                          title="Tải file JSON về máy tính (Tùy chọn)"
+                        >
+                          <Download className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDeleteDriveFile(file)}
@@ -3712,6 +4043,84 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 )}
               </div>
 
+              {/* TRƯỜNG 4: HIỂN THỊ CẢNH BÁO VI PHẠM & NÚT TỰ ĐỘNG SỬA VI PHẠM */}
+              <div className="bg-amber-50/90 border border-amber-200 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="toggle-show-violation-warnings" className="font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2 cursor-pointer select-none">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                    <span>4. Cảnh báo vi phạm điều kiện xếp chỗ của Giáo viên</span>
+                  </label>
+                  
+                  <div className="flex items-center gap-2 shrink-0 bg-white px-3 py-1.5 rounded-xl border border-amber-300 shadow-3xs">
+                    <input
+                      type="checkbox"
+                      id="toggle-show-violation-warnings"
+                      checked={showViolationWarnings}
+                      onChange={e => handleToggleShowViolationWarnings(e.target.checked)}
+                      className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
+                    />
+                    <label htmlFor="toggle-show-violation-warnings" className="text-xs font-bold text-purple-900 cursor-pointer select-none">
+                      {showViolationWarnings ? 'Hiện Cảnh Báo & Nút Tự Động Sửa' : 'Ẩn Cảnh Báo & Nút Tự Động Sửa'}
+                    </label>
+                  </div>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  💡 <strong>Quy tắc hoạt động:</strong> Khi tích chọn, hệ thống sẽ hiển thị ô cảnh báo đỏ (ví dụ: <em>"Phát hiện 3 vi phạm điều kiện xếp chỗ của Giáo viên"</em>) cùng nút <strong>"Tự động sửa vi phạm"</strong>. Khi bỏ chọn checkbox này, khung cảnh báo vi phạm và nút tự động sửa vi phạm sẽ ẩn đi hoàn toàn.
+                </p>
+              </div>
+
+              {/* TRƯỜNG 5: KHÓA GIỮ NGUYÊN THÀNH VIÊN TỔ */}
+              <div className="bg-sky-50/90 border border-sky-200 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <label className="font-extrabold text-slate-900 uppercase tracking-wide flex items-center gap-2 select-none">
+                    <span className="w-2.5 h-2.5 rounded-full bg-sky-600" />
+                    <span>5. Khóa không thay đổi thành viên của Tổ (Chỉ xáo trộn chỗ trong nội bộ Tổ)</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-sky-800 bg-white px-2 py-0.5 rounded-md border border-sky-200">
+                    {(seatingRules.lockedTeams || []).length > 0 ? `Đã khóa ${(seatingRules.lockedTeams || []).length} tổ` : 'Chưa khóa tổ nào'}
+                  </span>
+                </div>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  💡 <strong>Hướng dẫn:</strong> Chọn các tổ mà bạn <strong>không muốn thay đổi thành viên</strong> khi đổi sơ đồ lớp. Các học sinh thuộc tổ được chọn sẽ chỉ xáo trộn vị trí trong các bàn thuộc tổ đó, không bị di chuyển sang tổ khác.
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'].map((tName) => {
+                    const isLocked = (seatingRules.lockedTeams || []).some(t => t.toLowerCase() === tName.toLowerCase());
+                    return (
+                      <label
+                        key={tName}
+                        className={`flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-bold cursor-pointer transition-all shadow-3xs ${
+                          isLocked
+                            ? 'bg-sky-600 text-white border-sky-700 ring-2 ring-sky-300'
+                            : 'bg-white text-slate-800 border-slate-200 hover:bg-sky-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isLocked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSeatingRules(prev => {
+                              const currentLocked = prev.lockedTeams || [];
+                              let nextLocked: string[];
+                              if (checked) {
+                                nextLocked = Array.from(new Set([...currentLocked, tName]));
+                              } else {
+                                nextLocked = currentLocked.filter(t => t.toLowerCase() !== tName.toLowerCase());
+                              }
+                              return { ...prev, lockedTeams: nextLocked };
+                            });
+                          }}
+                          className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
+                        />
+                        <span>🔒 Khóa {tName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
             </div>
 
             {/* Footer buttons */}
@@ -3752,6 +4161,110 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                   <span>Phân Tự Động Theo Điều Kiện</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Chọn Khóa Tổ Trực Tiếp Trước Khi Xếp Chỗ Ngồi */}
+      {showTeamLockModalBeforeAssign && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200 print:hidden">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-sky-50 to-indigo-50">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-sky-600 text-white rounded-2xl shadow-sm">
+                  <SlidersHorizontal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900 tracking-tight">
+                    Cài Đặt Khóa Tổ Trước Khi Xếp Chỗ Ngồi
+                  </h3>
+                  <p className="text-xs text-slate-500 font-medium">
+                    Chọn các tổ không thay đổi thành viên trước khi tiến hành xếp chỗ
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTeamLockModalBeforeAssign(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-5 space-y-4 text-xs">
+              <div className="bg-sky-50 border border-sky-200 rounded-2xl p-4 space-y-3">
+                <label className="font-black text-slate-900 uppercase tracking-wide flex items-center gap-2 select-none text-xs">
+                  <span className="w-2.5 h-2.5 rounded-full bg-sky-600" />
+                  <span>5. KHÓA KHÔNG THAY ĐỔI THÀNH VIÊN CỦA TỔ (CHỈ XÁO TRỘN CHỖ TRONG NỘI BỘ TỔ)</span>
+                </label>
+                <p className="text-slate-600 leading-relaxed text-[11px]">
+                  💡 Chọn các tổ mà bạn <strong>không muốn thay đổi thành viên</strong> khi đổi sơ đồ lớp. Các học sinh thuộc tổ được chọn sẽ chỉ xáo trộn vị trí trong nội bộ tổ đó.
+                </p>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  {['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'].map((tName) => {
+                    const isLocked = (seatingRules.lockedTeams || []).some(t => t.toLowerCase() === tName.toLowerCase());
+                    return (
+                      <label
+                        key={tName}
+                        className={`flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
+                          isLocked
+                            ? 'bg-sky-600 text-white border-sky-700 ring-2 ring-sky-300 shadow-3xs'
+                            : 'bg-white text-slate-800 border-slate-200 hover:bg-sky-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isLocked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSeatingRules(prev => {
+                              const currentLocked = prev.lockedTeams || [];
+                              let nextLocked: string[];
+                              if (checked) {
+                                nextLocked = Array.from(new Set([...currentLocked, tName]));
+                              } else {
+                                nextLocked = currentLocked.filter(t => t.toLowerCase() !== tName.toLowerCase());
+                              }
+                              return { ...prev, lockedTeams: nextLocked };
+                            });
+                          }}
+                          className="w-4 h-4 text-sky-600 rounded border-slate-300 focus:ring-sky-500 cursor-pointer"
+                        />
+                        <span>🔒 Khóa {tName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-3 text-[11px] text-amber-900 font-medium">
+                💡 <strong>Tối ưu 3 năm học:</strong> Hệ thống tự động tra cứu lịch sử 30 sơ đồ lớp gần nhất để đặt kề nhau (8 hướng) cho các cặp học sinh CHƯA BAO GIỜ ngồi cạnh nhau trước đó!
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2">
+              <button
+                onClick={() => setShowTeamLockModalBeforeAssign(false)}
+                className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={() => {
+                  saveClassSeatingRules(selectedClassId, seatingRules);
+                  setShowTeamLockModalBeforeAssign(false);
+                  handleAutoAssignWithRules();
+                }}
+                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <SlidersHorizontal className="w-4 h-4" />
+                <span>🚀 Tiến Hành Xếp Chỗ</span>
+              </button>
             </div>
           </div>
         </div>

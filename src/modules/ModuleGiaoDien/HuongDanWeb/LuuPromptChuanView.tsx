@@ -100,6 +100,52 @@ Bây giờ, hãy thực hiện BƯỚC 1!`,
     ]
   },
   {
+    id: 'lam-de',
+    name: 'Làm Đề',
+    items: [
+      {
+        id: 'lam-de-kt-theo-ma-tran',
+        name: 'Làm đề KT theo Ma trận',
+        prompt: `Bạn là một chuyên gia giáo dục môn Toán, am hiểu sâu sắc về ma trận, đặc tả và các năng lực toán học (TD - Tư duy lập luận toán học; GQ - Giải quyết vấn đề toán học; MH - Mô hình hóa toán học) theo chương trình GDPT 2018. Hãy giúp tôi tạo một đề kiểm tra Toán dựa trên các tài liệu đính kèm (nếu có) thông qua 3 bước bắt buộc sau:
+
+Bước 1: Xác định và chốt Ma trận (Dạng thức câu hỏi -> Đơn vị kiến thức)
+- Dựa vào file đính kèm (nếu có) hoặc tự xây dựng một ma trận chuẩn gồm 4 phần (10 điểm):
+  + Phần I. Trắc nghiệm nhiều phương án lựa chọn (12 câu - 3,0đ): 100% mức độ Nhận biết.
+  + Phần II. Trắc nghiệm Đúng/Sai (4 câu lớn, 16 ý - 4,0đ): Phân bổ các ý Nhận biết, Thông hiểu và Vận dụng vào các chủ đề (Đơn điệu/Cực trị, Max/Min, Tiệm cận/Đồ thị, Ứng dụng thực tiễn).
+  + Phần III. Trắc nghiệm Trả lời ngắn (4 câu - 1,0đ): 100% mức độ Vận dụng. Chú ý: Câu Vận dụng về Tính đơn điệu KHÔNG dùng tham số $m$, KHÔNG dùng hàm hợp, bắt buộc ra dạng: Xét tính đơn điệu của hàm căn thức.
+  + Phần IV. Tự luận (2 câu - 2,0đ): 100% mức độ Thông hiểu (nội dung: Tìm khoảng đơn điệu, cực trị của hàm đa thức và hàm phân thức).
+- Hành động: In ra cấu trúc ma trận chi tiết và DỪNG LẠI để tôi xác nhận.
+
+Bước 2: Xác định và chốt Đặc tả chi tiết
+- Trích xuất 100% các "Yêu cầu cần đạt" gốc từ file ma trận (nếu có), tuyệt đối không bỏ sót.
+- Phân rã thành các hành vi đo lường cụ thể theo 3 mức độ (Biết, Hiểu, VD) và 3 năng lực. Nguyên tắc phân định:
+  + TD (Tư duy toán học): Nhận diện hình thức, đọc đồ thị/bảng biến thiên, so sánh, phân loại, tìm quy luật, chọn mệnh đề đúng/sai (Không yêu cầu tính toán).
+  + GQ (Giải quyết vấn đề): Thực thi tính toán, giải phương trình/bất phương trình, đạo hàm, lập bảng biến thiên 3 dòng, tìm đáp số.
+  + MH (Mô hình hóa): Dịch ngôn ngữ thực tiễn (tối ưu hóa kinh tế, hình học) thành hàm mục tiêu toán học.
+- Hành động: In ra bản đặc tả chi tiết và DỪNG LẠI để tôi xác nhận.
+
+Bước 3: Xuất toàn bộ Đề kiểm tra và Lời giải (Vào một khối mã - Code block)
+- Tỷ lệ lấy nguồn câu hỏi: 4,0 điểm lấy y nguyên từ đề cương; 2,0 điểm lấy từ đề cương và thay số; 4,0 điểm xây dựng mới hoàn toàn (bên ngoài).
+- Chú ý hình ảnh/đồ thị: Mô tả bằng văn bản thật chi tiết (tọa độ đỉnh, điểm đi qua, tiệm cận, hướng biến thiên) để tôi tự vẽ lại. Đưa ra hàm số gốc của đồ thị.
+- Yêu cầu định dạng BẮT BUỘC trong khối mã (Code block) xuất ra:
+  + Tuyệt đối KHÔNG dùng các định dạng Markdown (như in đậm **, in nghiêng *, thẻ tiêu đề #).
+  + Mọi công thức toán học chỉ dùng 1 dấu $ (ví dụ: $x^2+1=0$), tuyệt đối KHÔNG dùng $$.
+  + KHÔNG để bất kỳ dòng trống (dòng trắng) nào giữa các dòng chữ. Các dòng phải nối tiếp nhau liên tục từ trên xuống dưới.
+  + Viết bằng Tiếng Việt chuẩn, có dấu đầy đủ.
+- Cấu trúc bắt buộc cho MỖI câu hỏi:
+Câu k. Nội dung câu hỏi
+Lời giải
+Mức độ: 1/2/3 - {TD/GQ/MH}. Yêu cầu: {Hành vi chi tiết từ bản đặc tả}
+-Đáp án: {A/B/C/D hoặc Đúng/Sai hoặc Số cụ thể}
+{Nội dung lời giải chi tiết}
+Ghi chú: {Lấy y nguyên câu X trong đề cương / Thay số câu Y trong đề cương / Câu hỏi mới hoàn toàn (Bên ngoài)}
+
+Bây giờ, hãy kiểm tra các tài liệu tôi đính kèm và bắt đầu thực hiện Bước 1.`,
+        description: 'Prompt quy trình 3 bước tương tác (Ma trận 4 phần, Đặc tả phân rã TD/GQ/MH, Đề kiểm tra 10đ & Lời giải có tỷ lệ đề cương) ra đề kiểm tra Toán GDPT 2018.'
+      }
+    ]
+  },
+  {
     id: 'khdh',
     name: 'KHDH',
     items: [
