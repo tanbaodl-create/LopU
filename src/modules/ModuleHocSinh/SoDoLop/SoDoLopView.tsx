@@ -3225,8 +3225,18 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                   <span className="font-bold">Đang quét tìm các file sơ đồ lớp từ Google Drive...</span>
                 </div>
               ) : driveFiles.length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 border border-dashed border-slate-200 rounded-2xl italic">
-                  Chưa có file sơ đồ lớp nào được lưu trên Drive.
+                <div className="p-6 text-center text-xs text-slate-600 bg-slate-50 border border-dashed border-slate-300 rounded-2xl space-y-3">
+                  <div className="font-extrabold text-amber-800 flex items-center justify-center gap-1.5 text-sm">
+                    <AlertTriangle className="w-4 h-4 text-amber-600" />
+                    <span>Chưa tìm thấy file sơ đồ lớp nào!</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 leading-relaxed text-left bg-white p-3 rounded-xl border border-slate-200">
+                    💡 <strong>Tại sao trên Vercel chưa thấy sơ đồ lớp?</strong><br />
+                    • <strong>Cách ly tên miền (LocalStorage):</strong> Dữ liệu sơ đồ lưu ở AI Studio thuộc tên miền preview. Khi chạy trên Vercel (tên miền mới), trình duyệt bảo mật tách biệt bộ nhớ cục bộ.<br />
+                    • <strong>Giải pháp 1:</strong> Bấm nút <strong>"Tải lên Drive"</strong> từ sơ đồ hiện tại để lưu file lên Google Drive cloud thực tế.<br />
+                    • <strong>Giải pháp 2:</strong> Bấm nút <strong>"Nạp file JSON"</strong> trên thanh công cụ để chọn file JSON từ máy tính nạp vào app ngay.<br />
+                    • <strong>Giải pháp 3:</strong> Bấm <strong>"Đăng nhập Google"</strong> góc trên cùng để app tự động quét file trong thư mục <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">myApp\LopU\SoDoLop</code> trên Drive của bạn.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
