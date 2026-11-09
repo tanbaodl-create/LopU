@@ -1857,7 +1857,7 @@ export async function fetchKienThucHtmlFromDrive(
 /**
  * Lưu sơ đồ chỗ ngồi lớp học (Drag & Drop) lên Google Drive
  */
-export async function saveSeatingChartToDrive(classId: string, seatingData: any, customFileName?: string): Promise<{ success: boolean; fileId: string }> {
+export async function saveSeatingChartToDrive(classId: string, seatingData: any, customFileName?: string): Promise<{ success: boolean; fileId: string; error?: string }> {
   try {
     const fileName = customFileName || `LopU_SeatingChart_${classId}.json`;
     const stored = localStorage.getItem('lopu_gdrive_files_v1') || '[]';
@@ -1895,67 +1895,80 @@ export async function saveSeatingChartToDrive(classId: string, seatingData: any,
 
     // THỰC HIỆN UPLOAD THỰC TẾ LÊN GOOGLE DRIVE NẾU ĐÃ CẤU HÌNH VÀ KẾT NỐI
     const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
-    if (token) {
-      try {
-        // 1. Tìm hoặc tạo cấu trúc thư mục myApp -> LopU -> SoDoLop
-        const physicalFolders = ['myApp', 'LopU', 'SoDoLop'];
-        const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+    if (!token) {
+      return { success: false, fileId: '', error: 'Chưa có Token kết nối Google Drive! Vui lòng Đăng nhập Google.' };
+    }
 
-        // 1.5 Tìm kiếm và xóa sạch các file trùng tên cũ trong thư mục này trước khi ghi file mới
-        try {
-          const query = `name = '${fileName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed = false`;
-          const findUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
-          const findRes = await fetch(findUrl, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (findRes.ok) {
-            const findData = await findRes.json();
-            if (findData.files && findData.files.length > 0) {
-              console.log(`Tìm thấy ${findData.files.length} file trùng tên "${fileName}" trên Drive. Đang tiến hành xóa trước khi ghi file mới...`);
-              for (const existingFile of findData.files) {
-                try {
-                  await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}`, {
-                    method: 'DELETE',
-                    headers: { Authorization: `Bearer ${token}` }
-                  });
-                  console.log(`Đã xóa file trùng lặp cũ (ID: ${existingFile.id}) trên Drive thành công.`);
-                } catch (delErr) {
-                  console.error(`Lỗi khi xóa file trùng lặp cũ ${existingFile.id}:`, delErr);
-                }
+    try {
+      // 1. Tìm hoặc tạo cấu trúc thư mục myApp -> LopU -> SoDoLop
+      const physicalFolders = ['myApp', 'LopU', 'SoDoLop'];
+      const parentFolderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+
+      // 1.5 Tìm kiếm và xóa sạch các file trùng tên cũ trong thư mục này trước khi ghi file mới
+      try {
+        const query = `name = '${fileName.replace(/'/g, "\\'")}' and '${parentFolderId}' in parents and trashed = false`;
+        const findUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id)`;
+        const findRes = await fetch(findUrl, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (findRes.ok) {
+          const findData = await findRes.json();
+          if (findData.files && findData.files.length > 0) {
+            console.log(`Tìm thấy ${findData.files.length} file trùng tên "${fileName}" trên Drive. Đang tiến hành xóa trước khi ghi file mới...`);
+            for (const existingFile of findData.files) {
+              try {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${existingFile.id}`, {
+                  method: 'DELETE',
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                console.log(`Đã xóa file trùng lặp cũ (ID: ${existingFile.id}) trên Drive thành công.`);
+              } catch (delErr) {
+                console.error(`Lỗi khi xóa file trùng lặp cũ ${existingFile.id}:`, delErr);
               }
             }
           }
-        } catch (findErr) {
-          console.error('Lỗi khi tìm và xóa các file trùng lặp cũ trên Drive:', findErr);
         }
-
-        // 2. Upload file vào thư mục SoDoLop vừa tìm hoặc tạo được
-        const metadata = {
-          name: fileName,
-          mimeType: 'application/json',
-          parents: [parentFolderId],
-        };
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', new Blob([JSON.stringify(seatingData, null, 2)], { type: 'application/json' }));
-
-        await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          body: form,
-        });
-        console.log(`Đã tải lên Google Drive sơ đồ lớp thực tế thành công tại "myApp/LopU/SoDoLop": ${fileName}`);
-      } catch (uploadErr) {
-        console.error('Lỗi tải file sơ đồ lớp thực tế lên Google Drive API:', uploadErr);
+      } catch (findErr) {
+        console.error('Lỗi khi tìm và xóa các file trùng lặp cũ trên Drive:', findErr);
       }
-    }
 
-    return { success: true, fileId };
-  } catch (err) {
+      // 2. Upload file vào thư mục SoDoLop vừa tìm hoặc tạo được
+      const metadata = {
+        name: fileName,
+        mimeType: 'application/json',
+        parents: [parentFolderId],
+      };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', new Blob([JSON.stringify(seatingData, null, 2)], { type: 'application/json' }));
+
+      const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: form,
+      });
+
+      if (!uploadRes.ok) {
+        if (uploadRes.status === 401) {
+          localStorage.removeItem('lopu_google_drive_token_v1');
+          localStorage.removeItem('lopu_gdrive_token');
+          throw new Error('Phiên kết nối Google Drive đã hết hạn (401). Vui lòng đăng nhập lại Google.');
+        }
+        const errText = await uploadRes.text();
+        throw new Error(`Google Drive API trả về lỗi (${uploadRes.status}): ${errText}`);
+      }
+
+      console.log(`Đã tải lên Google Drive sơ đồ lớp thực tế thành công tại "myApp/LopU/SoDoLop": ${fileName}`);
+      return { success: true, fileId };
+    } catch (uploadErr: any) {
+      console.error('Lỗi tải file sơ đồ lớp thực tế lên Google Drive API:', uploadErr);
+      return { success: false, fileId: '', error: uploadErr?.message || 'Lỗi tải lên Google Drive' };
+    }
+  } catch (err: any) {
     console.error('Lỗi lưu sơ đồ lớp Google Drive:', err);
-    return { success: false, fileId: '' };
+    return { success: false, fileId: '', error: err?.message || 'Lỗi lưu sơ đồ lớp' };
   }
 }
 
@@ -2170,8 +2183,12 @@ export async function fetchSeatingChartsFromDrive(): Promise<DriveStoredFile[]> 
           }
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Lỗi khi truy vấn danh sách file từ Google Drive API:', err);
+      if (err?.message && (err.message.includes('401') || err.message.includes('Phiên kết nối'))) {
+        localStorage.removeItem('lopu_google_drive_token_v1');
+        localStorage.removeItem('lopu_gdrive_token');
+      }
     }
   }
 

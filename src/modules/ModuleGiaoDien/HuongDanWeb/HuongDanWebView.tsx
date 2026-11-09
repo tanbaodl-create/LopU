@@ -97,13 +97,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
 
       {
         id: 'SoDoLop',
-        name: 'SoDoLop (Sơ đồ vị trí chỗ ngồi, Nạp trực tiếp từ Drive/JSON & Hộp thoại Khóa Tổ tinh gọn)',
+        name: 'SoDoLop (Sơ đồ chỗ ngồi, Tinh gọn cửa sổ cài đặt điều kiện)',
         folderPath: 'src/modules/ModuleHocSinh/SoDoLop',
-        description: 'Sơ đồ vị trí chỗ ngồi học sinh với giao diện khổ rộng toàn màn hình ngang (100% width); nạp trực tiếp file sơ đồ lớp từ Google Drive ("🚀 Nạp vào app ngay") hoặc file JSON cục bộ vào app ngay; tự động giải thích & hỗ trợ đồng bộ dữ liệu khi chuyển sang tên miền Vercel mới; hộp thoại Khóa tổ được tinh gọn chọn khóa tổ và xếp chỗ; loại bỏ vi phạm không ngồi gần nhau (cả 8 hướng) & vị trí cố định; tự động lưu lịch sử để ưu tiên xếp kề nhau cho các cặp chưa từng ngồi cùng nhau suốt 3 năm phổ thông.',
-        purpose: 'Nạp trực tiếp từ Drive/JSON vào app ngay, Hướng dẫn đồng bộ khi chạy tên miền Vercel mới, Hộp thoại Khóa tổ tinh gọn khi xếp chỗ & ưu tiên kề nhau 8 hướng',
+        description: 'Sơ đồ vị trí chỗ ngồi học sinh: tinh gọn thanh công cụ với 1 nút "Xếp chỗ ngồi" duy nhất có icon spinner xoay; trong Cửa sổ Cài Đặt Điều Kiện đã loại bỏ nút "Phân Tự Động Theo Điều Kiện" để tập trung thao tác lưu cài đặt và kích hoạt xếp chỗ trực tiếp từ nút chính trên thanh công cụ.',
+        purpose: 'Thanh công cụ và cửa sổ cài đặt tinh gọn, lưu điều kiện xếp chỗ và kích hoạt qua nút "Xếp chỗ ngồi" chính có biểu tượng spinner xoay',
         viewId: 'learning-seating',
         icon: LayoutGrid,
-        tags: ['Nạp trực tiếp từ Drive vào app ngay', 'Nạp file JSON từ máy', 'Đồng bộ Drive tên miền Vercel', 'Hộp thoại Khóa tổ tinh gọn', 'Chặn vi phạm 8 hướng', 'Lịch sử 30 sơ đồ 3 năm học'],
+        tags: ['Thanh công cụ tinh gọn', '1 nút Xếp chỗ ngồi duy nhất', 'Icon Spinner khi xếp chỗ', 'Loại bỏ nút trùng lặp trong modal cài đặt', 'CSP Backtracking Solver'],
       },
       {
         id: 'ThoiKhoaBieu',

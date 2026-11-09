@@ -34,6 +34,7 @@ import { toPng } from 'html-to-image';
 import { ClassItem, ClassSeatingPlan, UserRole } from '../../../services/storageTypes';
 import { getClasses } from '../../ConnectData/ConnectFirestore';
 import {
+  connectGoogleDrive,
   savePersonalSeatingPlanToDrive,
   saveSeatingChartToDrive,
   fetchSeatingChartsFromDrive,
@@ -504,6 +505,7 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const [pickerSearch, setPickerSearch] = useState<string>('');
   const [pickerStatusFilter, setPickerStatusFilter] = useState<'unassigned' | 'all' | 'assigned'>('unassigned');
   const [pickerTeamFilter, setPickerTeamFilter] = useState<string>('all');
+  const [isAssigningSeating, setIsAssigningSeating] = useState<boolean>(false);
 
   // Config Header (Làm sạch 100% dữ liệu demo)
   const [headerInfo, setHeaderInfo] = useState({
@@ -1067,13 +1069,15 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   }, [students, seatingRules]);
 
   // Phân tự động thông minh theo 5 điều kiện cài đặt
+  // Phân tự động thông minh theo TẤT CẢ các điều kiện cài đặt (CSP Backtracking Solver hỗ trợ vô tận điều kiện)
   const handleAutoAssignWithRules = () => {
-    // Lưu sơ đồ hiện tại vào lịch sử trước khi tạo sơ đồ mới
+    // 1. Lưu sơ đồ hiện tại vào lịch sử trước khi xếp phương án mới
     recordCurrentSeatingToHistory(selectedClassId, students, headerInfo.className);
 
-    const copy = students.map(s => ({ ...s, team: s.team || '', desk: 0, seatCol: 0 }));
+    // Xóa vị trí bàn cũ của học sinh trong bản sao làm việc
+    const studentListCopy = students.map(s => ({ ...s, team: s.team || '', desk: 0, seatCol: 0 }));
 
-    // Helper xáo trộn mảng ngẫu nhiên (Fisher-Yates Shuffle) giúp mỗi lần kích nút "Xếp chỗ ngồi" tạo 1 phương án mới
+    // Helper xáo trộn mảng ngẫu nhiên (Fisher-Yates) giúp mỗi lần kích nút "Xếp chỗ ngồi" tạo 1 phương án mới
     const shuffleArray = <T,>(arr: T[]): T[] => {
       const res = [...arr];
       for (let i = res.length - 1; i > 0; i--) {
@@ -1089,19 +1093,12 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       return allRoles.includes('TT') || allRoles.includes('TP');
     };
 
-    // Helper kiểm tra giới tính Nữ
-    const isFemaleStudent = (s: StudentCardData) => {
-      const g = (s.gender || '').trim().toLowerCase();
-      return g === 'nữ' || g === 'nu';
-    };
-
-    // Khởi tạo tất cả vị trí ghế trống trong phòng học
+    // Tất cả slot ghế trống trong phòng học
     interface SeatSlot {
       row: number; // 1 hoặc 2
       desk: number; // 1..6
-      seatCol: number; // 1..seatsPerDesk
+      seatCol: number; // 1..cap
       teamName: string;
-      occupiedBy: StudentCardData | null;
       x: number;
       y: number;
     }
@@ -1122,7 +1119,6 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
             desk: d,
             seatCol: g,
             teamName,
-            occupiedBy: null,
             x: r === 1 ? g : g + 4,
             y: d,
           });
@@ -1130,340 +1126,320 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       }
     }
 
-    const assignedIds = new Set<string>();
+    // Kiểm tra tổng số học sinh so với tổng số ghế
+    if (studentListCopy.length > allSlots.length) {
+      showConfirm(
+        '❌ KHÔNG THỂ XẾP CHỖ NGỒI',
+        `Số lượng học sinh (${studentListCopy.length}) vượt quá tổng số ghế trống trong phòng học (${allSlots.length})! Vui lòng tăng số ghế/bàn hoặc giảm bớt số lượng học sinh.`,
+        () => {},
+        () => {}
+      );
+      return;
+    }
+
+    // Parse các quy tắc cài đặt
+    const avoidGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
+    const lockedTeamsList = (seatingRules.lockedTeams || []).map(t => t.toLowerCase());
+
+    // Xử lý Cặp đôi cùng tiến
+    const pairTokens = seatingRules.studyPairs.split(/[;,]+/).map(p => p.trim()).filter(Boolean);
+    const studyPairMap = new Map<string, string>(); // studentId -> partnerStudentId
+    for (const pToken of pairTokens) {
+      const parts = pToken.split(/[-–—]/).map(x => x.trim().toLowerCase());
+      if (parts.length === 2) {
+        const [n1, n2] = parts;
+        const st1 = studentListCopy.find(s => isStudentMatch(n1, s.nickname || s.name, studentListCopy) || s.name.toLowerCase().includes(n1));
+        const st2 = studentListCopy.find(s => isStudentMatch(n2, s.nickname || s.name, studentListCopy) || s.name.toLowerCase().includes(n2));
+        if (st1 && st2 && st1.id !== st2.id) {
+          studyPairMap.set(st1.id, st2.id);
+          studyPairMap.set(st2.id, st1.id);
+        }
+      }
+    }
+
+    // Map Vị trí bàn cố định cho từng học sinh
+    const studentFixedPositionsMap = new Map<string, FixedSeatPosition[]>();
+    if (seatingRules.fixedSeatRules && seatingRules.fixedSeatRules.length > 0) {
+      for (const rule of seatingRules.fixedSeatRules) {
+        const targetNick = rule.studentNickname.trim();
+        const st = studentListCopy.find(s => isStudentMatch(targetNick, s.nickname || s.name, studentListCopy) || s.name.toLowerCase().includes(targetNick.toLowerCase()));
+        if (st && rule.positions && rule.positions.length > 0) {
+          studentFixedPositionsMap.set(st.id, rule.positions);
+        }
+      }
+    }
 
     // Đọc lịch sử 8 hướng để tối ưu đa dạng bạn ngồi cạnh nhau trong 3 năm học (~30 lần đổi)
     const historicalNeighborMap = getHistoricalPairNeighborMap(selectedClassId);
 
-    // Helper kiểm tra xem slot có bị dành riêng cho học sinh vị trí cố định khác chưa xếp không
-    const isReservedForFixedSeat = (sl: SeatSlot, st: StudentCardData): boolean => {
-      if (!seatingRules.fixedSeatRules || seatingRules.fixedSeatRules.length === 0) return false;
-      for (const rule of seatingRules.fixedSeatRules) {
-        const targetNick = rule.studentNickname.trim().toLowerCase();
-        const isOwner = (st.nickname || '').toLowerCase() === targetNick || st.name.toLowerCase() === targetNick || st.name.toLowerCase().includes(targetNick);
-        if (isOwner) continue;
+    // Tính thứ tự ưu tiên xếp học sinh (Most Constrained First)
+    const getStudentConstraintPriority = (st: StudentCardData): number => {
+      let score = 0;
+      const fixedPos = studentFixedPositionsMap.get(st.id);
+      if (fixedPos && fixedPos.length > 0) {
+        score += 2000 - fixedPos.length * 20; // Càng ít vị trí cố định càng ưu tiên xếp trước
+      }
+      if (studyPairMap.has(st.id)) score += 1000;
+      if (st.team && lockedTeamsList.includes(st.team.toLowerCase())) score += 500;
+      if (isLeaderOrSub(st)) score += 300;
+      const isInAvoidGroup = avoidGroups.some(g => g.some(n => isStudentMatch(n, st.nickname || st.name, studentListCopy) || st.name.toLowerCase().includes(n.toLowerCase())));
+      if (isInAvoidGroup) score += 200;
+      return score;
+    };
 
-        const isFixedForOther = rule.positions.some(p => p.desk === sl.desk && p.row === sl.row && p.seatCol === sl.seatCol);
-        if (isFixedForOther) {
-          const otherSt = copy.find(s => ((s.nickname || '').toLowerCase() === targetNick || s.name.toLowerCase() === targetNick || s.name.toLowerCase().includes(targetNick)));
-          if (otherSt && !assignedIds.has(otherSt.id)) {
-            return true;
+    // Hàm kiểm tra 1 slot có thỏa mãn TẤT CẢ các điều kiện đối với 1 học sinh hay không (Strict Validator)
+    const isValidAssignment = (
+      st: StudentCardData,
+      slot: SeatSlot,
+      currentAssignment: Map<string, SeatSlot>,
+      slotToStudentMap: Map<string, StudentCardData>
+    ): boolean => {
+      const slotKey = `${slot.row}_${slot.desk}_${slot.seatCol}`;
+      if (slotToStudentMap.has(slotKey)) return false; // Ghế đã có người ngồi
+
+      // 1. Kiểm tra Vị trí cố định (Rule 2)
+      const fixedPositions = studentFixedPositionsMap.get(st.id);
+      if (fixedPositions && fixedPositions.length > 0) {
+        const isMatch = fixedPositions.some(p => p.desk === slot.desk && p.row === slot.row && p.seatCol === slot.seatCol);
+        if (!isMatch) return false;
+      }
+
+      // 2. Kiểm tra Khóa tổ (Rule 5) hoặc Tổ trưởng/Tổ phó
+      if (st.team) {
+        const isTeamLocked = lockedTeamsList.includes(st.team.toLowerCase());
+        const isLeader = isLeaderOrSub(st);
+        if (isTeamLocked || isLeader) {
+          if (slot.teamName.toLowerCase() !== st.team.toLowerCase()) {
+            return false;
           }
         }
       }
-      return false;
+
+      // 3. Kiểm tra Không gần nhau (Rule 1)
+      if (avoidGroups.length > 0) {
+        for (const group of avoidGroups) {
+          const lowerGroup = group.map(n => n.trim().toLowerCase());
+          const isInGroup = lowerGroup.some(n => isStudentMatch(n, st.nickname || st.name, studentListCopy) || st.name.toLowerCase().includes(n));
+          if (!isInGroup) continue;
+
+          // Duyệt qua tất cả học sinh đã xếp
+          for (const [placedStId, placedSlot] of currentAssignment.entries()) {
+            if (placedStId === st.id) continue;
+            const placedSt = studentListCopy.find(s => s.id === placedStId);
+            if (!placedSt) continue;
+
+            const isOtherInGroup = lowerGroup.some(n => isStudentMatch(n, placedSt.nickname || placedSt.name, studentListCopy) || placedSt.name.toLowerCase().includes(n));
+            if (isOtherInGroup) {
+              const isNearDesk = isAvoidNearViolation(
+                { row: slot.row, desk: slot.desk },
+                { row: placedSlot.row, desk: placedSlot.desk }
+              );
+              const is8Dir = is8DirectionNeighbor(
+                { row: slot.row, desk: slot.desk, seatCol: slot.seatCol },
+                { row: placedSlot.row, desk: placedSlot.desk, seatCol: placedSlot.seatCol }
+              );
+              if (isNearDesk || is8Dir) {
+                return false;
+              }
+            }
+          }
+        }
+      }
+
+      // 4. Kiểm tra Cặp đôi cùng tiến (Rule 3)
+      const partnerId = studyPairMap.get(st.id);
+      if (partnerId) {
+        const partnerSlot = currentAssignment.get(partnerId);
+        if (partnerSlot) {
+          // Đối phương đã xếp -> bắt buộc slot này phải CÙNG BÀN và CẠNH NHAU (seatCol chênh 1)
+          if (slot.row !== partnerSlot.row || slot.desk !== partnerSlot.desk || Math.abs(slot.seatCol - partnerSlot.seatCol) !== 1) {
+            return false;
+          }
+        } else {
+          // Đối phương chưa xếp -> bắt buộc slot này phải có ít nhất 1 ghế kề bên cùng bàn còn trống
+          const hasAdjacentFreeSeat = allSlots.some(
+            otherSl =>
+              otherSl.row === slot.row &&
+              otherSl.desk === slot.desk &&
+              Math.abs(otherSl.seatCol - slot.seatCol) === 1 &&
+              !slotToStudentMap.has(`${otherSl.row}_${otherSl.desk}_${otherSl.seatCol}`)
+          );
+          if (!hasAdjacentFreeSeat) {
+            return false;
+          }
+        }
+      }
+
+      return true;
     };
 
-    // Helper kiểm tra vi phạm điều kiện "Không gần nhau" hoặc vị trí cố định
-    const avoidGroups = parseAvoidNearGroups(seatingRules.avoidNearStudents);
-    const checkAvoidViolation = (st: StudentCardData, slot: SeatSlot): boolean => {
-      if (isReservedForFixedSeat(slot, st)) return true;
-      if (avoidGroups.length === 0) return false;
+    // Sắp xếp danh sách học sinh theo thứ tự ưu tiên ràng buộc
+    const sortedStudents = [...studentListCopy].sort((a, b) => getStudentConstraintPriority(b) - getStudentConstraintPriority(a));
 
-      const stNameLower = st.name.toLowerCase();
-      const stNickLower = (st.nickname || '').toLowerCase();
+    // Thử nghiệm chạy tối đa MAX_RESTARTS vòng lặp CSP Backtracking
+    let successfulPlan: { studentId: string; team: string; desk: number; seatCol: number }[] | null = null;
+    let bestNeighborScore = Infinity;
 
-      for (const group of avoidGroups) {
-        const lowerGroup = group.map(n => n.trim().toLowerCase());
-        const isInGroup = lowerGroup.some(
-          n => n === stNickLower || n === stNameLower || stNameLower.includes(n)
-        );
-        if (!isInGroup) continue;
+    const MAX_RESTARTS = 300;
+    const MAX_STEPS_PER_RESTART = 600;
 
-        // Kiểm tra xem slot có nằm kề bàn/cùng bàn hoặc kề 8 hướng với thành viên khác trong cùng nhóm
-        for (const otherSlot of allSlots) {
-          if (!otherSlot.occupiedBy || otherSlot.occupiedBy.id === st.id) continue;
-          const other = otherSlot.occupiedBy;
-          const otherNameLower = other.name.toLowerCase();
-          const otherNickLower = (other.nickname || '').toLowerCase();
+    for (let restart = 0; restart < MAX_RESTARTS; restart++) {
+      const currentAssignment = new Map<string, SeatSlot>();
+      const slotToStudentMap = new Map<string, StudentCardData>();
+      let stepCount = 0;
 
-          const isOtherInGroup = lowerGroup.some(
-            n => n === otherNickLower || n === otherNameLower || otherNameLower.includes(n)
-          );
-          if (isOtherInGroup) {
-            const isNearDesk = isAvoidNearViolation(slot, otherSlot);
-            const is8Dir = is8DirectionNeighbor(
-              { row: slot.row, desk: slot.desk, seatCol: slot.seatCol },
-              { row: otherSlot.row, desk: otherSlot.desk, seatCol: otherSlot.seatCol }
-            );
-            if (isNearDesk || is8Dir) {
+      // Hàm Backtrack chính
+      const backtrack = (studentIdx: number): boolean => {
+        if (studentIdx >= sortedStudents.length) {
+          return true; // Đã xếp thành công tất cả học sinh!
+        }
+
+        stepCount++;
+        if (stepCount > MAX_STEPS_PER_RESTART) {
+          return false; // Quá giới hạn bước thử
+        }
+
+        const st = sortedStudents[studentIdx];
+
+        // Lấy danh sách candidate slots cho học sinh st
+        let candidateSlots = [...allSlots];
+
+        // Nếu có vị trí cố định -> lọc các slot khớp
+        const fixedPos = studentFixedPositionsMap.get(st.id);
+        if (fixedPos && fixedPos.length > 0) {
+          candidateSlots = candidateSlots.filter(sl => fixedPos.some(p => p.desk === sl.desk && p.row === sl.row && p.seatCol === sl.seatCol));
+        }
+
+        // Xáo trộn ngẫu nhiên các slot thỏa mãn để tạo sự đa dạng giữa mỗi lần bấm nút
+        candidateSlots = shuffleArray(candidateSlots);
+
+        for (const slot of candidateSlots) {
+          if (isValidAssignment(st, slot, currentAssignment, slotToStudentMap)) {
+            const slotKey = `${slot.row}_${slot.desk}_${slot.seatCol}`;
+            currentAssignment.set(st.id, slot);
+            slotToStudentMap.set(slotKey, st);
+
+            if (backtrack(studentIdx + 1)) {
               return true;
             }
+
+            // Backtrack nếu nhánh phía sau không tìm ra lời giải
+            currentAssignment.delete(st.id);
+            slotToStudentMap.delete(slotKey);
           }
         }
-      }
-      return false;
-    };
 
-    // Tính điểm số trùng lặp bạn ngồi cạnh 8 hướng trong quá khứ đối với 1 slot cụ thể (Loại bỏ tuyệt đối ô vi phạm)
-    const calculateNeighborOverlapScore = (st: StudentCardData, sl: SeatSlot): number => {
-      if (checkAvoidViolation(st, sl)) {
-        return 99999; // Phạt điểm tuyệt đối nếu vi phạm quy tắc không gần nhau hoặc vị trí cố định
-      }
-      let totalOverlap = 0;
-      let zeroCount = 0;
-      allSlots.forEach(otherSl => {
-        if (otherSl.occupiedBy && otherSl.occupiedBy.id !== st.id) {
-          if (is8DirectionNeighbor({ row: sl.row, desk: sl.desk, seatCol: sl.seatCol }, { row: otherSl.row, desk: otherSl.desk, seatCol: otherSl.seatCol })) {
-            const idA = st.id;
-            const idB = otherSl.occupiedBy.id;
-            const pairKey = idA < idB ? `${idA}_${idB}` : `${idB}_${idA}`;
-            const pastCount = historicalNeighborMap.get(pairKey) || 0;
-            if (pastCount === 0) {
-              zeroCount += 1;
-            } else {
-              totalOverlap += pastCount * 100;
-            }
-          }
-        }
-      });
-      return totalOverlap - (zeroCount * 1000) + Math.random() * 0.5;
-    };
+        return false;
+      };
 
-    const getBestAvailableSlots = (candidateSlots: SeatSlot[], st: StudentCardData): SeatSlot[] => {
-      return [...candidateSlots]
-        .filter(sl => !sl.occupiedBy && !checkAvoidViolation(st, sl))
-        .sort((a, b) => calculateNeighborOverlapScore(st, a) - calculateNeighborOverlapScore(st, b));
-    };
+      if (backtrack(0)) {
+        // Đã tìm được 1 phương án hợp lệ 100%!
+        // Kiểm tra xem phương án này có vi phạm bất kỳ quy tắc nào trong validateSeatingViolations không
+        const candidateStudents = studentListCopy.map(s => {
+          const sl = currentAssignment.get(s.id)!;
+          return {
+            ...s,
+            team: sl.teamName,
+            desk: sl.desk,
+            seatCol: sl.seatCol,
+          };
+        });
 
-    // BƯỚC 0: XẾP THÀNH VIÊN CÁC TỔ ĐANG BỊ KHÓA (LOCKED TEAMS)
-    const lockedTeamsList = (seatingRules.lockedTeams || []).map(t => t.toLowerCase());
-    if (lockedTeamsList.length > 0) {
-      for (const tName of lockedTeamsList) {
-        const teamMembers = shuffleArray(copy.filter(s => !assignedIds.has(s.id) && s.team && s.team.toLowerCase() === tName));
-        const teamSlots = shuffleArray(allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === tName));
-        for (const st of teamMembers) {
-          const sortedSlots = getBestAvailableSlots(teamSlots, st);
-          const validSlot = sortedSlots[0] || getBestAvailableSlots(allSlots, st)[0];
-          if (validSlot) {
-            validSlot.occupiedBy = st;
-            st.team = validSlot.teamName;
-            st.desk = validSlot.desk;
-            st.seatCol = validSlot.seatCol;
-            assignedIds.add(st.id);
-          }
-        }
-      }
-    }
-
-    // BƯỚC 1: XẾP HỌC SINH CÓ VỊ TRÍ BÀN CỐ ĐỊNH (RULE 2 & RULE 5)
-    if (seatingRules.fixedSeatRules && seatingRules.fixedSeatRules.length > 0) {
-      for (const rule of seatingRules.fixedSeatRules) {
-        const targetNick = rule.studentNickname.trim().toLowerCase();
-        const student = copy.find(
-          s => !assignedIds.has(s.id) && ((s.nickname || '').toLowerCase() === targetNick || s.name.toLowerCase() === targetNick || s.name.toLowerCase().includes(targetNick))
-        );
-        if (student && rule.positions.length > 0) {
-          for (const pos of shuffleArray(rule.positions)) {
-            const slot = allSlots.find(
-              sl => !sl.occupiedBy && sl.desk === pos.desk && sl.row === pos.row && sl.seatCol === pos.seatCol
-            );
-            if (slot) {
-              if (isLeaderOrSub(student) && student.team && slot.teamName.toLowerCase() !== student.team.toLowerCase()) {
-                continue;
-              }
-              if (!checkAvoidViolation(student, slot)) {
-                slot.occupiedBy = student;
-                student.team = slot.teamName;
-                student.desk = slot.desk;
-                student.seatCol = slot.seatCol;
-                assignedIds.add(student.id);
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // BƯỚC 2: XẾP CÁC CẶP ĐÔI CÙNG TIẾN (RULE 3 - RANDOM BÀN GHẾ)
-    if (seatingRules.studyPairs.trim()) {
-      const pairTokens = seatingRules.studyPairs.split(/[;,]+/).map(p => p.trim()).filter(Boolean);
-      for (const pToken of shuffleArray(pairTokens)) {
-        const parts = pToken.split(/[-–—]/).map(x => x.trim().toLowerCase());
-        if (parts.length === 2) {
-          const [n1, n2] = parts;
-          const st1 = copy.find(s => !assignedIds.has(s.id) && ((s.nickname || '').toLowerCase() === n1 || s.name.toLowerCase() === n1 || s.name.toLowerCase().includes(n1)));
-          const st2 = copy.find(s => !assignedIds.has(s.id) && ((s.nickname || '').toLowerCase() === n2 || s.name.toLowerCase() === n2 || s.name.toLowerCase().includes(n2)));
-
-          if (st1 && st2) {
-            let placed = false;
-            for (const r of shuffleArray([1, 2])) {
-              if (placed) break;
-              for (const d of shuffleArray([1, 2, 3, 4, 5, 6])) {
-                if (placed) break;
-                const deskSlots = allSlots.filter(sl => sl.row === r && sl.desk === d);
-                for (let g = 0; g < deskSlots.length - 1; g++) {
-                  const sl1 = deskSlots[g];
-                  const sl2 = deskSlots[g + 1];
-                  if (!sl1.occupiedBy && !sl2.occupiedBy) {
-                    if (isLeaderOrSub(st1) && st1.team && sl1.teamName.toLowerCase() !== st1.team.toLowerCase()) continue;
-                    if (isLeaderOrSub(st2) && st2.team && sl2.teamName.toLowerCase() !== st2.team.toLowerCase()) continue;
-
-                    if (!checkAvoidViolation(st1, sl1) && !checkAvoidViolation(st2, sl2)) {
-                      sl1.occupiedBy = st1;
-                      st1.team = sl1.teamName;
-                      st1.desk = sl1.desk;
-                      st1.seatCol = sl1.seatCol;
-                      assignedIds.add(st1.id);
-
-                      sl2.occupiedBy = st2;
-                      st2.team = sl2.teamName;
-                      st2.desk = sl2.desk;
-                      st2.seatCol = sl2.seatCol;
-                      assignedIds.add(st2.id);
-
-                      placed = true;
-                      break;
-                    }
-                  }
+        const testViolations = validateSeatingViolations(candidateStudents, seatingRules);
+        if (testViolations.length === 0) {
+          // Tính điểm số trùng lặp bạn ngồi cạnh 8 hướng từ lịch sử 30 sơ đồ gần nhất
+          let overlapScore = 0;
+          currentAssignment.forEach((slA, stIdA) => {
+            currentAssignment.forEach((slB, stIdB) => {
+              if (stIdA < stIdB) {
+                if (is8DirectionNeighbor({ row: slA.row, desk: slA.desk, seatCol: slA.seatCol }, { row: slB.row, desk: slB.desk, seatCol: slB.seatCol })) {
+                  const pairKey = `${stIdA}_${stIdB}`;
+                  overlapScore += (historicalNeighborMap.get(pairKey) || 0) * 10;
                 }
               }
-            }
+            });
+          });
+
+          if (overlapScore < bestNeighborScore) {
+            bestNeighborScore = overlapScore;
+            successfulPlan = candidateStudents.map(s => ({
+              studentId: s.id,
+              team: s.team,
+              desk: s.desk,
+              seatCol: s.seatCol,
+            }));
           }
+
+          if (bestNeighborScore === 0) break; // Đạt tối ưu tuyệt đối
         }
       }
     }
 
-    // BƯỚC 3: XẾP TỔ TRƯỞNG, TỔ PHÓ CHƯA XẾP (RULE 5)
-    const unassignedLeaders = shuffleArray(copy.filter(s => !assignedIds.has(s.id) && isLeaderOrSub(s) && s.team));
-    for (const leader of unassignedLeaders) {
-      const leaderTeamName = leader.team;
-      const teamSlots = shuffleArray(
-        allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === leaderTeamName.toLowerCase())
+    // KIỂM TRA KẾT QUẢ CUỐI CÙNG
+    if (!successfulPlan) {
+      // ❌ KHÔNG THỂ XẾP ĐƯỢC -> TUYỆT ĐỐI KHÔNG SỬA SƠ ĐỒ HỌC SINH HIỆN TẠI!
+      let conflictDetail = 'Phát hiện xung đột điều kiện xếp chỗ của Giáo viên!';
+
+      if (studentFixedPositionsMap.size > 0) {
+        // Kiểm tra xem có học sinh nào bị trùng hoàn toàn vị trí cố định không
+        const fixedCounts = new Map<string, string[]>();
+        studentFixedPositionsMap.forEach((positions, stId) => {
+          const st = studentListCopy.find(s => s.id === stId);
+          const stName = st ? (st.nickname || st.name) : stId;
+          positions.forEach(p => {
+            const key = `Bàn ${p.desk}-Dãy ${p.row}-G${p.seatCol}`;
+            const list = fixedCounts.get(key) || [];
+            list.push(stName);
+            fixedCounts.set(key, list);
+          });
+        });
+
+        const overlapConflicts: string[] = [];
+        fixedCounts.forEach((studentsWithFixed, seatLabel) => {
+          if (studentsWithFixed.length > 1) {
+            overlapConflicts.push(`Vị trí "${seatLabel}" đang bị cài đặt cố định trùng cho ${studentsWithFixed.length} học sinh (${studentsWithFixed.join(', ')})!`);
+          }
+        });
+
+        if (overlapConflicts.length > 0) {
+          conflictDetail = `Xung đột vị trí cố định trùng nhau:\n• ${overlapConflicts.join('\n• ')}`;
+        } else {
+          conflictDetail = `Ràng buộc vị trí cố định hoặc danh sách không ngồi gần nhau quá dày đặc làm cho một số học sinh không còn ghế trống thỏa mãn!`;
+        }
+      }
+
+      showConfirm(
+        '❌ KHÔNG THỂ XẾP CHỖ NGỒI',
+        `Hệ thống không thể sắp xếp sơ đồ lớp do phát hiện xung đột điều kiện:\n\n${conflictDetail}\n\n⚠️ Sơ đồ lớp hiện tại được giữ nguyên 100% (không bị xáo trộn). Vui lòng vào ⚙️ Cài đặt điều kiện để điều chỉnh bớt các ràng buộc trùng lặp.`,
+        () => {},
+        () => {}
       );
-      const sortedSlots = getBestAvailableSlots(teamSlots, leader);
-      const validSlot = sortedSlots[0] || getBestAvailableSlots(allSlots, leader)[0];
-      if (validSlot) {
-        validSlot.occupiedBy = leader;
-        leader.desk = validSlot.desk;
-        leader.seatCol = validSlot.seatCol;
-        assignedIds.add(leader.id);
-      }
+      return;
     }
 
-    // BƯỚC 4: XẾP HỌC SINH KHÔNG ĐƯỢC GẦN NHAU CÒN LẠI (RULE 1)
-    if (seatingRules.avoidNearStudents.trim()) {
-      for (const groupNames of shuffleArray(avoidGroups)) {
-        const avoidNames = groupNames.map(n => n.trim().toLowerCase()).filter(Boolean);
-        if (avoidNames.length < 2) continue;
-
-        const groupStudents = shuffleArray(
-          copy.filter(
-            s => !assignedIds.has(s.id) && avoidNames.some(name => name === (s.nickname || '').toLowerCase() || s.name.toLowerCase() === name || s.name.toLowerCase().includes(name))
-          )
-        );
-
-        for (const st of groupStudents) {
-          const sortedSlots = getBestAvailableSlots(allSlots, st);
-          if (sortedSlots.length > 0) {
-            const slot = sortedSlots[0];
-            slot.occupiedBy = st;
-            st.team = slot.teamName;
-            st.desk = slot.desk;
-            st.seatCol = slot.seatCol;
-            assignedIds.add(st.id);
-          }
-        }
+    // ✅ NẾU ĐÁP ỨNG THÀNH CÔNG 100% TẤT CẢ CÁC ĐIỀU KIỆN -> CẬP NHẬT SƠ ĐỒ MỚI!
+    const finalStudents = studentListCopy.map(s => {
+      const planItem = successfulPlan!.find(p => p.studentId === s.id);
+      if (planItem) {
+        return {
+          ...s,
+          team: planItem.team,
+          desk: planItem.desk,
+          seatCol: planItem.seatCol,
+        };
       }
-    }
+      return s;
+    });
 
-    // BƯỚC 5: XẾP HỌC SINH CÒN LẠI CÂN BẰNG NAM NỮ GIỮA CÁC TỔ
-    const teamNames = ['Tổ 1', 'Tổ 2', 'Tổ 3', 'Tổ 4'];
-    const remainingUnassigned = copy.filter(s => !assignedIds.has(s.id));
-    const femalesToAssign = shuffleArray(remainingUnassigned.filter(isFemaleStudent));
-    const malesToAssign = shuffleArray(remainingUnassigned.filter(s => !isFemaleStudent(s)));
+    setStudents(finalStudents);
 
-    const getTeamGenderCounts = () => {
-      const counts: Record<string, { female: number; male: number }> = {};
-      teamNames.forEach(tn => { counts[tn] = { female: 0, male: 0 }; });
-      allSlots.forEach(sl => {
-        if (sl.occupiedBy && counts[sl.teamName]) {
-          if (isFemaleStudent(sl.occupiedBy)) {
-            counts[sl.teamName].female++;
-          } else {
-            counts[sl.teamName].male++;
-          }
-        }
-      });
-      return counts;
-    };
-
-    // Phân bổ Nữ
-    for (const fSt of femalesToAssign) {
-      const counts = getTeamGenderCounts();
-      const sortedTeams = [...teamNames].sort((a, b) => counts[a].female - counts[b].female);
-
-      let placed = false;
-      for (const tName of sortedTeams) {
-        const freeSlots = allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === tName.toLowerCase());
-        const sortedSlots = getBestAvailableSlots(freeSlots, fSt);
-        if (sortedSlots[0]) {
-          const validSlot = sortedSlots[0];
-          validSlot.occupiedBy = fSt;
-          fSt.team = validSlot.teamName;
-          fSt.desk = validSlot.desk;
-          fSt.seatCol = validSlot.seatCol;
-          assignedIds.add(fSt.id);
-          placed = true;
-          break;
-        }
-      }
-
-      if (!placed) {
-        const anySlots = getBestAvailableSlots(allSlots, fSt);
-        if (anySlots[0]) {
-          anySlots[0].occupiedBy = fSt;
-          fSt.team = anySlots[0].teamName;
-          fSt.desk = anySlots[0].desk;
-          fSt.seatCol = anySlots[0].seatCol;
-          assignedIds.add(fSt.id);
-        }
-      }
-    }
-
-    // Phân bổ Nam
-    for (const mSt of malesToAssign) {
-      const counts = getTeamGenderCounts();
-      const sortedTeams = [...teamNames].sort((a, b) => counts[a].male - counts[b].male);
-
-      let placed = false;
-      for (const tName of sortedTeams) {
-        const freeSlots = allSlots.filter(sl => !sl.occupiedBy && sl.teamName.toLowerCase() === tName.toLowerCase());
-        const sortedSlots = getBestAvailableSlots(freeSlots, mSt);
-        if (sortedSlots[0]) {
-          const validSlot = sortedSlots[0];
-          validSlot.occupiedBy = mSt;
-          mSt.team = validSlot.teamName;
-          mSt.desk = validSlot.desk;
-          mSt.seatCol = validSlot.seatCol;
-          assignedIds.add(mSt.id);
-          placed = true;
-          break;
-        }
-      }
-
-      if (!placed) {
-        const anySlots = getBestAvailableSlots(allSlots, mSt);
-        if (anySlots[0]) {
-          anySlots[0].occupiedBy = mSt;
-          mSt.team = anySlots[0].teamName;
-          mSt.desk = anySlots[0].desk;
-          mSt.seatCol = anySlots[0].seatCol;
-          assignedIds.add(mSt.id);
-        }
-      }
-    }
-
-    setStudents(copy);
-
-    // Cập nhật lại rawStudentsText với danh sách tổ viên mới
+    // Cập nhật lại rawStudentsText
     if (rawStudentsText.trim()) {
       const lines = rawStudentsText.split('\n');
       const updatedLines = lines.map((line, idx) => {
         const parts = line.split(';').map(p => p.trim());
         if (parts.length >= 4) {
-          const st = copy.find(s => s.id === `hs_${idx + 1}` || s.name.trim().toLowerCase() === parts[0].trim().toLowerCase());
+          const st = finalStudents.find(s => s.id === `hs_${idx + 1}` || s.name.trim().toLowerCase() === parts[0].trim().toLowerCase());
           if (st && st.team) {
             parts[3] = st.team;
             return parts.join('; ');
@@ -1474,10 +1450,11 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       setRawStudentsText(updatedLines.join('\n'));
     }
 
-    const newViolations = validateSeatingViolations(copy, seatingRules);
-    setActiveViolations(newViolations);
+    // Kiểm tra vi phạm xác nhận lại
+    const finalViolations = validateSeatingViolations(finalStudents, seatingRules);
+    setActiveViolations(finalViolations);
 
-    setSyncMessage('Đã tự động đổi phương án xếp chỗ ngồi mới đáp ứng 5 điều kiện cài đặt!');
+    setSyncMessage('🎉 Đã xếp chỗ ngồi mới đáp ứng TẤT CẢ 100% điều kiện cài đặt của Giáo viên!');
     setTimeout(() => setSyncMessage(null), 3500);
   };
 
@@ -1922,6 +1899,20 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
   const handleUploadToDrive = async () => {
     setIsUploadingDrive(true);
     try {
+      let conn = getDriveConnectionState();
+
+      // Nếu chưa kết nối hoặc chưa có token trên tên miền hiện tại (ví dụ vercel.app) -> Tự động bật popup Đăng nhập Google Drive!
+      if (!conn.isConnected) {
+        setSyncMessage('🔑 Đang mở cửa sổ kết nối Google Drive...');
+        const authRes = await connectGoogleDrive();
+        if (!authRes.success) {
+          setIsUploadingDrive(false);
+          setSyncMessage('⚠️ Cần kết nối tài khoản Google Drive để tải sơ đồ lớp lên Cloud.');
+          setTimeout(() => setSyncMessage(null), 4000);
+          return;
+        }
+      }
+
       const cleanClassName = headerInfo.className.replace(/^Lớp\s*/i, '').trim().replace(/\s+/g, '_');
       const fileName = `SoDoLop_${cleanClassName}_Tuan${applyWeekNum}.json`;
 
@@ -1976,18 +1967,27 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
         localStorage.setItem('lopu_google_drive_files_v1', JSON.stringify(files));
 
         // Lưu vào bộ nhớ đệm và đẩy trực tiếp lên thư mục "myApp/LopU/SoDoLop" trên Google Drive
-        const driveRes = await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
+        let driveRes = await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
+
+        // Nếu bị lỗi 401 hoặc chưa có token -> Thử đăng nhập lại tự động 1 lần
+        if (!driveRes.success && (driveRes.error?.includes('401') || driveRes.error?.includes('Chưa có Token'))) {
+          setSyncMessage('🔑 Phiên kết nối hết hạn. Đang mở cửa sổ đăng nhập lại Google Drive...');
+          const reAuth = await connectGoogleDrive();
+          if (reAuth.success) {
+            driveRes = await saveSeatingChartToDrive(selectedClassId, saveData, fileName);
+          }
+        }
+
         const cleanFileName = fileName.replace('.json', '');
 
-        const conn = getDriveConnectionState();
-        if (conn.isConnected || driveRes.success) {
-          setSyncMessage(`Đã tải lên Google Drive thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
+        if (driveRes.success) {
+          setSyncMessage(`🎉 Đã tải lên Google Drive thực tế thành công: ${cleanFileName} tại thư mục myApp\\LopU\\SoDoLop!`);
         } else {
-          setSyncMessage(`Đã lưu sơ đồ lớp ${cleanFileName} vào hệ thống thành công (Thư mục: myApp\\LopU\\SoDoLop)!`);
+          setSyncMessage(`⚠️ Không thể tải lên Drive: ${driveRes.error || 'Lỗi kết nối'}`);
         }
 
         setIsUploadingDrive(false);
-        setTimeout(() => setSyncMessage(null), 3500);
+        setTimeout(() => setSyncMessage(null), 4000);
       };
 
       if (existingIdx >= 0) {
@@ -2004,10 +2004,10 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
       } else {
         await proceedUpload(null);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
       setIsUploadingDrive(false);
-      alert('Đã xảy ra lỗi khi tải lên Drive.');
+      alert('Đã xảy ra lỗi khi tải lên Drive: ' + (err?.message || err));
     }
   };
 
@@ -2017,8 +2017,12 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
     try {
       const seatingFiles = await fetchSeatingChartsFromDrive();
       setDriveFiles(seatingFiles);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Lỗi khi tải danh sách file từ Drive:', err);
+      if (err?.message && (err.message.includes('401') || err.message.includes('Phiên kết nối'))) {
+        setSyncMessage('⚠️ Phiên kết nối Google Drive đã hết hạn. Vui lòng bấm Kết Nối Google Drive để xác thực lại!');
+        setTimeout(() => setSyncMessage(null), 5000);
+      }
     } finally {
       setIsLoadingDriveFiles(false);
     }
@@ -2333,16 +2337,6 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
               <Download className="w-4 h-4" />
               <span>Tải Drive về</span>
             </button>
-
-            <button
-              id="btn-reset-all-seating"
-              onClick={handleResetAllSeating}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-xs cursor-pointer transition-colors"
-              title="Xóa chỗ ngồi cả lớp để xếp lại từ đầu"
-            >
-              <RotateCcw className="w-4 h-4" />
-              <span>Xếp Lại Cả Lớp</span>
-            </button>
           </div>
         </div>
 
@@ -2394,17 +2388,6 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 className="hidden"
                 onChange={handleJsonFileUpload}
               />
-
-              {/* Nút Xếp chỗ ngồi tự động theo điều kiện */}
-              <button
-                id="btn-auto-assign-with-rules"
-                onClick={() => setShowTeamLockModalBeforeAssign(true)}
-                className="text-[11px] font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 px-2.5 py-1 rounded-lg flex items-center gap-1 cursor-pointer transition-all hover:scale-105 active:scale-95 shadow-3xs"
-                title="Tự động phân bổ thông minh: Chọn khóa tổ và xếp chỗ ngồi"
-              >
-                <SlidersHorizontal className="w-3 h-3 text-purple-600" />
-                <span>Xếp chỗ ngồi</span>
-              </button>
             </div>
           </div>
 
@@ -2458,15 +2441,20 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 {paperOrientation === 'landscape' ? '📄 A4 Ngang' : '📄 A4 Dọc'}
               </button>
 
-              {/* Nút Xếp chỗ ngồi đáp ứng 5 điều kiện cài đặt */}
+              {/* Nút Xếp chỗ ngồi duy nhất trước nút Đổi Cửa ⇄ Bàn GV */}
               <button
                 id="btn-auto-assign-seating-rules"
+                disabled={isAssigningSeating}
                 onClick={() => setShowTeamLockModalBeforeAssign(true)}
-                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer transition-all hover:scale-105 active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-xs cursor-pointer transition-all hover:scale-105 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
                 title="Bấm để chọn khóa tổ và tiến hành xếp chỗ ngồi tự động"
               >
-                <SlidersHorizontal className="w-3.5 h-3.5 text-purple-200" />
-                <span>Xếp chỗ ngồi</span>
+                {isAssigningSeating ? (
+                  <RefreshCw className="w-3.5 h-3.5 text-purple-200 animate-spin" />
+                ) : (
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-purple-200" />
+                )}
+                <span>{isAssigningSeating ? 'Đang tính toán...' : 'Xếp chỗ ngồi'}</span>
               </button>
 
               {/* Đổi vị trí Cửa ⇄ Bàn GV */}
@@ -3231,12 +3219,31 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                     <span>Chưa tìm thấy file sơ đồ lớp nào!</span>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-relaxed text-left bg-white p-3 rounded-xl border border-slate-200">
-                    💡 <strong>Tại sao trên Vercel chưa thấy sơ đồ lớp?</strong><br />
-                    • <strong>Cách ly tên miền (LocalStorage):</strong> Dữ liệu sơ đồ lưu ở AI Studio thuộc tên miền preview. Khi chạy trên Vercel (tên miền mới), trình duyệt bảo mật tách biệt bộ nhớ cục bộ.<br />
-                    • <strong>Giải pháp 1:</strong> Bấm nút <strong>"Tải lên Drive"</strong> từ sơ đồ hiện tại để lưu file lên Google Drive cloud thực tế.<br />
-                    • <strong>Giải pháp 2:</strong> Bấm nút <strong>"Nạp file JSON"</strong> trên thanh công cụ để chọn file JSON từ máy tính nạp vào app ngay.<br />
-                    • <strong>Giải pháp 3:</strong> Bấm <strong>"Đăng nhập Google"</strong> góc trên cùng để app tự động quét file trong thư mục <code className="bg-slate-100 px-1 py-0.5 rounded text-indigo-700">myApp\LopU\SoDoLop</code> trên Drive của bạn.
+                    💡 <strong>Tại sao chưa thấy sơ đồ lớp hoặc báo hết hạn (401)?</strong><br />
+                    • <strong>Phiên kết nối hết hạn:</strong> Nếu phiên làm việc Google Drive hết hạn, hãy bấm nút kết nối bên dưới để xác thực lại.<br />
+                    • <strong>Cách ly tên miền (LocalStorage):</strong> Dữ liệu sơ đồ lưu ở tên miền preview cũ được trình duyệt bảo mật cách ly.<br />
+                    • <strong>Giải pháp 1:</strong> Bấm nút <strong>"Tải lên Drive"</strong> từ sơ đồ hiện tại để lưu lên Google Drive cloud.<br />
+                    • <strong>Giải pháp 2:</strong> Bấm nút <strong>"Nạp file JSON"</strong> trên thanh công cụ để nạp file từ máy tính.
                   </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsLoadingDriveFiles(true);
+                      const res = await connectGoogleDrive();
+                      if (res.success) {
+                        setSyncMessage(res.message);
+                        const seatingFiles = await fetchSeatingChartsFromDrive();
+                        setDriveFiles(seatingFiles);
+                      } else {
+                        alert(res.message || 'Chưa thể kết nối Google Drive.');
+                      }
+                      setIsLoadingDriveFiles(false);
+                    }}
+                    className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1.5 shadow-2xs cursor-pointer transition-colors"
+                  >
+                    <Cloud className="w-4 h-4" />
+                    <span>🔑 Bấm Kết Nối / Xác Thực Google Drive Trực Tiếp</span>
+                  </button>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -4158,18 +4165,6 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                   <Save className="w-4 h-4" />
                   <span>Lưu Cài Đặt</span>
                 </button>
-
-                <button
-                  onClick={() => {
-                    saveClassSeatingRules(selectedClassId, seatingRules);
-                    setShowRulesModal(false);
-                    handleAutoAssignWithRules();
-                  }}
-                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-xs flex items-center gap-1.5"
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span>Phân Tự Động Theo Điều Kiện</span>
-                </button>
               </div>
             </div>
           </div>
@@ -4265,15 +4260,32 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
                 Hủy
               </button>
               <button
+                disabled={isAssigningSeating}
                 onClick={() => {
+                  if (isAssigningSeating) return;
                   saveClassSeatingRules(selectedClassId, seatingRules);
-                  setShowTeamLockModalBeforeAssign(false);
-                  handleAutoAssignWithRules();
+                  setIsAssigningSeating(true);
+                  setTimeout(() => {
+                    try {
+                      handleAutoAssignWithRules();
+                    } finally {
+                      setIsAssigningSeating(false);
+                      setShowTeamLockModalBeforeAssign(false);
+                    }
+                  }, 80);
                 }}
-                className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5"
+                className={`px-4 py-2 rounded-xl text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all ${
+                  isAssigningSeating
+                    ? 'bg-purple-400 text-white cursor-wait opacity-80'
+                    : 'bg-purple-600 hover:bg-purple-700 text-white cursor-pointer'
+                }`}
               >
-                <SlidersHorizontal className="w-4 h-4" />
-                <span>🚀 Tiến Hành Xếp Chỗ</span>
+                {isAssigningSeating ? (
+                  <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                ) : (
+                  <SlidersHorizontal className="w-4 h-4" />
+                )}
+                <span>{isAssigningSeating ? '⏳ Đang tính toán xếp chỗ...' : '🚀 Tiến Hành Xếp Chỗ'}</span>
               </button>
             </div>
           </div>
