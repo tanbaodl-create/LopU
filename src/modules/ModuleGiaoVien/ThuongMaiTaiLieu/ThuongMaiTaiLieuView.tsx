@@ -47,7 +47,7 @@ export const ThuongMaiTaiLieuView: React.FC = () => {
           configs[doc.id] = {
             isForSale: doc.isForSale ?? false,
             priceDiamonds: doc.priceDiamonds ?? 50,
-            publishedToClasses: doc.publishedToClasses ?? [],
+            publishedToClasses: (doc.publishedToClasses ?? []).filter(c => c !== 'open-library' && c !== 'cls_open_library'),
           };
         });
         setEditingConfigs(configs);
@@ -120,20 +120,17 @@ export const ThuongMaiTaiLieuView: React.FC = () => {
       Object.values(originalDoc.nodeConfigs).some(
         (nc) =>
           nc &&
-          ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
-            (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-            nc.publishedToClasses?.includes('open-library'))
+          Boolean(nc.isForSale) &&
+          (nc.priceDiamonds ?? 0) >= 0
       )
     );
     const hasDiamondPrice = (Boolean(config.isForSale) && finalPrice >= 0) || hasNodeDiamondPrice;
 
-    let finalClasses = config.publishedToClasses || [];
+    let finalClasses = (config.publishedToClasses || []).filter(
+      (id) => id !== 'open-library' && id !== 'cls_open_library'
+    );
     if (hasDiamondPrice) {
-      if (!finalClasses.includes('open-library')) {
-        finalClasses = [...finalClasses, 'open-library'];
-      }
-    } else {
-      finalClasses = finalClasses.filter(id => id !== 'open-library');
+      finalClasses = [...finalClasses, 'open-library'];
     }
 
     const updatedDoc: TeacherDocument = {

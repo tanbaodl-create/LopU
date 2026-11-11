@@ -696,28 +696,20 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         return false;
       }
 
-      // Kiểm tra tài liệu hoặc bất kỳ mục con nào (Chương/bài/vấn đề/chuyên đề/lý thuyết/luyện tập/KTDG) có giá bán >= 0 kim cương
-      const hasSalePriceGe0 = Boolean(
-        (doc.isForSale && typeof doc.priceDiamonds === 'number' && doc.priceDiamonds >= 0) ||
-        (typeof doc.priceDiamonds === 'number' && doc.priceDiamonds >= 0) ||
-        doc.publishedToClasses?.includes('open-library') ||
-        doc.publishedToClasses?.includes('cls_open_library') ||
-        doc.publishedToClasses?.includes('KTL') ||
-        doc.publishedToClasses?.includes('KTL-OPEN') ||
+      // Kiểm tra có thu phí kim cương hay không:
+      // Khi có thu phí kim cương (ở cấp tài liệu hoặc mục con chuyên đề/bài/vấn đề/KTĐG) thì mặc nhiên phát hành vào Kho Tài Liệu
+      // Không thu phí kim cương thì sẽ không phát hành vào lớp Kho Tài Liệu
+      const hasDiamondFee = Boolean(
+        (Boolean(doc.isForSale) && (doc.priceDiamonds ?? 0) >= 0) ||
         (doc.nodeConfigs &&
           Object.values(doc.nodeConfigs).some(
-            nc =>
-              nc &&
-              ((nc.isForSale && typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-                nc.publishedToClasses?.includes('open-library') ||
-                nc.publishedToClasses?.includes('cls_open_library'))
+            nc => nc && Boolean(nc.isForSale) && (nc.priceDiamonds ?? 0) >= 0
           ))
       );
 
       if (isKhoTaiLieu) {
-        // Tài liệu hoặc mục con có giá bán >= 0 kim cương sẽ tự động thuộc Kho tài liệu
-        if (!hasSalePriceGe0) return false;
+        // Chỉ khi có thu phí kim cương thì mặc nhiên thuộc Kho tài liệu; không thu phí kim cương thì không vào Kho tài liệu
+        if (!hasDiamondFee) return false;
       } else {
         // Khi phát hành tài liệu vào lớp nào thì nó mới hiện trong danh sách tài liệu của lớp đó
         const targetClasses = doc.publishedToClasses || [];

@@ -120,20 +120,18 @@ export const PhatHanhTaiLieuView: React.FC = () => {
           Object.values(doc.nodeConfigs).some(
             (nc) =>
               nc &&
-              ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
-                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-                nc.publishedToClasses?.includes('open-library'))
+              Boolean(nc.isForSale) &&
+              (nc.priceDiamonds ?? 0) >= 0
           )
         );
         const hasDiamondPrice =
-          ((doc.isForSale ?? false) && (doc.priceDiamonds ?? 0) >= 0) ||
-          (typeof doc.priceDiamonds === 'number' && doc.priceDiamonds >= 0) ||
+          (Boolean(doc.isForSale) && (doc.priceDiamonds ?? 0) >= 0) ||
           hasNodeDiamondPrice;
-        let publishedClasses = doc.publishedToClasses ?? [];
+        let publishedClasses = (doc.publishedToClasses ?? []).filter(
+          (c) => c !== 'open-library' && c !== 'cls_open_library'
+        );
         if (hasDiamondPrice) {
-          if (!publishedClasses.includes('open-library')) {
-            publishedClasses = [...publishedClasses, 'open-library'];
-          }
+          publishedClasses = [...publishedClasses, 'open-library'];
         }
 
         configs[doc.id] = {
@@ -208,20 +206,17 @@ export const PhatHanhTaiLieuView: React.FC = () => {
           Object.values(updated.nodeConfigs).some(
             (nc) =>
               nc &&
-              ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
-                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-                nc.publishedToClasses?.includes('open-library'))
+              Boolean(nc.isForSale) &&
+              (nc.priceDiamonds ?? 0) >= 0
           )
         );
         const hasDiamondPrice = (Boolean(nextIsForSale) && (nextPrice ?? 0) >= 0) || hasNodeDiamondPrice;
 
-        let updatedClasses = updated.publishedToClasses || [];
+        let updatedClasses = (updated.publishedToClasses || []).filter(
+          (id) => id !== 'open-library' && id !== 'cls_open_library'
+        );
         if (hasDiamondPrice) {
-          if (!updatedClasses.includes('open-library')) {
-            updatedClasses = [...updatedClasses, 'open-library'];
-          }
-        } else {
-          updatedClasses = updatedClasses.filter((id) => id !== 'open-library');
+          updatedClasses = [...updatedClasses, 'open-library'];
         }
         updated.publishedToClasses = updatedClasses;
       }
@@ -383,23 +378,33 @@ export const PhatHanhTaiLieuView: React.FC = () => {
         const nextPrice = field === 'priceDiamonds' ? Number(value) : (updatedNC.priceDiamonds ?? 0);
         const hasDiamondPrice = Boolean(nextIsForSale) && (nextPrice ?? 0) >= 0;
 
-        let updatedClasses = updatedNC.publishedToClasses || [];
+        let updatedClasses = (updatedNC.publishedToClasses || []).filter(
+          (id) => id !== 'open-library' && id !== 'cls_open_library'
+        );
         if (hasDiamondPrice) {
-          if (!updatedClasses.includes('open-library')) {
-            updatedClasses = [...updatedClasses, 'open-library'];
-          }
-        } else {
-          updatedClasses = updatedClasses.filter((id) => id !== 'open-library');
+          updatedClasses = [...updatedClasses, 'open-library'];
         }
         updatedNC.publishedToClasses = updatedClasses;
       }
 
       currentNodeConfigs[nodeId] = updatedNC;
 
+      const hasAnyNodeDiamond = Object.values(currentNodeConfigs).some(
+        (nc) => nc && Boolean(nc.isForSale) && (nc.priceDiamonds ?? 0) >= 0
+      );
+      const docHasDiamond = (Boolean(current.isForSale) && (current.priceDiamonds ?? 0) >= 0) || hasAnyNodeDiamond;
+      let docClasses = (current.publishedToClasses || []).filter(
+        (id) => id !== 'open-library' && id !== 'cls_open_library'
+      );
+      if (docHasDiamond) {
+        docClasses = [...docClasses, 'open-library'];
+      }
+
       return {
         ...prev,
         [docId]: {
           ...current,
+          publishedToClasses: docClasses,
           nodeConfigs: currentNodeConfigs,
         },
       };
@@ -613,20 +618,17 @@ export const PhatHanhTaiLieuView: React.FC = () => {
       Object.values(config.nodeConfigs).some(
         (nc) =>
           nc &&
-          ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
-            (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-            nc.publishedToClasses?.includes('open-library'))
+          Boolean(nc.isForSale) &&
+          (nc.priceDiamonds ?? 0) >= 0
       )
     );
     const hasDiamondPrice = (Boolean(config.isForSale) && finalPrice >= 0) || hasNodeDiamondPrice;
 
-    let finalClasses = config.publishedToClasses || [];
+    let finalClasses = (config.publishedToClasses || []).filter(
+      (id) => id !== 'open-library' && id !== 'cls_open_library'
+    );
     if (hasDiamondPrice) {
-      if (!finalClasses.includes('open-library')) {
-        finalClasses = [...finalClasses, 'open-library'];
-      }
-    } else {
-      finalClasses = finalClasses.filter((id) => id !== 'open-library');
+      finalClasses = [...finalClasses, 'open-library'];
     }
 
     const isPub = config.isPublished || finalClasses.length > 0;
@@ -694,12 +696,11 @@ export const PhatHanhTaiLieuView: React.FC = () => {
           Object.values(config.nodeConfigs).some(
             (nc) =>
               nc &&
-              ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
-                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
-                nc.publishedToClasses?.includes('open-library'))
+              Boolean(nc.isForSale) &&
+              (nc.priceDiamonds ?? 0) >= 0
           )
         );
-        return (isSale && price >= 0) || pubClasses.includes('open-library') || hasNodeDiamondPrice;
+        return (Boolean(isSale) && price >= 0) || hasNodeDiamondPrice;
       }
 
       return true;
@@ -1449,20 +1450,6 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                       </div>
 
                       <div className="flex flex-wrap gap-2 pt-1 max-h-32 overflow-y-auto pr-1">
-                        {/* Kênh phát hành Kho tài liệu (Toàn trường) - Dành cho cả tài liệu Miễn phí (0 💎) và Có phí */}
-                        <label
-                          onClick={() => handleToggleClassPublish(doc.id, 'open-library')}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all flex items-center gap-1.5 ${
-                            pubClasses.includes('open-library')
-                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
-                              : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
-                          }`}
-                        >
-                          <Globe className="w-3.5 h-3.5" />
-                          <span>Kho tài liệu 💎 (Toàn trường)</span>
-                          {pubClasses.includes('open-library') && <Check className="w-3.5 h-3.5" />}
-                        </label>
-
                         {/* Danh sách Lớp Học do chính Giáo viên này phụ trách */}
                         {teacherClasses.length === 0 ? (
                           <p className="text-xs text-slate-400 italic">Chưa có lớp học nào do thầy/cô mở lớp.</p>
@@ -1524,20 +1511,19 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                             <span className="text-xs font-bold text-amber-700">Kim Cương (💎)</span>
                           </div>
                           <p className="text-[11px] text-amber-800 leading-snug">
-                            Tài liệu hoặc vị trí có giá bán Kim Cương &ge; 0 (kể cả miễn phí 0 💎) sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho tất cả giáo viên &amp; học sinh mua/mở khóa hoặc xem tự do.
+                            Khi có thu phí Kim Cương, tài liệu sẽ <strong>mặc nhiên tự động phát hành vào Kho tài liệu 💎</strong> toàn trường.
                           </p>
                         </div>
                       ) : (
-                        <div className="pt-2 text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Tài liệu Miễn Phí (0 💎) trong Kho tài liệu</span>
+                        <div className="pt-2 text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                          <span>Không thu phí Kim Cương (Không phát hành vào Kho tài liệu)</span>
                         </div>
                       )}
                     </div>
                   </div>
 
                   {/* CÀI ĐẶT THỜI GIAN BẮT ĐẦU / KẾT THÚC PHÁT HÀNH CHO TỪNG LỚP */}
-                  {pubClasses.length > 0 && (
+                  {pubClasses.filter((c) => c !== 'open-library' && c !== 'cls_open_library').length > 0 && (
                     <div className="p-3.5 bg-sky-50/70 rounded-xl border border-sky-200 space-y-3">
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
@@ -1547,16 +1533,13 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                           </span>
                         </div>
                         <span className="text-[10px] font-bold text-sky-700 bg-sky-100 px-2.5 py-0.5 rounded-full border border-sky-200">
-                          {pubClasses.length} lớp áp dụng hạn giờ
+                          {pubClasses.filter((c) => c !== 'open-library' && c !== 'cls_open_library').length} lớp áp dụng hạn giờ
                         </span>
                       </div>
 
                       <div className="space-y-2.5">
-                        {pubClasses.map((classId) => {
-                          const className =
-                            classId === 'open-library'
-                              ? 'Kho tài liệu 💎'
-                              : classes.find((c) => c.id === classId)?.name || classId;
+                        {pubClasses.filter((c) => c !== 'open-library' && c !== 'cls_open_library').map((classId) => {
+                          const className = classes.find((c) => c.id === classId)?.name || classId;
 
                           const sched = config.classSchedules?.[classId];
                           const status = getScheduleStatus(sched?.startDate, sched?.endDate);
@@ -1568,11 +1551,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                             >
                               <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-                                  {classId === 'open-library' ? (
-                                    <Globe className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                  ) : (
-                                    <Users className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                                  )}
+                                  <Users className="w-3.5 h-3.5 text-teal-600 shrink-0" />
                                   {className}
                                 </span>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full border ${status.badgeClass}`}>
@@ -1667,11 +1646,8 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                           className="px-3 py-1 bg-white border border-teal-300 rounded-xl text-xs font-black text-teal-900 focus:ring-2 focus:ring-teal-500 cursor-pointer shadow-2xs"
                         >
                           <option value="global">Cấu hình Mặc Định (Chung)</option>
-                          {pubClasses.map((cId) => {
-                            const cName =
-                              cId === 'open-library'
-                                ? 'Kho tài liệu 💎'
-                                : classes.find((c) => c.id === cId)?.name || cId;
+                          {pubClasses.filter((cId) => cId !== 'open-library' && cId !== 'cls_open_library').map((cId) => {
+                            const cName = classes.find((c) => c.id === cId)?.name || cId;
                             return (
                               <option key={cId} value={cId}>
                                 Lớp: {cName}
