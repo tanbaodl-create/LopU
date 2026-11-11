@@ -65,6 +65,72 @@ export function isSubjectMatching(classSubject?: string, targetSubject?: string)
 }
 
 /**
+ * Chuyển chuỗi tiếng Việt có dấu thành không dấu
+ */
+export function removeVietnameseDiacritics(str: string): string {
+  if (!str) return '';
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D');
+}
+
+/**
+ * Lấy tên riêng của giáo viên (từ cuối cùng trong họ và tên, không lấy họ và chữ lót)
+ * Ví dụ: "Nguyễn Tấn Bảo" -> "Bao", "Thầy Bảo" -> "Bao", "Cô Lan" -> "Lan"
+ */
+export function getTeacherFirstName(fullName?: string): string {
+  if (!fullName || !fullName.trim()) return 'GV';
+  // Loại bỏ các tiền tố danh xưng thường gặp: "Thầy ", "Cô ", "GV ", "TS.", "ThS."
+  const clean = fullName.replace(/^(thầy|cô|gv|pgs|ts|th\s*s)\.?\s+/i, '').trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'GV';
+  const lastName = parts[parts.length - 1];
+  const noDiacritics = removeVietnameseDiacritics(lastName).replace(/[^a-zA-Z0-9]/g, '');
+  if (!noDiacritics) return 'GV';
+  return noDiacritics.charAt(0).toUpperCase() + noDiacritics.slice(1);
+}
+
+/**
+ * Chuẩn hóa tên môn thành slug không dấu viết hoa chữ cái đầu
+ * Ví dụ: "Toán" -> "Toan", "Môn Lý" -> "Ly", "Tin" -> "Tin"
+ */
+export function formatSubjectSlug(subject?: string): string {
+  if (!subject || !subject.trim()) return 'Mon';
+  const clean = subject.replace(/^(môn|mon)\s+/i, '').trim();
+  const noDiacritics = removeVietnameseDiacritics(clean).replace(/[^a-zA-Z0-9]/g, '');
+  if (!noDiacritics) return 'Mon';
+  return noDiacritics.charAt(0).toUpperCase() + noDiacritics.slice(1);
+}
+
+/**
+ * Chuẩn hóa tên lớp thành slug không dấu
+ * Ví dụ: "N01" -> "N01", "Lớp 12A1" -> "12A1", "10A1" -> "10A1"
+ */
+export function formatClassNameSlug(className?: string): string {
+  if (!className || !className.trim()) return 'N01';
+  const clean = className.replace(/^(lớp|lop)\s+/i, '').trim();
+  const noDiacritics = removeVietnameseDiacritics(clean).replace(/[^a-zA-Z0-9]/g, '');
+  return noDiacritics || 'N01';
+}
+
+/**
+ * Tạo mã lớp mặc định theo cấu trúc: {tên môn}-{tên giáo viên; không phải họ và tên}-{tên lớp}
+ * Ví dụ: Toan-Bao-N01
+ */
+export function generateDefaultClassCode(
+  subject?: string,
+  teacherFullName?: string,
+  className?: string
+): string {
+  const subj = formatSubjectSlug(subject);
+  const teacher = getTeacherFirstName(teacherFullName);
+  const cls = formatClassNameSlug(className);
+  return `${subj}-${teacher}-${cls}`;
+}
+
+/**
  * Kiểm tra vai trò từ Giáo viên trở lên (Superadmin, Admin, Manager, Teacher, Assistant)
  */
 export function isTeacherOrHigher(role?: UserRole): boolean {

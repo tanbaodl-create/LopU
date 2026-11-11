@@ -31,6 +31,7 @@ import {
   APP_SUBJECTS,
   AppSubject,
   isSubjectMatching,
+  generateDefaultClassCode,
 } from '../../../services/storageTypes';
 import {
   getClasses,
@@ -339,6 +340,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [newClassRequirePin, setNewClassRequirePin] = useState<boolean>(false);
   const [newClassCoords, setNewClassCoords] = useState<string>(DEFAULT_KTL_COORDS);
   const [showNewClassGpsModal, setShowNewClassGpsModal] = useState<boolean>(false);
+  const [isCustomClassCode, setIsCustomClassCode] = useState<boolean>(false);
 
   // Modal State: Giáo viên sửa thông tin & cập nhật lớp học do mình mở
   const [showEditClassModal, setShowEditClassModal] = useState<boolean>(false);
@@ -598,6 +600,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     return isOwnerTeacher;
   }, [effectiveRole, isOwnerTeacher]);
 
+  // Quyền xem sĩ số học sinh của lớp: Chỉ hiện với giáo viên phụ trách, quản lý và quản trị; ẩn với các tài khoản khác
+  const canViewStudentCount = useMemo(() => {
+    if (isKhoTaiLieu) return false;
+    if (effectiveRole === 'superadmin' || effectiveRole === 'admin') {
+      return true;
+    }
+    return isOwnerTeacher;
+  }, [effectiveRole, isOwnerTeacher, isKhoTaiLieu]);
+
   // Tọa độ điểm đến của lớp học (Kho Tài Liệu mặc định là 15.173411, 108.667254)
   const currentGpsCoords = useMemo(() => {
     if (currentClass?.gpsCoords && currentClass.gpsCoords.trim()) {
@@ -835,11 +846,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
         return {
           id: c.id,
-          label: isKTL ? 'Kho Tài Liệu' : `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
+          label: isKTL ? 'Kho Tài Liệu' : `${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
           badge: isKTL ? 'Toàn trường' : (c.subject ? `Môn ${c.subject}` : c.code),
           badgeColor: isKTL ? 'emerald' : 'indigo',
           subText: isKTL
-            ? 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)'
+            ? 'Kho tài liệu công khai toàn trường'
             : c.teacherName
             ? `Môn: ${c.subject || 'Chung'} • Giáo viên: ${c.teacherName} • Địa điểm: ${c.room || 'Chưa cập nhật'}`
             : `Môn: ${c.subject || 'Chung'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
@@ -953,29 +964,31 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           label: 'Kho Tài Liệu',
           badge: 'Toàn trường',
           badgeColor: 'emerald',
-          subText: 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)',
+          subText: 'Kho tài liệu công khai toàn trường',
           actionType: 'select',
           classItem: c,
         });
         return;
       }
 
+      const classDisplayLabel = `${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`;
+
       if (effectiveRole === 'teacher') {
         const { isPrimary, isAssistant } = isTeacherInClass(c);
         if (isPrimary) {
           results.push({
             id: c.id,
-            label: `${c.code} — ${c.name}`,
+            label: classDisplayLabel,
             badge: 'Lớp bạn dạy',
             badgeColor: 'indigo',
-            subText: `Địa điểm: ${c.room || 'Chưa cập nhật'} • Sĩ số: ${c.studentCount || 0} HS`,
+            subText: `Địa điểm: ${c.room || 'Chưa cập nhật'}${canViewStudentCount ? ` • Sĩ số: ${c.studentCount || 0} HS` : ''}`,
             actionType: 'select',
             classItem: c,
           });
         } else if (isAssistant) {
           results.push({
             id: c.id,
-            label: `${c.code} — ${c.name}`,
+            label: classDisplayLabel,
             badge: 'Trợ giảng',
             badgeColor: 'emerald',
             subText: `GV chính: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
@@ -986,7 +999,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           // Khả năng 1 của GV: Tên lớp đã có trong hệ thống -> có thể đăng ký làm trợ giảng
           results.push({
             id: c.id,
-            label: `${c.code} — ${c.name}`,
+            label: classDisplayLabel,
             badge: 'Đăng ký làm trợ giảng',
             badgeColor: 'purple',
             subText: `GV phụ trách: ${c.teacherName || 'Chưa rõ'} • Khối: ${c.grade} • Nhấn để đăng ký trợ giảng`,
@@ -997,10 +1010,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       } else if (effectiveRole === 'superadmin' || effectiveRole === 'admin') {
         results.push({
           id: c.id,
-          label: `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
+          label: classDisplayLabel,
           badge: c.code,
           badgeColor: 'indigo',
-          subText: `GV: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
+          subText: `GV: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}${canViewStudentCount ? ` • Sĩ số: ${c.studentCount || 0} HS` : ''}`,
           actionType: 'select',
           classItem: c,
         });
@@ -1010,7 +1023,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         if (isEnrolled) {
           results.push({
             id: c.id,
-            label: `${c.code} — ${c.name}`,
+            label: classDisplayLabel,
             badge: 'Đã tham gia',
             badgeColor: 'indigo',
             subText: `GV: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
@@ -1021,7 +1034,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           // Học sinh nhập tên lớp bên ngoài danh sách -> tìm thấy trong hệ thống -> cho phép đăng ký học
           results.push({
             id: c.id,
-            label: `${c.code} — ${c.name}`,
+            label: classDisplayLabel,
             badge: 'Đăng ký học',
             badgeColor: 'amber',
             subText: `GV: ${c.teacherName || 'Chưa rõ'} • Khối: ${c.grade} • Nhấn để đăng ký tham gia lớp`,
@@ -1076,13 +1089,16 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
     if (opt.actionType === 'create_class') {
       const suggested = opt.extraData?.suggestedName || '';
-      setNewClassName(suggested);
-      setNewClassCode(
+      const initialSubj = selectedSubjectFilter !== 'all' ? selectedSubjectFilter : APP_SUBJECTS[0];
+      const initialCode = generateDefaultClassCode(
+        initialSubj,
+        studentProfile?.name || activeEmail,
         suggested
-          ? `LOP-${suggested.replace(/\s+/g, '').toUpperCase().slice(0, 8)}`
-          : `LOP-${Date.now().toString().slice(-4)}`
       );
-      setNewClassSubject(selectedSubjectFilter !== 'all' ? selectedSubjectFilter : APP_SUBJECTS[0]);
+      setNewClassName(suggested);
+      setNewClassCode(initialCode);
+      setIsCustomClassCode(false);
+      setNewClassSubject(initialSubj);
       setNewClassGrade('Khối 10');
       setNewClassRoom('');
       setNewClassPin('');
@@ -1216,10 +1232,12 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       return;
     }
 
-    const classCode = (
-      newClassCode.trim() ||
-      `LOP-${newClassName.replace(/\s+/g, '').toUpperCase().slice(0, 8)}`
-    ).toUpperCase();
+    const defaultGeneratedCode = generateDefaultClassCode(
+      newClassSubject,
+      studentProfile?.name || activeEmail,
+      newClassName
+    );
+    const classCode = (newClassCode.trim() || defaultGeneratedCode).toUpperCase();
 
     const newClassItem: ClassItem = {
       id: `cls_${Date.now()}`,
@@ -1599,7 +1617,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                         {' '}• Giáo viên: <span className="font-semibold text-slate-700">{currentClass.teacherName}</span>
                       </>
                     )}
-                    {' '}• Sĩ số: <span className="font-semibold text-indigo-700">{currentClass.studentCount || 0} HS</span>
+                    {canViewStudentCount && (
+                      <>
+                        {' '}• Sĩ số: <span className="font-semibold text-indigo-700">{currentClass.studentCount || 0} HS</span>
+                      </>
+                    )}
                   </p>
                 )}
 
@@ -1613,13 +1635,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     <Navigation className="w-3.5 h-3.5" />
                     <span>Dẫn đường</span>
                   </button>
-
-                  <span
-                    className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200"
-                    title="Tọa độ điểm đến của lớp học"
-                  >
-                    {currentGpsCoords}
-                  </span>
 
                   {canEditCoordinates && (
                     <button
@@ -1912,9 +1927,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900">Tiến Độ Lớp Học</h3>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                  {currentClass.academicYear || '2025-2026'}
-                </span>
               </div>
 
               <div>
@@ -1934,13 +1946,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-center">
-                <div className="p-2.5 bg-slate-50 rounded-xl">
-                  <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
-                  <span className="text-base font-extrabold text-slate-800">
-                    {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
-                  </span>
-                </div>
+              <div className={`pt-2 border-t border-slate-100 grid ${canViewStudentCount ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-center`}>
+                {canViewStudentCount && (
+                  <div className="p-2.5 bg-slate-50 rounded-xl">
+                    <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
+                    <span className="text-base font-extrabold text-slate-800">
+                      {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
+                    </span>
+                  </div>
+                )}
                 <div className="p-2.5 bg-slate-50 rounded-xl">
                   <span className="block text-[11px] text-slate-500">Số tài liệu</span>
                   <span className="text-base font-extrabold text-emerald-600">
@@ -2203,9 +2217,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900">Tiến Độ Lớp Học</h3>
-                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                  {currentClass.academicYear || '2025-2026'}
-                </span>
               </div>
 
               {/* Progress bar */}
@@ -2226,13 +2237,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 border-t border-slate-100 grid grid-cols-2 gap-3 text-center">
-                <div className="p-2.5 bg-slate-50 rounded-xl">
-                  <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
-                  <span className="text-base font-extrabold text-slate-800">
-                    {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
-                  </span>
-                </div>
+              <div className={`pt-2 border-t border-slate-100 grid ${canViewStudentCount ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-center`}>
+                {canViewStudentCount && (
+                  <div className="p-2.5 bg-slate-50 rounded-xl">
+                    <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
+                    <span className="text-base font-extrabold text-slate-800">
+                      {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
+                    </span>
+                  </div>
+                )}
                 <div className="p-2.5 bg-slate-50 rounded-xl">
                   <span className="block text-[11px] text-slate-500">Số tài liệu</span>
                   <span className="text-base font-extrabold text-emerald-600">
@@ -2304,27 +2317,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           </p>
         </div>
       )}
-
-      {/* FOOTER CỐ ĐỊNH THỐNG KÊ LỚP HỌC */}
-      <div
-        id="lophoc-footer-stats"
-        className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center justify-between gap-4 mt-6"
-      >
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-          <Users className="w-4 h-4 text-indigo-600" />
-          <span>THỐNG KÊ LỚP HỌC:</span>
-          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 rounded-lg border border-indigo-100 font-extrabold text-sm">
-            {isKhoTaiLieu
-              ? 'Kho Tài Liệu: Công khai toàn trường (Không giới hạn thành viên)'
-              : `Sĩ số: ${currentClass?.studentCount || 0} học sinh`}
-          </span>
-        </div>
-
-        <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
-          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Báo cáo tiến độ cập nhật real-time Firestore</span>
-        </div>
-      </div>
 
       {/* MODAL GOOGLE MAPS LẤY TỌA ĐỘ LỚP HỌC (Dành riêng cho Quản trị, Quản lý, GV mở lớp) */}
       {showGpsModal && canEditCoordinates && (
@@ -2560,28 +2552,77 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 <input
                   type="text"
                   value={newClassName}
-                  onChange={e => setNewClassName(e.target.value)}
-                  placeholder="Ví dụ: 10A1 - Toán Chuyên..."
+                  onChange={e => {
+                    const val = e.target.value;
+                    setNewClassName(val);
+                    if (!isCustomClassCode) {
+                      setNewClassCode(
+                        generateDefaultClassCode(
+                          newClassSubject,
+                          studentProfile?.name || activeEmail,
+                          val
+                        )
+                      );
+                    }
+                  }}
+                  placeholder="Ví dụ: N01, Lớp 10A1, Ôn thi tốt nghiệp..."
                   className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-semibold text-slate-900"
                 />
               </div>
 
               <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Mã lớp <span className="text-rose-500">*</span></label>
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-700">Mã lớp <span className="text-rose-500">*</span></label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomClassCode(false);
+                      setNewClassCode(
+                        generateDefaultClassCode(
+                          newClassSubject,
+                          studentProfile?.name || activeEmail,
+                          newClassName
+                        )
+                      );
+                    }}
+                    className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                    title="Đặt lại mã lớp theo định dạng mặc định {Môn}-{Tên GV}-{Tên lớp}"
+                  >
+                    Tạo lại mặc định
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={newClassCode}
-                  onChange={e => setNewClassCode(e.target.value.toUpperCase())}
-                  placeholder="Ví dụ: 10A1, TOAN-10..."
-                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono uppercase font-bold text-indigo-700"
+                  onChange={e => {
+                    setNewClassCode(e.target.value);
+                    setIsCustomClassCode(true);
+                  }}
+                  placeholder="Ví dụ: Toan-Bao-N01"
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono font-bold text-indigo-700"
                 />
+                <p className="text-[10px] text-slate-400">
+                  Mặc định: <span className="font-mono text-slate-600">{`{Môn}-{Tên GV}-{Tên lớp}`}</span> (Ví dụ: Toan-Bao-N01)
+                </p>
               </div>
 
               <div className="space-y-1">
                 <label className="block font-bold text-slate-700">Môn học <span className="text-rose-500">*</span></label>
                 <select
                   value={newClassSubject}
-                  onChange={e => setNewClassSubject(e.target.value)}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setNewClassSubject(val);
+                    if (!isCustomClassCode) {
+                      setNewClassCode(
+                        generateDefaultClassCode(
+                          val,
+                          studentProfile?.name || activeEmail,
+                          newClassName
+                        )
+                      );
+                    }
+                  }}
                   className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white cursor-pointer font-semibold text-slate-900"
                 >
                   {APP_SUBJECTS.map(subj => (
@@ -2749,13 +2790,31 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Mã lớp <span className="text-rose-500">*</span></label>
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold text-slate-700">Mã lớp <span className="text-rose-500">*</span></label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditClassCode(
+                        generateDefaultClassCode(
+                          editClassSubject,
+                          currentClass?.teacherName || studentProfile?.name || activeEmail,
+                          editClassName
+                        )
+                      );
+                    }}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 cursor-pointer"
+                    title="Tạo mã lớp theo chuẩn {Môn}-{Tên GV}-{Tên lớp}"
+                  >
+                    Tạo mã chuẩn
+                  </button>
+                </div>
                 <input
                   type="text"
                   value={editClassCode}
-                  onChange={e => setEditClassCode(e.target.value.toUpperCase())}
-                  placeholder="Ví dụ: 10A1, TOAN-10..."
-                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono uppercase font-bold text-indigo-700"
+                  onChange={e => setEditClassCode(e.target.value)}
+                  placeholder="Ví dụ: Toan-Bao-N01"
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono font-bold text-indigo-700"
                 />
               </div>
 
@@ -2823,28 +2882,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     <span>Lấy tọa độ</span>
                   </button>
                 </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Niên khóa</label>
-                <input
-                  type="text"
-                  value={editClassAcademicYear}
-                  onChange={e => setEditClassAcademicYear(e.target.value)}
-                  placeholder="2025-2026"
-                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Học kỳ</label>
-                <input
-                  type="text"
-                  value={editClassSemester}
-                  onChange={e => setEditClassSemester(e.target.value)}
-                  placeholder="Học kỳ I"
-                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
-                />
               </div>
 
               <div className="sm:col-span-2 space-y-1">
