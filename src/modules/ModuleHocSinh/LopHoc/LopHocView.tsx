@@ -847,10 +847,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         return {
           id: c.id,
           label: isKTL ? 'Kho Tài Liệu' : `${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
-          badge: isKTL ? 'Toàn trường' : (c.subject ? `Môn ${c.subject}` : c.code),
-          badgeColor: isKTL ? 'emerald' : 'indigo',
+          badge: isKTL ? undefined : (c.subject ? `Môn ${c.subject}` : c.code),
+          badgeColor: isKTL ? undefined : 'indigo',
           subText: isKTL
-            ? 'Kho tài liệu công khai toàn trường'
+            ? undefined
             : c.teacherName
             ? `Môn: ${c.subject || 'Chung'} • Giáo viên: ${c.teacherName} • Địa điểm: ${c.room || 'Chưa cập nhật'}`
             : `Môn: ${c.subject || 'Chung'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
@@ -962,9 +962,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         results.push({
           id: 'cls_open_library',
           label: 'Kho Tài Liệu',
-          badge: 'Toàn trường',
-          badgeColor: 'emerald',
-          subText: 'Kho tài liệu công khai toàn trường',
           actionType: 'select',
           classItem: c,
         });
@@ -1577,11 +1574,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 <ChevronDown className="w-4 h-4" />
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-500 truncate">
-              {selectedSubjectFilter === 'all'
-                ? 'Đang xem tất cả các môn'
-                : `Đang lọc các lớp thuộc môn ${selectedSubjectFilter}`}
-            </p>
+            {selectedSubjectFilter !== 'all' && (
+              <p className="mt-2 text-xs text-slate-500 truncate">
+                Đang lọc các lớp thuộc môn {selectedSubjectFilter}
+              </p>
+            )}
           </div>
 
           {/* 2. Combobox Chọn Lớp Học (Nhập trực tiếp hoặc chọn từ danh sách) */}
@@ -1605,11 +1602,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
             {currentClass && (
               <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap text-xs">
-                {isKhoTaiLieu ? (
-                  <p className="text-slate-500">
-                    <span className="font-semibold text-indigo-700">Kho Tài Liệu</span> • Công khai cho tất cả giáo viên và học sinh (Tài liệu bán 💎 &amp; miễn phí 0 💎)
-                  </p>
-                ) : (
+                {!isKhoTaiLieu && (
                   <p className="text-slate-500">
                     Địa điểm: <span className="font-semibold text-slate-700">{currentClass.room || 'Chưa cập nhật'}</span>
                     {currentClass.teacherName && (
@@ -1696,11 +1689,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   : 'Không tìm thấy tài liệu phù hợp'
               }
             />
-            <p className="mt-2 text-xs text-slate-500">
-              {isKhoTaiLieu
-                ? 'Kho Tài Liệu chung: Tất cả thành viên đều có thể xem và tải tài liệu miễn phí hoặc mua tài liệu thu phí.'
-                : 'Chỉ học sinh trong lớp mới thấy và truy cập tài liệu phát hành cho lớp này.'}
-            </p>
           </div>
         </div>
       </div>
