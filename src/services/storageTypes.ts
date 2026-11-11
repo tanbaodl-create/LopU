@@ -128,6 +128,7 @@ export interface ClassItem {
   lessons: ClassLesson[];
   color: string;
   updatedAt?: string;
+  gpsCoords?: string;
 }
 
 export interface ImportDeduplicationReport {

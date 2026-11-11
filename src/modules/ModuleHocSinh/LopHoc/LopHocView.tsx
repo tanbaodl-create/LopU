@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   BookOpen,
   Lock,
@@ -11,6 +11,9 @@ import {
   MapPin,
   FileText,
   Sparkles,
+  Navigation,
+  Edit3,
+  Check,
 } from 'lucide-react';
 import {
   ClassItem,
@@ -28,6 +31,7 @@ import {
   purchaseDocumentWithDiamonds,
   rewardStudentDiamonds,
   getPinRequests,
+  saveClass,
 } from '../../ConnectData/ConnectFirestore';
 import { auth } from '../../../config/firebase';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
@@ -35,6 +39,206 @@ import { GpsPickerModal } from '../../../components/GpsPickerModal';
 // Đường dẫn mặc định của app và module Lớp học
 export const DEFAULT_APP_PATH = 'myApp/LopU';
 export const DEFAULT_LOPHOC_PATH = `${DEFAULT_APP_PATH}/LopHoc`;
+
+// Tọa độ mặc định của lớp "Kho Tài Liệu"
+export const DEFAULT_KTL_COORDS = '15.173411, 108.667254';
+
+// Hàm chuẩn hóa chuỗi tiếng Việt phục vụ tìm kiếm không dấu
+function normalizeVietnamese(str: string): string {
+  return (str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim();
+}
+
+export interface ComboboxOption {
+  id: string;
+  label: string;
+  badge?: string;
+  badgeColor?: 'emerald' | 'indigo' | 'amber' | 'slate';
+  subText?: string;
+  disabled?: boolean;
+}
+
+interface SearchableComboboxProps {
+  id: string;
+  options: ComboboxOption[];
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  emptyText?: string;
+}
+
+export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
+  id,
+  options,
+  value,
+  onChange,
+  placeholder = 'Nhập để tìm kiếm hoặc chọn từ danh sách...',
+  emptyText = 'Không tìm thấy kết quả phù hợp',
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const selectedOption = useMemo(() => {
+    return options.find(o => o.id === value) || null;
+  }, [options, value]);
+
+  useEffect(() => {
+    if (!isTyping) {
+      setSearchTerm(selectedOption ? selectedOption.label : '');
+    }
+  }, [selectedOption, isTyping]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+        setIsTyping(false);
+        setSearchTerm(selectedOption ? selectedOption.label : '');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [selectedOption]);
+
+  const filteredOptions = useMemo(() => {
+    if (!isTyping || !searchTerm.trim()) {
+      return options;
+    }
+    const cleanSearch = normalizeVietnamese(searchTerm);
+    return options.filter(opt => {
+      const matchLabel = normalizeVietnamese(opt.label).includes(cleanSearch);
+      const matchSub = opt.subText ? normalizeVietnamese(opt.subText).includes(cleanSearch) : false;
+      const matchBadge = opt.badge ? normalizeVietnamese(opt.badge).includes(cleanSearch) : false;
+      return matchLabel || matchSub || matchBadge;
+    });
+  }, [options, searchTerm, isTyping]);
+
+  const handleSelect = (opt: ComboboxOption) => {
+    if (opt.disabled) return;
+    onChange(opt.id);
+    setIsTyping(false);
+    setSearchTerm(opt.label);
+    setIsOpen(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (filteredOptions.length > 0) {
+        const firstActive = filteredOptions.find(o => !o.disabled) || filteredOptions[0];
+        handleSelect(firstActive);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+      setIsTyping(false);
+      setSearchTerm(selectedOption ? selectedOption.label : '');
+    } else if (e.key === 'ArrowDown') {
+      if (!isOpen) setIsOpen(true);
+    }
+  };
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <div className="relative">
+        <input
+          id={id}
+          ref={inputRef}
+          type="text"
+          value={searchTerm}
+          onChange={e => {
+            setSearchTerm(e.target.value);
+            setIsTyping(true);
+            setIsOpen(true);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            inputRef.current?.select();
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          autoComplete="off"
+          className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-slate-900 text-sm font-semibold py-2.5 px-3.5 pr-10 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors shadow-2xs"
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          onClick={() => {
+            setIsOpen(prev => !prev);
+            inputRef.current?.focus();
+          }}
+          className="absolute right-2 top-2.5 p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer transition-colors"
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div className="absolute z-40 left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl max-h-64 overflow-y-auto divide-y divide-slate-100 py-1 animate-fade-in">
+          {filteredOptions.length === 0 ? (
+            <div className="p-3 text-center text-xs text-slate-400 italic">
+              {emptyText}
+            </div>
+          ) : (
+            filteredOptions.map(opt => {
+              const isSelected = opt.id === value;
+              return (
+                <div
+                  key={opt.id}
+                  onClick={() => handleSelect(opt)}
+                  className={`p-2.5 text-xs flex items-center justify-between cursor-pointer transition-colors ${
+                    opt.disabled
+                      ? 'opacity-50 cursor-not-allowed bg-slate-50'
+                      : isSelected
+                      ? 'bg-indigo-50/80 font-bold text-indigo-900 border-l-4 border-indigo-600'
+                      : 'hover:bg-slate-100/70 text-slate-800'
+                  }`}
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {opt.badge && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                            opt.badgeColor === 'emerald'
+                              ? 'bg-emerald-50 text-emerald-700'
+                              : opt.badgeColor === 'amber'
+                              ? 'bg-amber-50 text-amber-800'
+                              : opt.badgeColor === 'slate'
+                              ? 'bg-slate-100 text-slate-600'
+                              : 'bg-indigo-50 text-indigo-700'
+                          }`}
+                        >
+                          {opt.badge}
+                        </span>
+                      )}
+                      <span className="truncate">{opt.label}</span>
+                    </div>
+                    {opt.subText && (
+                      <div className="text-[11px] text-slate-500 mt-0.5 truncate">
+                        {opt.subText}
+                      </div>
+                    )}
+                  </div>
+                  {isSelected && (
+                    <Check className="w-4 h-4 text-indigo-600 shrink-0 ml-1" />
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export interface LearningClassesViewProps {
   currentStudentId?: string;
@@ -62,11 +266,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [publishedDocuments, setPublishedDocuments] = useState<TeacherDocument[]>([]);
   const [pinRequests, setPinRequests] = useState<PinJoinRequest[]>([]);
 
-  // GPS Google Maps State
+  // GPS State
   const [showGpsModal, setShowGpsModal] = useState<boolean>(false);
-  const [gpsCoords, setGpsCoords] = useState<string>('21.028511, 105.854444');
-  const [selectedLat, setSelectedLat] = useState<number>(21.028511);
-  const [selectedLng, setSelectedLng] = useState<number>(105.854444);
+  const [selectedLat, setSelectedLat] = useState<number>(15.173411);
+  const [selectedLng, setSelectedLng] = useState<number>(108.667254);
 
   const activeStudentId = studentProfile?.id || currentStudentId;
   const activeEmail = (
@@ -77,17 +280,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     ''
   ).toLowerCase().trim();
   const effectiveRole: UserRole = currentRole || studentProfile?.role || 'student';
-
-  const handleOpenGpsModal = () => {
-    if (gpsCoords) {
-      const parts = gpsCoords.split(',').map(s => parseFloat(s.trim()));
-      if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-        setSelectedLat(parts[0]);
-        setSelectedLng(parts[1]);
-      }
-    }
-    setShowGpsModal(true);
-  };
 
   const loadStudentAndDocs = async () => {
     const allUsers = await getUsers();
@@ -166,6 +358,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         description:
           'Kho tài liệu công khai dành cho tất cả thành viên truy cập (chứa các tài liệu bán và tài liệu miễn phí 0 kim cương)',
         lessons: [],
+        gpsCoords: DEFAULT_KTL_COORDS,
       };
     } else {
       openClass = {
@@ -174,6 +367,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         name: 'Kho Tài Liệu',
         teacherName: '',
         studentCount: 0,
+        gpsCoords: openClass.gpsCoords || DEFAULT_KTL_COORDS,
       };
     }
 
@@ -211,7 +405,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     const approvedClassCodes = new Set<string>();
     const approvedClassNames = new Set<string>();
 
-    // a. Từ classIds trong hồ sơ học sinh (đã được quản lý thêm hoặc hệ thống duyệt)
     if (studentProfile?.classIds && Array.isArray(studentProfile.classIds)) {
       studentProfile.classIds.forEach(cid => {
         if (cid) {
@@ -223,7 +416,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       });
     }
 
-    // b. Từ yêu cầu mã PIN đã được duyệt (status === 'approved')
     pinRequests.forEach(req => {
       if (req.status === 'approved') {
         const isMatchStudent =
@@ -238,7 +430,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       }
     });
 
-    // Lọc các lớp mà học sinh thực sự là thành viên đã được duyệt
     const studentApprovedClasses = classes.filter(c => {
       if (
         c.id === openClass!.id ||
@@ -253,7 +444,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       const codeLower = (c.code || '').toLowerCase().trim();
       const nameLower = (c.name || '').toLowerCase().trim();
 
-      // Kiểm tra trong danh sách duyệt từ classIds hoặc pinRequests
       if (
         (idLower && approvedClassIds.has(idLower)) ||
         (codeLower && approvedClassCodes.has(codeLower)) ||
@@ -262,7 +452,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         return true;
       }
 
-      // Kiểm tra giáo viên / quản lý đã thêm trực tiếp vào danh sách học sinh của lớp
       if (activeStudentId && c.studentIds?.includes(activeStudentId)) return true;
       if (studentProfile?.id && c.studentIds?.includes(studentProfile.id)) return true;
       if (activeEmail && c.studentIds?.includes(activeEmail)) return true;
@@ -288,15 +477,106 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     );
   }, [selectedClassId, currentClass]);
 
+  // Quyền chỉnh sửa tọa độ: Chỉ quản trị, quản lý và chính giáo viên mở lớp mới có quyền
+  const canEditCoordinates = useMemo(() => {
+    if (effectiveRole === 'superadmin' || effectiveRole === 'admin') {
+      return true;
+    }
+    if (effectiveRole === 'teacher' && currentClass) {
+      const isOwnerTeacher =
+        (currentClass.teacherId &&
+          (currentClass.teacherId === activeStudentId ||
+            currentClass.teacherId === studentProfile?.id)) ||
+        (studentProfile?.name &&
+          currentClass.teacherName?.toLowerCase().trim() ===
+            studentProfile.name.toLowerCase().trim());
+      if (isOwnerTeacher) return true;
+    }
+    return false;
+  }, [effectiveRole, currentClass, activeStudentId, studentProfile]);
+
+  // Tọa độ điểm đến của lớp học (Kho Tài Liệu mặc định là 15.173411, 108.667254)
+  const currentGpsCoords = useMemo(() => {
+    if (currentClass?.gpsCoords && currentClass.gpsCoords.trim()) {
+      return currentClass.gpsCoords.trim();
+    }
+    return DEFAULT_KTL_COORDS;
+  }, [currentClass]);
+
+  // Đồng bộ tọa độ khi đổi lớp
+  useEffect(() => {
+    const coords = currentGpsCoords;
+    const parts = coords.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      setSelectedLat(parts[0]);
+      setSelectedLng(parts[1]);
+    }
+  }, [currentGpsCoords]);
+
+  const handleOpenGpsModal = () => {
+    if (!canEditCoordinates) {
+      alert('Chỉ quản trị, quản lý và chính giáo viên mở lớp mới có quyền chỉnh sửa tọa độ.');
+      return;
+    }
+    const parts = currentGpsCoords.split(',').map(s => parseFloat(s.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      setSelectedLat(parts[0]);
+      setSelectedLng(parts[1]);
+    }
+    setShowGpsModal(true);
+  };
+
+  const handleConfirmGps = async (coordsStr: string) => {
+    setShowGpsModal(false);
+    if (!canEditCoordinates) {
+      alert('Chỉ quản trị, quản lý và chính giáo viên mở lớp mới có quyền chỉnh sửa tọa độ.');
+      return;
+    }
+    if (currentClass) {
+      const updatedClass: ClassItem = {
+        ...currentClass,
+        gpsCoords: coordsStr,
+      };
+      await saveClass(updatedClass);
+      setClasses(prev => prev.map(c => (c.id === updatedClass.id ? updatedClass : c)));
+      setNotification(`Đã cập nhật tọa độ thành công cho ${currentClass.name}: [${coordsStr}]`);
+      setTimeout(() => setNotification(null), 4000);
+    }
+  };
+
+  // Dẫn đường Google Maps: Đích đến là tọa độ lớp học, điểm bắt đầu là vị trí hiện tại của người dùng
+  const handleNavigateGoogleMaps = () => {
+    const coords = currentGpsCoords;
+    const parts = coords.split(',').map(s => s.trim());
+    const destLat = parts[0] || '15.173411';
+    const destLng = parts[1] || '108.667254';
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const originLat = pos.coords.latitude;
+          const originLng = pos.coords.longitude;
+          const mapsUrl = `https://www.google.com/maps/dir/?api=1&origin=${originLat},${originLng}&destination=${destLat},${destLng}&travelmode=driving`;
+          window.open(mapsUrl, '_blank');
+        },
+        () => {
+          const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving`;
+          window.open(mapsUrl, '_blank');
+        },
+        { timeout: 4000, enableHighAccuracy: true }
+      );
+    } else {
+      const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&travelmode=driving`;
+      window.open(mapsUrl, '_blank');
+    }
+  };
+
   // Lọc tài liệu phát hành theo lớp học đang chọn
   const currentClassDocuments = useMemo(() => {
     if (!selectedClassId) return [];
     const nowMs = new Date().getTime();
 
     return publishedDocuments.filter(doc => {
-      // 1. Nếu đang chọn lớp "Kho Tài Liệu":
-      // Tất cả mọi người đều thấy tài liệu phát hành vào Kho Tài Liệu
-      // (chứa cả tài liệu bán kim cương và tài liệu miễn phí giá 0 kim cương)
       if (isKhoTaiLieu) {
         const isTargetedToKhoTaiLieu =
           doc.publishedToClasses?.includes('cls_open_library') ||
@@ -308,9 +588,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           doc.isPublished;
         if (!isTargetedToKhoTaiLieu) return false;
       } else {
-        // 2. Nếu đang chọn một lớp học cụ thể (ví dụ 12A1):
-        // CHỈ hiện tài liệu được phát hành vào lớp học đó.
-        // Tài liệu không phát hành vào đây thì sẽ chỉ thấy với thành viên trong lớp được phát hành.
         const targetClasses = doc.publishedToClasses || [];
         const isTargetedToThisClass =
           targetClasses.includes(selectedClassId) ||
@@ -319,18 +596,17 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         if (!isTargetedToThisClass) return false;
       }
 
-      // Kiểm tra lịch mở phát hành riêng cho lớp
       const sched =
         doc.classSchedules?.[selectedClassId] ||
         (isKhoTaiLieu ? doc.classSchedules?.['open-library'] : undefined);
       if (sched) {
         if (sched.startDate) {
           const startMs = new Date(sched.startDate).getTime();
-          if (nowMs < startMs) return false; // Chưa đến giờ phát hành
+          if (nowMs < startMs) return false;
         }
         if (sched.endDate) {
           const endMs = new Date(sched.endDate).getTime();
-          if (nowMs > endMs) return false; // Đã hết hạn phát hành
+          if (nowMs > endMs) return false;
         }
       }
 
@@ -414,6 +690,51 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     setSelectedMaterialId('');
   };
 
+  // Danh sách options dạng Combobox để người dùng vừa có thể nhập trực tiếp vừa có thể chọn danh sách
+  const classComboboxOptions: ComboboxOption[] = useMemo(() => {
+    return userClassOptions.map(c => {
+      const isKTL =
+        c.id === 'cls_open_library' ||
+        c.code === 'KTL-OPEN' ||
+        c.code === 'KTL' ||
+        c.name?.toLowerCase().includes('kho tài liệu');
+
+      return {
+        id: c.id,
+        label: isKTL ? 'Kho Tài Liệu' : `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
+        badge: isKTL ? 'Toàn trường' : c.code,
+        badgeColor: isKTL ? 'emerald' : 'indigo',
+        subText: isKTL
+          ? 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)'
+          : c.teacherName
+          ? `Giáo viên: ${c.teacherName} • Phòng: ${c.room || 'Phòng học'}`
+          : undefined,
+      };
+    });
+  }, [userClassOptions]);
+
+  const materialComboboxOptions: ComboboxOption[] = useMemo(() => {
+    return classMaterials.map(mat => {
+      let badgeColor: 'emerald' | 'amber' | 'indigo' | 'slate' = 'indigo';
+      if (mat.badgeText.includes('Miễn phí') || mat.badgeText.includes('Đã mua')) {
+        badgeColor = 'emerald';
+      } else if (mat.badgeText.includes('💎')) {
+        badgeColor = 'amber';
+      } else if (mat.badgeText.includes('Khóa')) {
+        badgeColor = 'slate';
+      }
+
+      return {
+        id: mat.id,
+        label: mat.title,
+        badge: mat.badgeText,
+        badgeColor,
+        subText: mat.subText,
+        disabled: mat.type === 'lesson' && !mat.isUnlocked,
+      };
+    });
+  }, [classMaterials]);
+
   const currentMaterial = useMemo(() => {
     return classMaterials.find(m => m.id === selectedMaterialId) || classMaterials[0] || null;
   }, [classMaterials, selectedMaterialId]);
@@ -476,18 +797,18 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       const res = await rewardStudentDiamonds(
         activeStudentId,
         -10,
-        `hủy hoàn thành tài liệu "${lesson.title}"`
+        `hủy hoàn thành bài học "${lesson.title}"`
       );
       if (res.success && res.diamonds !== undefined) {
         setStudentProfile(prev => (prev ? { ...prev, diamonds: res.diamonds } : null));
       }
-      setNotification(`Đã hủy đánh dấu hoàn thành tài liệu "${lesson.title}".`);
+      setNotification(`Đã hủy đánh dấu hoàn thành bài học "${lesson.title}".`);
     } else {
       nextSet.add(lesson.id);
       const res = await rewardStudentDiamonds(
         activeStudentId,
         10,
-        `hoàn thành xuất sắc tài liệu "${lesson.title}"`
+        `hoàn thành xuất sắc bài học "${lesson.title}"`
       );
       if (res.success && res.diamonds !== undefined) {
         setStudentProfile(prev => (prev ? { ...prev, diamonds: res.diamonds } : null));
@@ -521,7 +842,6 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
     setTimeout(() => setNotification(null), 4000);
   };
-
 
   if (loading) {
     return (
@@ -563,47 +883,28 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         </div>
       )}
 
-      {/* Top Filter Bar: Dropdown Chọn Lớp & Dropdown Chọn Tài Liệu/Bài Học */}
+      {/* Top Filter Bar: Combobox Chọn Lớp & Combobox Chọn Tài Liệu/Bài Học */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* 1. Dropdown Chọn Lớp Học */}
+          {/* 1. Combobox Chọn Lớp Học (Nhập trực tiếp hoặc chọn từ danh sách) */}
           <div>
             <label
               htmlFor="select-class-dropdown"
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
             >
-              1. Chọn Lớp Học
+              1. Chọn Lớp Học (Nhập trực tiếp hoặc chọn danh sách)
             </label>
-            <div className="relative">
-              <select
-                id="select-class-dropdown"
-                value={selectedClassId}
-                onChange={e => handleClassChange(e.target.value)}
-                className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 text-slate-900 text-sm font-semibold py-2.5 px-3.5 pr-9 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors"
-              >
-                {userClassOptions.length === 0 ? (
-                  <option value="">-- (Danh sách rỗng) --</option>
-                ) : (
-                  userClassOptions.map(c => {
-                    const isKTL =
-                      c.id === 'cls_open_library' ||
-                      c.code === 'KTL-OPEN' ||
-                      c.code === 'KTL' ||
-                      c.name?.toLowerCase().includes('kho tài liệu');
-
-                    return (
-                      <option key={c.id} value={c.id}>
-                        {isKTL ? 'Kho Tài Liệu' : `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`}
-                      </option>
-                    );
-                  })
-                )}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3.5 pointer-events-none" />
-            </div>
+            <SearchableCombobox
+              id="select-class-dropdown"
+              value={selectedClassId}
+              options={classComboboxOptions}
+              onChange={handleClassChange}
+              placeholder="Nhập tên lớp, mã lớp hoặc chọn từ danh sách..."
+              emptyText="Không tìm thấy lớp học phù hợp"
+            />
 
             {currentClass && (
-              <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
+              <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap text-xs">
                 {isKhoTaiLieu ? (
                   <p className="text-slate-500">
                     <span className="font-semibold text-indigo-700">Kho Tài Liệu</span> • Công khai cho tất cả giáo viên và học sinh (Tài liệu bán 💎 &amp; miễn phí 0 💎)
@@ -620,27 +921,41 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   </p>
                 )}
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <button
                     type="button"
-                    onClick={handleOpenGpsModal}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors"
-                    title="Mở Google Maps dẫn đường"
+                    onClick={handleNavigateGoogleMaps}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors"
+                    title="Mở Google Maps chỉ đường từ vị trí hiện tại của bạn đến lớp học"
                   >
-                    <MapPin className="w-3.5 h-3.5" />
+                    <Navigation className="w-3.5 h-3.5" />
                     <span>Dẫn đường</span>
                   </button>
-                  {gpsCoords && (
-                    <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                      {gpsCoords}
-                    </span>
+
+                  <span
+                    className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded-lg border border-slate-200"
+                    title="Tọa độ điểm đến của lớp học"
+                  >
+                    {currentGpsCoords}
+                  </span>
+
+                  {canEditCoordinates && (
+                    <button
+                      type="button"
+                      onClick={handleOpenGpsModal}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] border border-amber-200 transition-colors cursor-pointer"
+                      title="Chỉnh sửa tọa độ lớp học (Dành riêng cho Quản trị viên, Quản lý & Giáo viên mở lớp)"
+                    >
+                      <Edit3 className="w-3 h-3 text-amber-600" />
+                      <span>Sửa tọa độ</span>
+                    </button>
                   )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* 2. Dropdown Chọn Tài Liệu / Bài Học của Lớp */}
+          {/* 2. Combobox Chọn Tài Liệu / Bài Học của Lớp (Nhập trực tiếp hoặc chọn từ danh sách) */}
           <div>
             <label
               htmlFor="select-material-dropdown"
@@ -648,30 +963,19 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             >
               2. Chọn Tài Liệu / Bài Học Của Lớp ({classMaterials.length} tài liệu)
             </label>
-            <div className="relative">
-              <select
-                id="select-material-dropdown"
-                value={selectedMaterialId}
-                onChange={e => setSelectedMaterialId(e.target.value)}
-                className="w-full appearance-none bg-slate-50 hover:bg-slate-100/80 text-slate-900 text-sm font-semibold py-2.5 px-3.5 pr-9 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors"
-              >
-                {classMaterials.length === 0 ? (
-                  <option value="">-- (Lớp học này chưa có tài liệu nào) --</option>
-                ) : (
-                  classMaterials.map(mat => (
-                    <option
-                      key={mat.id}
-                      value={mat.id}
-                      disabled={mat.type === 'lesson' && !mat.isUnlocked}
-                    >
-                      {mat.badgeText} {mat.title} {mat.subText ? `(${mat.subText})` : ''}
-                    </option>
-                  ))
-                )}
-              </select>
-              <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3.5 pointer-events-none" />
-            </div>
-            <p className="mt-1.5 text-xs text-slate-500">
+            <SearchableCombobox
+              id="select-material-dropdown"
+              value={selectedMaterialId}
+              options={materialComboboxOptions}
+              onChange={val => setSelectedMaterialId(val)}
+              placeholder="Nhập tên tài liệu, bài học hoặc chọn từ danh sách..."
+              emptyText={
+                classMaterials.length === 0
+                  ? 'Lớp học này chưa có tài liệu nào'
+                  : 'Không tìm thấy tài liệu phù hợp'
+              }
+            />
+            <p className="mt-2 text-xs text-slate-500">
               {isKhoTaiLieu
                 ? 'Kho Tài Liệu chung: Tất cả thành viên đều có thể xem và tải tài liệu miễn phí hoặc mua tài liệu thu phí.'
                 : 'Chỉ học sinh trong lớp mới thấy và truy cập tài liệu phát hành cho lớp này.'}
@@ -1220,7 +1524,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 <div className="p-2.5 bg-slate-50 rounded-xl">
                   <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
                   <span className="text-base font-extrabold text-slate-800">
-                    {isKhoTaiLieu ? 'Công khai' : `${currentClass.studentCount || 0} HS`}
+                    {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
                   </span>
                 </div>
                 <div className="p-2.5 bg-slate-50 rounded-xl">
@@ -1316,20 +1620,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL GOOGLE MAPS DẪN ĐƯỜNG LỚP HỌC */}
-      {showGpsModal && (
+      {/* MODAL GOOGLE MAPS CHỈNH SỬA TỌA ĐỘ LỚP HỌC (Dành riêng cho Quản trị, Quản lý, GV mở lớp) */}
+      {showGpsModal && canEditCoordinates && (
         <GpsPickerModal
-          title="Google Maps — Bản Đồ Dẫn Đường Lớp Học"
+          title={`Google Maps — Chỉnh Sửa Tọa Độ Lớp: ${currentClass ? currentClass.name : 'Kho Tài Liệu'}`}
           userNameOrContext={currentClass ? `${currentClass.name} (${currentClass.code})` : undefined}
           initialLat={selectedLat}
           initialLng={selectedLng}
           onClose={() => setShowGpsModal(false)}
-          onConfirm={coordsStr => {
-            setGpsCoords(coordsStr);
-            setShowGpsModal(false);
-            setNotification(`Đã xác nhận vị trí dẫn đường lớp học: [${coordsStr}]`);
-            setTimeout(() => setNotification(null), 4000);
-          }}
+          onConfirm={handleConfirmGps}
         />
       )}
     </div>
