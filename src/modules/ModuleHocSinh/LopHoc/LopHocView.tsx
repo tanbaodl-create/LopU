@@ -691,28 +691,54 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     const nowMs = new Date().getTime();
 
     return publishedDocuments.filter(doc => {
+      // Bỏ qua tài liệu chưa được xuất bản hoặc ở trạng thái nháp
+      if (doc.isPublished === false && (!doc.publishedToClasses || doc.publishedToClasses.length === 0)) {
+        return false;
+      }
+
+      // Kiểm tra tài liệu có bán bằng Kim Cương hay không
+      const isForDiamondSale = Boolean(
+        (doc.isForSale && (doc.priceDiamonds ?? 0) > 0) ||
+        (typeof doc.priceDiamonds === 'number' && doc.priceDiamonds > 0)
+      );
+
       if (isKhoTaiLieu) {
-        const isTargetedToKhoTaiLieu =
-          doc.publishedToClasses?.includes('cls_open_library') ||
-          doc.publishedToClasses?.includes('open-library') ||
-          doc.publishedToClasses?.includes('KTL') ||
-          doc.publishedToClasses?.includes('KTL-OPEN') ||
-          doc.isForSale ||
-          (doc.priceDiamonds !== undefined && doc.priceDiamonds >= 0) ||
-          doc.isPublished;
-        if (!isTargetedToKhoTaiLieu) return false;
+        // Tài liệu nào có bán kim cương thì mới vào lớp học Kho tài liệu
+        if (!isForDiamondSale) return false;
       } else {
+        // Khi phát hành tài liệu vào lớp nào thì nó mới hiện trong danh sách tài liệu của lớp đó
         const targetClasses = doc.publishedToClasses || [];
         const isTargetedToThisClass =
           targetClasses.includes(selectedClassId) ||
-          (currentClass?.code && targetClasses.includes(currentClass.code)) ||
-          (currentClass?.name && targetClasses.includes(currentClass.name));
+          (currentClass?.id && targetClasses.includes(currentClass.id)) ||
+          (currentClass?.code &&
+            targetClasses.some(
+              tc => tc && tc.toLowerCase().trim() === currentClass.code.toLowerCase().trim()
+            )) ||
+          (currentClass?.name &&
+            targetClasses.some(
+              tc => tc && tc.toLowerCase().trim() === currentClass.name.toLowerCase().trim()
+            )) ||
+          // Kiểm tra nếu giáo viên cấu hình phát hành từng nút chuyên đề / bài học vào lớp này
+          (doc.nodeConfigs &&
+            Object.values(doc.nodeConfigs).some(
+              nc =>
+                nc.publishedToClasses?.includes(selectedClassId) ||
+                (currentClass?.id && nc.publishedToClasses?.includes(currentClass.id)) ||
+                (currentClass?.code &&
+                  nc.publishedToClasses?.some(
+                    tc => tc && tc.toLowerCase().trim() === currentClass.code.toLowerCase().trim()
+                  ))
+            ));
+
         if (!isTargetedToThisClass) return false;
       }
 
       const sched =
         doc.classSchedules?.[selectedClassId] ||
-        (isKhoTaiLieu ? doc.classSchedules?.['open-library'] : undefined);
+        (isKhoTaiLieu
+          ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library'])
+          : undefined);
       if (sched) {
         if (sched.startDate) {
           const startMs = new Date(sched.startDate).getTime();
