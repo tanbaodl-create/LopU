@@ -185,7 +185,7 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'PhatHanhTaiLieu',
         name: 'PhatHanhTaiLieu (Gộp nút thành 1 nút ⚙️ Cài đặt, Phân biệt lớp Thừa hưởng màu Tím chọn sẵn & Lọc lớp do Giáo viên mở)',
         folderPath: 'src/modules/ModuleGiaoVien/PhatHanhTaiLieu',
-        description: 'Module độc lập chuyên trách Phát hành Tài liệu: 1) Giao diện tinh gọn, loại bỏ Thư viện mở khỏi Mục 1; 2) Phát hành phân cấp Cấu trúc (Tài liệu -> Chương -> Bài -> Vấn đề -> Chuyên đề -> Luyện tập -> Bài đánh giá -> KTDG); 3) Gộp các nút thành 1 nút "⚙️ Cài đặt" duy nhất ở cuối mỗi vị trí, mở modal xem chi tiết phát hành; 4) Modal tự động chọn sẵn lớp Thừa hưởng từ cha với màu Tím nổi bật, cho phép bấm chọn/bỏ chọn trực tiếp; 5) Chỉ hiển thị danh sách các Lớp do chính Giáo viên đó mở.',
+        description: 'Module độc lập chuyên trách Phát hành Tài liệu: 1) Kênh Kho tài liệu 💎 toàn trường đồng bộ cho cả tài liệu miễn phí và có phí; 2) Phát hành phân cấp Cấu trúc (Tài liệu -> Chương -> Bài -> Vấn đề -> Chuyên đề -> Luyện tập -> Bài đánh giá -> KTDG); 3) Gộp các nút thành 1 nút "⚙️ Cài đặt" duy nhất ở cuối mỗi vị trí, mở modal xem chi tiết phát hành; 4) Modal tự động chọn sẵn lớp Thừa hưởng từ cha với màu Tím nổi bật, cho phép bấm chọn/bỏ chọn trực tiếp; 5) Chỉ hiển thị danh sách các Lớp do chính Giáo viên đó mở.',
         purpose: 'Cài đặt phát hành & Định giá bán Kim Cương (💎) từng vị trí tinh gọn với 1 nút ⚙️ Cài đặt và màu sắc phân biệt lớp Thừa hưởng',
         viewId: 'teaching-monetization',
         icon: Coins,

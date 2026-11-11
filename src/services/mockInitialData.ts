@@ -34,7 +34,7 @@ export const INITIAL_USERS: UserProfile[] = [
 export const INITIAL_CLASSES: ClassItem[] = [
   {
     id: 'cls_open_library',
-    name: 'Kho Tài Liệu 💎',
+    name: 'Kho tài liệu 💎',
     code: 'KTL-OPEN',
     subject: 'Chung (Tất cả môn)',
     grade: 'Toàn trường',
@@ -47,7 +47,7 @@ export const INITIAL_CLASSES: ClassItem[] = [
     academicYear: '2025-2026',
     semester: 'Học kỳ I',
     color: 'emerald',
-    description: 'Kho tài liệu công khai dành cho tất cả học sinh và thành viên hệ thống truy cập (chứa cả tài liệu Miễn phí 🆓 và Trả phí Kim Cương 💎)',
+    description: 'Kho tài liệu công khai dành cho tất cả thành viên truy cập (chứa các tài liệu bán và tài liệu miễn phí 0 kim cương)',
     lessons: [
       {
         id: 'les_lib_01',
@@ -57,7 +57,7 @@ export const INITIAL_CLASSES: ClassItem[] = [
         isUnlocked: true,
         estimatedMinutes: 90,
         unlockDate: '2025-09-01',
-        tags: ['Đề thi', 'Toán 12', 'Miễn phí'],
+        tags: ['Đề thi', 'Toán 12', 'Miễn phí (0 💎)'],
       },
       {
         id: 'les_lib_02',

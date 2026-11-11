@@ -92,13 +92,6 @@ export const MENU_GROUPS: MenuGroup[] = [
     icon: Users,
     subItems: [
       {
-        id: 'settings-permissions',
-        label: 'Quản lý Lớp dạy',
-        badge: 'Mở lớp & PIN',
-        icon: KeyRound,
-        description: 'Giáo viên mở lớp mới, quản lý danh sách lớp, cấu hình mã PIN bảo mật và duyệt học sinh vào lớp',
-      },
-      {
         id: 'teaching-soanthao',
         label: 'Tài liệu',
         badge: 'Word 💎',

@@ -105,19 +105,82 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     setPublishedDocuments(allDocs);
   };
 
+  // Luôn luôn hiển thị Lớp "Kho tài liệu 💎" cho tất cả người dùng (học sinh, giáo viên, quản trị viên, khách)
+  const userClassOptions = useMemo(() => {
+    let openClass = classes.find(
+      c => c.id === 'cls_open_library' || c.code === 'KTL-OPEN' || c.code === 'TVM-OPEN' || c.name?.toLowerCase().includes('kho tài liệu')
+    );
+    if (!openClass) {
+      openClass = {
+        id: 'cls_open_library',
+        name: 'Kho tài liệu 💎',
+        code: 'KTL-OPEN',
+        subject: 'Chung (Tất cả môn)',
+        grade: 'Toàn trường',
+        teacherId: 'u_superadmin_1',
+        teacherName: 'Hệ thống & Tất cả GV',
+        room: 'Kho Học Liệu Công Khai',
+        pinCode: '000000',
+        requirePin: false,
+        studentCount: 999,
+        academicYear: '2025-2026',
+        semester: 'Học kỳ I',
+        color: 'emerald',
+        description: 'Kho tài liệu công khai dành cho tất cả thành viên truy cập (chứa các tài liệu bán và tài liệu miễn phí 0 kim cương)',
+        lessons: [
+          {
+            id: 'les_lib_01',
+            title: 'Bộ Đề Thi Thử THPT Quốc Gia - Chuyên Đề Toán 12',
+            unit: 'Chuyên đề 01',
+            description: 'Tài liệu tổng hợp đề thi thử chuẩn cấu trúc Bộ GD&ĐT có đáp án và lời giải chi tiết.',
+            isUnlocked: true,
+            estimatedMinutes: 90,
+            unlockDate: '2025-09-01',
+            tags: ['Đề thi', 'Toán 12', 'Miễn phí (0 💎)'],
+          },
+          {
+            id: 'les_lib_02',
+            title: 'Bí Quyết Ôn Thi Siêu Tốc & Bài Tập Phân Loại Cao 9+',
+            unit: 'Chuyên đề 02',
+            description: 'Chuyên đề bài tập phân hóa vận dụng cao lấy điểm 9+ kèm sơ đồ tư duy tóm tắt.',
+            isUnlocked: true,
+            estimatedMinutes: 120,
+            unlockDate: '2025-09-05',
+            tags: ['Vận dụng cao', 'Toán 12', 'Kim Cương 💎'],
+          },
+        ],
+      };
+    }
+
+    const openClasses = [openClass];
+    if (studentProfile && Array.isArray(studentProfile.classIds) && studentProfile.classIds.length > 0) {
+      const classSet = new Set(studentProfile.classIds.map(c => c.trim().toLowerCase()));
+      const userSpecific = classes.filter(
+        c => c.id !== openClass!.id && (classSet.has(c.code.toLowerCase()) || classSet.has(c.name.toLowerCase()) || classSet.has(c.id.toLowerCase()))
+      );
+      return [...openClasses, ...userSpecific];
+    }
+    const otherClasses = classes.filter(c => c.id !== openClass!.id);
+    return [...openClasses, ...otherClasses];
+  }, [classes, studentProfile]);
+
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       const list = await getClasses();
       setClasses(list);
       if (list.length > 0) {
-        setSelectedClassId(list[0].id);
-        const firstUnlocked = list[0].lessons.find(l => l.isUnlocked);
+        const defaultClass = list.find(c => c.id === 'cls_open_library' || c.code === 'KTL-OPEN') || list[0];
+        setSelectedClassId(defaultClass.id);
+        const firstUnlocked = defaultClass.lessons.find(l => l.isUnlocked);
         if (firstUnlocked) {
           setSelectedLessonId(firstUnlocked.id);
-        } else if (list[0].lessons.length > 0) {
-          setSelectedLessonId(list[0].lessons[0].id);
+        } else if (defaultClass.lessons.length > 0) {
+          setSelectedLessonId(defaultClass.lessons[0].id);
         }
+      } else {
+        setSelectedClassId('cls_open_library');
+        setSelectedLessonId('les_lib_01');
       }
       await loadStudentAndDocs();
       setLoading(false);
@@ -125,7 +188,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     loadData();
   }, []);
 
-  const currentClass = classes.find(c => c.id === selectedClassId) || classes[0];
+  const currentClass = userClassOptions.find(c => c.id === selectedClassId) || userClassOptions[0];
   const unlockedLessons = currentClass ? currentClass.lessons.filter(l => l.isUnlocked) : [];
   const currentLesson = currentClass?.lessons.find(l => l.id === selectedLessonId);
 
@@ -133,14 +196,30 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const currentClassDocuments = useMemo(() => {
     if (!selectedClassId) return [];
     const nowMs = new Date().getTime();
+    const isKhoTaiLieu =
+      selectedClassId === 'cls_open_library' ||
+      selectedClassId === 'open-library' ||
+      currentClass?.code === 'KTL-OPEN' ||
+      currentClass?.name?.toLowerCase().includes('kho tài liệu');
 
     return publishedDocuments.filter(doc => {
-      if (!doc.publishedToClasses || !doc.publishedToClasses.includes(selectedClassId)) {
-        return false;
+      // Trong Kho tài liệu: Chứa cả tài liệu bán (> 0 kim cương) và tài liệu miễn phí (bán giá 0 kim cương)
+      if (isKhoTaiLieu) {
+        const isTargetedToKhoTaiLieu =
+          doc.publishedToClasses?.includes('cls_open_library') ||
+          doc.publishedToClasses?.includes('open-library') ||
+          doc.isForSale ||
+          (doc.priceDiamonds !== undefined && doc.priceDiamonds >= 0) ||
+          doc.isPublished;
+        if (!isTargetedToKhoTaiLieu) return false;
+      } else {
+        if (!doc.publishedToClasses || !doc.publishedToClasses.includes(selectedClassId)) {
+          return false;
+        }
       }
 
       // Kiểm tra lịch mở phát hành riêng cho lớp
-      const sched = doc.classSchedules?.[selectedClassId];
+      const sched = doc.classSchedules?.[selectedClassId] || (isKhoTaiLieu ? doc.classSchedules?.['open-library'] : undefined);
       if (sched) {
         if (sched.startDate) {
           const startMs = new Date(sched.startDate).getTime();
@@ -154,28 +233,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
       return true;
     });
-  }, [publishedDocuments, selectedClassId]);
-
-  // Rà soát danh sách "Các Lớp Dạy/Học" từ Hồ Sơ Chi Tiết + Luôn hiển thị Lớp "Kho Tài Liệu 💎" cho tất cả người dùng
-  const userClassOptions = useMemo(() => {
-    const openClasses = classes.filter(c => c.id === 'cls_open_library' || c.code === 'KTL-OPEN' || c.code === 'TVM-OPEN' || c.name.includes('Kho Tài Liệu') || c.pinCode === '000000');
-    if (studentProfile && Array.isArray(studentProfile.classIds) && studentProfile.classIds.length > 0) {
-      const classSet = new Set(studentProfile.classIds.map(c => c.trim().toLowerCase()));
-      const userSpecific = classes.filter(c => classSet.has(c.code.toLowerCase()) || classSet.has(c.name.toLowerCase()) || classSet.has(c.id.toLowerCase()));
-      const combined = [...openClasses];
-      userSpecific.forEach(c => {
-        if (!combined.some(item => item.id === c.id)) {
-          combined.push(c);
-        }
-      });
-      return combined;
-    }
-    return classes.length > 0 ? classes : openClasses;
-  }, [classes, studentProfile]);
+  }, [publishedDocuments, selectedClassId, currentClass]);
 
   const handleClassChange = (classId: string) => {
     setSelectedClassId(classId);
-    const target = classes.find(c => c.id === classId);
+    const target = userClassOptions.find(c => c.id === classId);
     if (target) {
       const firstUnlocked = target.lessons.find(l => l.isUnlocked);
       setSelectedLessonId(firstUnlocked ? firstUnlocked.id : target.lessons[0]?.id || '');
@@ -293,13 +355,13 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     );
   }
 
-  if (classes.length === 0) {
+  if (userClassOptions.length === 0) {
     return (
       <div id="learning-classes-view" className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs space-y-3">
         <BookOpen className="w-12 h-12 text-slate-300 mx-auto" />
         <h3 className="text-base font-bold text-slate-900">Chưa có lớp học hoặc chưa có tài liệu</h3>
         <p className="text-xs text-slate-500 max-w-lg mx-auto leading-relaxed">
-          Hiện tại chưa có lớp học nào được khởi tạo hoặc gán cho bạn. Giáo viên có thể truy cập module <strong>Quản Lý Lớp Dạy</strong> để tạo lớp mới và tải lên tài liệu học tập.
+          Hiện tại chưa có lớp học nào được khởi tạo hoặc gán cho bạn.
         </p>
       </div>
     );
@@ -558,7 +620,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {currentClassDocuments.map(doc => {
-                      const isFree = !doc.isForSale;
+                      const isFree = !doc.isForSale || (doc.priceDiamonds ?? 0) === 0;
                       const isOwned = isFree || (doc.purchasedUserIds && doc.purchasedUserIds.includes(currentStudentId));
 
                       return (
@@ -570,7 +632,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                               </span>
                               {isFree ? (
                                 <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
-                                  🆓 Free
+                                  🆓 Miễn phí (0 💎)
                                 </span>
                               ) : isOwned ? (
                                 <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded text-[9px]">

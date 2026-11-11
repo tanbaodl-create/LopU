@@ -121,8 +121,6 @@ export const PhatHanhTaiLieuView: React.FC = () => {
           if (!publishedClasses.includes('open-library')) {
             publishedClasses = [...publishedClasses, 'open-library'];
           }
-        } else {
-          publishedClasses = publishedClasses.filter((c) => c !== 'open-library');
         }
 
         configs[doc.id] = {
@@ -157,7 +155,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
     const currentUserEmail = auth?.currentUser?.email?.toLowerCase();
 
     return classes.filter((cls) => {
-      // Bỏ qua Thư viện mở (vì Thư viện mở là kênh công khai tự động theo giá Kim Cương)
+      // Bỏ qua Kho tài liệu trong danh sách lớp riêng (Kho tài liệu là kênh toàn trường riêng biệt)
       if (cls.id === 'cls_open_library') return false;
 
       // Nếu có ID người dùng hiện tại, kiểm tra teacherId
@@ -188,7 +186,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
 
       const updated = { ...current, [field]: value };
 
-      // Quản lý Thư viện mở 💎
+      // Quản lý Kho tài liệu 💎
       if (field === 'isForSale' || field === 'priceDiamonds') {
         const nextIsForSale = field === 'isForSale' ? Boolean(value) : updated.isForSale;
         const nextPrice = field === 'priceDiamonds' ? Number(value) : updated.priceDiamonds;
@@ -199,8 +197,6 @@ export const PhatHanhTaiLieuView: React.FC = () => {
           if (!updatedClasses.includes('open-library')) {
             updatedClasses = [...updatedClasses, 'open-library'];
           }
-        } else {
-          updatedClasses = updatedClasses.filter((id) => id !== 'open-library');
         }
         updated.publishedToClasses = updatedClasses;
       }
@@ -211,8 +207,6 @@ export const PhatHanhTaiLieuView: React.FC = () => {
 
   // Bật/Tắt Lớp nhận tài liệu ở cấp Bộ Tài Liệu (Gốc)
   const handleToggleClassPublish = (docId: string, classId: string) => {
-    if (classId === 'open-library') return;
-
     setPublishConfigs((prev) => {
       const current = prev[docId];
       if (!current) return prev;
@@ -1126,7 +1120,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                         <span className="text-xs font-bold text-amber-800">Kim Cương (💎)</span>
                       </div>
                       <p className="text-[11px] text-amber-800 leading-relaxed">
-                        Ví dụ: Đặt giá 5 💎 cho riêng Bài kiểm tra KTDG này hoặc Bài tập Luyện tập này. Khi giá bán Kim Cương &gt; 0, vị trí này sẽ <strong>tự động thuộc Thư viện mở 💎</strong> cho người học tự do mua/mở khóa.
+                        Ví dụ: Đặt giá 5 💎 cho riêng Bài kiểm tra KTDG này hoặc Bài tập Luyện tập này. Khi giá bán Kim Cương &gt; 0, vị trí này sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho người học tự do mua/mở khóa.
                       </p>
                     </div>
                   ) : (
@@ -1234,7 +1228,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                   : 'text-indigo-700 hover:bg-indigo-50'
               }`}
             >
-              <Globe className="w-3.5 h-3.5" /> Thư Viện Mở 💎
+              <Globe className="w-3.5 h-3.5" /> Kho Tài Liệu 💎
             </button>
           </div>
 
@@ -1361,7 +1355,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
 
                       {pubClasses.includes('open-library') && (
                         <span className="px-2.5 py-0.5 text-[10px] font-bold bg-indigo-600 text-white rounded-full flex items-center gap-1">
-                          <Globe className="w-3 h-3" /> Thư viện mở 💎
+                          <Globe className="w-3 h-3" /> Kho tài liệu 💎
                         </span>
                       )}
                     </div>
@@ -1416,6 +1410,20 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                       </div>
 
                       <div className="flex flex-wrap gap-2 pt-1 max-h-32 overflow-y-auto pr-1">
+                        {/* Kênh phát hành Kho tài liệu (Toàn trường) - Dành cho cả tài liệu Miễn phí (0 💎) và Có phí */}
+                        <label
+                          onClick={() => handleToggleClassPublish(doc.id, 'open-library')}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold border cursor-pointer transition-all flex items-center gap-1.5 ${
+                            pubClasses.includes('open-library')
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-2xs'
+                              : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+                          }`}
+                        >
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>Kho tài liệu 💎 (Toàn trường)</span>
+                          {pubClasses.includes('open-library') && <Check className="w-3.5 h-3.5" />}
+                        </label>
+
                         {/* Danh sách Lớp Học do chính Giáo viên này phụ trách */}
                         {teacherClasses.length === 0 ? (
                           <p className="text-xs text-slate-400 italic">Chưa có lớp học nào do thầy/cô mở lớp.</p>
@@ -1477,13 +1485,13 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                             <span className="text-xs font-bold text-amber-700">Kim Cương (💎)</span>
                           </div>
                           <p className="text-[11px] text-amber-800 leading-snug">
-                            Tài liệu có giá bán Kim Cương &gt; 0 sẽ <strong>tự động thuộc Thư viện mở 💎</strong> cho tất cả giáo viên &amp; học sinh mua/mở khóa.
+                            Tài liệu có giá bán Kim Cương &gt; 0 sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho tất cả giáo viên &amp; học sinh mua/mở khóa.
                           </p>
                         </div>
                       ) : (
                         <div className="pt-2 text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
                           <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                          <span>Tài liệu Miễn Phí (0 💎) - Chưa thuộc Thư viện mở</span>
+                          <span>Tài liệu Miễn Phí (0 💎) trong Kho tài liệu</span>
                         </div>
                       )}
                     </div>
@@ -1508,7 +1516,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                         {pubClasses.map((classId) => {
                           const className =
                             classId === 'open-library'
-                              ? 'Thư viện mở 💎'
+                              ? 'Kho tài liệu 💎'
                               : classes.find((c) => c.id === classId)?.name || classId;
 
                           const sched = config.classSchedules?.[classId];
@@ -1623,7 +1631,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                           {pubClasses.map((cId) => {
                             const cName =
                               cId === 'open-library'
-                                ? 'Thư viện mở 💎'
+                                ? 'Kho tài liệu 💎'
                                 : classes.find((c) => c.id === cId)?.name || cId;
                             return (
                               <option key={cId} value={cId}>
