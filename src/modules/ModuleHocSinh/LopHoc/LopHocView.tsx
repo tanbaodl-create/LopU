@@ -14,6 +14,10 @@ import {
   Navigation,
   Edit3,
   Check,
+  X,
+  UserPlus,
+  PlusCircle,
+  GraduationCap,
 } from 'lucide-react';
 import {
   ClassItem,
@@ -32,6 +36,7 @@ import {
   rewardStudentDiamonds,
   getPinRequests,
   saveClass,
+  saveUser,
 } from '../../ConnectData/ConnectFirestore';
 import { auth } from '../../../config/firebase';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
@@ -58,9 +63,12 @@ export interface ComboboxOption {
   id: string;
   label: string;
   badge?: string;
-  badgeColor?: 'emerald' | 'indigo' | 'amber' | 'slate';
+  badgeColor?: 'emerald' | 'indigo' | 'amber' | 'slate' | 'purple' | 'rose';
   subText?: string;
   disabled?: boolean;
+  actionType?: 'select' | 'register_student' | 'apply_assistant' | 'create_class';
+  classItem?: ClassItem;
+  extraData?: any;
 }
 
 interface SearchableComboboxProps {
@@ -68,6 +76,8 @@ interface SearchableComboboxProps {
   options: ComboboxOption[];
   value: string;
   onChange: (value: string) => void;
+  onSelectOption?: (option: ComboboxOption) => void;
+  getDynamicOptions?: (searchTerm: string) => ComboboxOption[];
   placeholder?: string;
   emptyText?: string;
 }
@@ -77,6 +87,8 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
   options,
   value,
   onChange,
+  onSelectOption,
+  getDynamicOptions,
   placeholder = 'Nhập để tìm kiếm hoặc chọn từ danh sách...',
   emptyText = 'Không tìm thấy kết quả phù hợp',
 }) => {
@@ -112,6 +124,9 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
     if (!isTyping || !searchTerm.trim()) {
       return options;
     }
+    if (getDynamicOptions) {
+      return getDynamicOptions(searchTerm.trim());
+    }
     const cleanSearch = normalizeVietnamese(searchTerm);
     return options.filter(opt => {
       const matchLabel = normalizeVietnamese(opt.label).includes(cleanSearch);
@@ -119,11 +134,15 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
       const matchBadge = opt.badge ? normalizeVietnamese(opt.badge).includes(cleanSearch) : false;
       return matchLabel || matchSub || matchBadge;
     });
-  }, [options, searchTerm, isTyping]);
+  }, [options, searchTerm, isTyping, getDynamicOptions]);
 
   const handleSelect = (opt: ComboboxOption) => {
     if (opt.disabled) return;
-    onChange(opt.id);
+    if (onSelectOption) {
+      onSelectOption(opt);
+    } else {
+      onChange(opt.id);
+    }
     setIsTyping(false);
     setSearchTerm(opt.label);
     setIsOpen(false);
@@ -211,6 +230,10 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
                               ? 'bg-emerald-50 text-emerald-700'
                               : opt.badgeColor === 'amber'
                               ? 'bg-amber-50 text-amber-800'
+                              : opt.badgeColor === 'purple'
+                              ? 'bg-purple-50 text-purple-700'
+                              : opt.badgeColor === 'rose'
+                              ? 'bg-rose-50 text-rose-700'
                               : opt.badgeColor === 'slate'
                               ? 'bg-slate-100 text-slate-600'
                               : 'bg-indigo-50 text-indigo-700'
@@ -227,8 +250,22 @@ export const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
                       </div>
                     )}
                   </div>
-                  {isSelected && (
-                    <Check className="w-4 h-4 text-indigo-600 shrink-0 ml-1" />
+                  {opt.actionType === 'register_student' ? (
+                    <span className="shrink-0 ml-1 px-2.5 py-1 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-lg shadow-2xs">
+                      Đăng ký học
+                    </span>
+                  ) : opt.actionType === 'apply_assistant' ? (
+                    <span className="shrink-0 ml-1 px-2.5 py-1 text-[11px] font-bold bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-2xs">
+                      Làm trợ giảng
+                    </span>
+                  ) : opt.actionType === 'create_class' ? (
+                    <span className="shrink-0 ml-1 px-2.5 py-1 text-[11px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow-2xs">
+                      Mở lớp mới
+                    </span>
+                  ) : (
+                    isSelected && (
+                      <Check className="w-4 h-4 text-indigo-600 shrink-0 ml-1" />
+                    )
                   )}
                 </div>
               );
@@ -270,6 +307,26 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [showGpsModal, setShowGpsModal] = useState<boolean>(false);
   const [selectedLat, setSelectedLat] = useState<number>(15.173411);
   const [selectedLng, setSelectedLng] = useState<number>(108.667254);
+
+  // Modal State: Học sinh đăng ký học lớp ngoài danh sách
+  const [registeringClass, setRegisteringClass] = useState<ClassItem | null>(null);
+  const [registerPinInput, setRegisterPinInput] = useState<string>('');
+  const [registerNote, setRegisterNote] = useState<string>('');
+
+  // Modal State: Giáo viên đăng ký làm trợ giảng cho lớp đã có (Khả năng 1)
+  const [assistantApplyingClass, setAssistantApplyingClass] = useState<ClassItem | null>(null);
+  const [assistantNote, setAssistantNote] = useState<string>('');
+
+  // Modal State: Giáo viên đăng ký mở lớp mới (Khả năng 2)
+  const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
+  const [newClassName, setNewClassName] = useState<string>('');
+  const [newClassCode, setNewClassCode] = useState<string>('');
+  const [newClassSubject, setNewClassSubject] = useState<string>('Toán');
+  const [newClassGrade, setNewClassGrade] = useState<string>('Khối 10');
+  const [newClassRoom, setNewClassRoom] = useState<string>('Phòng học bộ môn');
+  const [newClassPin, setNewClassPin] = useState<string>('');
+  const [newClassRequirePin, setNewClassRequirePin] = useState<boolean>(false);
+  const [newClassCoords, setNewClassCoords] = useState<string>(DEFAULT_KTL_COORDS);
 
   const activeStudentId = studentProfile?.id || currentStudentId;
   const activeEmail = (
@@ -385,7 +442,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       return [...openClasses, ...otherClasses];
     }
 
-    // 2. Giáo viên (teacher) -> Nhìn thấy các lớp mình phụ trách + Kho Tài Liệu
+    // 2. Giáo viên (teacher) -> Nhìn thấy các lớp mình phụ trách + các lớp mình làm trợ giảng + Kho Tài Liệu
     if (effectiveRole === 'teacher') {
       const teacherClasses = classes.filter(c => {
         if (c.id === openClass!.id || c.name?.toLowerCase().includes('kho tài liệu')) return false;
@@ -393,7 +450,15 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         const isMatchName =
           studentProfile?.name &&
           c.teacherName?.toLowerCase().trim() === studentProfile.name.toLowerCase().trim();
-        return isMatchId || isMatchName;
+        const isAssistant =
+          c.assistantIds?.includes(activeStudentId) ||
+          (studentProfile?.id && c.assistantIds?.includes(studentProfile.id)) ||
+          (studentProfile?.name &&
+            c.assistantNames?.some(
+              n => n.toLowerCase().trim() === studentProfile.name.toLowerCase().trim()
+            )) ||
+          (studentProfile?.classIds && studentProfile.classIds.includes(c.id));
+        return isMatchId || isMatchName || isAssistant;
       });
       return [...openClasses, ...teacherClasses];
     }
@@ -713,6 +778,426 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     });
   }, [userClassOptions]);
 
+  // Tìm kiếm thông minh theo ký tự gõ vào (incremental search): gõ thêm từ -> lọc bớt, xóa từ -> bổ sung lại
+  const getClassSearchOptions = (query: string): ComboboxOption[] => {
+    const cleanSearch = normalizeVietnamese(query);
+    if (!cleanSearch) return classComboboxOptions;
+
+    const words = cleanSearch.split(/\s+/).filter(Boolean);
+
+    // 1. Tìm trong toàn bộ danh sách lớp của trường
+    const matchedClasses = classes.filter(c => {
+      const isKTL =
+        c.id === 'cls_open_library' ||
+        c.code === 'KTL-OPEN' ||
+        c.code === 'KTL' ||
+        c.name?.toLowerCase().includes('kho tài liệu');
+
+      const nameNorm = normalizeVietnamese(isKTL ? 'Kho Tài Liệu' : c.name || '');
+      const codeNorm = normalizeVietnamese(isKTL ? 'KTL' : c.code || '');
+      const teacherNorm = normalizeVietnamese(c.teacherName || '');
+      const subjectNorm = normalizeVietnamese(c.subject || '');
+      const roomNorm = normalizeVietnamese(c.room || '');
+
+      return words.every(
+        w =>
+          nameNorm.includes(w) ||
+          codeNorm.includes(w) ||
+          teacherNorm.includes(w) ||
+          subjectNorm.includes(w) ||
+          roomNorm.includes(w)
+      );
+    });
+
+    const results: ComboboxOption[] = [];
+
+    // Helper kiểm tra học sinh đã tham gia lớp chưa
+    const isStudentEnrolledInClass = (c: ClassItem) => {
+      if (
+        c.id === 'cls_open_library' ||
+        c.code === 'KTL-OPEN' ||
+        c.code === 'KTL' ||
+        c.name?.toLowerCase().includes('kho tài liệu')
+      ) {
+        return true;
+      }
+      if (
+        studentProfile?.classIds &&
+        (studentProfile.classIds.includes(c.id) || studentProfile.classIds.includes(c.code))
+      ) {
+        return true;
+      }
+      if (
+        c.studentIds &&
+        (c.studentIds.includes(activeStudentId) ||
+          (studentProfile?.id && c.studentIds.includes(studentProfile.id)))
+      ) {
+        return true;
+      }
+      return pinRequests.some(
+        r =>
+          r.status === 'approved' &&
+          (r.classId === c.id || r.className === c.name) &&
+          (r.studentId === activeStudentId || r.studentEmail === activeEmail)
+      );
+    };
+
+    // Helper kiểm tra giáo viên có phải là GV chính hay trợ giảng của lớp chưa
+    const isTeacherInClass = (c: ClassItem) => {
+      if (
+        c.id === 'cls_open_library' ||
+        c.code === 'KTL-OPEN' ||
+        c.code === 'KTL' ||
+        c.name?.toLowerCase().includes('kho tài liệu')
+      ) {
+        return { isPrimary: false, isAssistant: false, isMember: true };
+      }
+      const isPrimary =
+        (c.teacherId && (c.teacherId === activeStudentId || c.teacherId === studentProfile?.id)) ||
+        (studentProfile?.name &&
+          c.teacherName?.toLowerCase().trim() === studentProfile.name.toLowerCase().trim());
+      const isAssistant =
+        c.assistantIds?.includes(activeStudentId) ||
+        (studentProfile?.id && c.assistantIds?.includes(studentProfile.id)) ||
+        (studentProfile?.name &&
+          c.assistantNames?.some(
+            n => n.toLowerCase().trim() === studentProfile.name.toLowerCase().trim()
+          )) ||
+        (studentProfile?.classIds && studentProfile.classIds.includes(c.id));
+      return { isPrimary, isAssistant, isMember: isPrimary || isAssistant };
+    };
+
+    matchedClasses.forEach(c => {
+      const isKTL =
+        c.id === 'cls_open_library' ||
+        c.code === 'KTL-OPEN' ||
+        c.code === 'KTL' ||
+        c.name?.toLowerCase().includes('kho tài liệu');
+
+      if (isKTL) {
+        results.push({
+          id: 'cls_open_library',
+          label: 'Kho Tài Liệu',
+          badge: 'Toàn trường',
+          badgeColor: 'emerald',
+          subText: 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)',
+          actionType: 'select',
+          classItem: c,
+        });
+        return;
+      }
+
+      if (effectiveRole === 'teacher') {
+        const { isPrimary, isAssistant } = isTeacherInClass(c);
+        if (isPrimary) {
+          results.push({
+            id: c.id,
+            label: `${c.code} — ${c.name}`,
+            badge: 'Lớp bạn dạy',
+            badgeColor: 'indigo',
+            subText: `Phòng: ${c.room || 'Phòng học'} • Sĩ số: ${c.studentCount || 0} HS`,
+            actionType: 'select',
+            classItem: c,
+          });
+        } else if (isAssistant) {
+          results.push({
+            id: c.id,
+            label: `${c.code} — ${c.name}`,
+            badge: 'Trợ giảng',
+            badgeColor: 'emerald',
+            subText: `GV chính: ${c.teacherName || 'Chưa rõ'} • Phòng: ${c.room || 'Phòng học'}`,
+            actionType: 'select',
+            classItem: c,
+          });
+        } else {
+          // Khả năng 1 của GV: Tên lớp đã có trong hệ thống -> có thể đăng ký làm trợ giảng
+          results.push({
+            id: c.id,
+            label: `${c.code} — ${c.name}`,
+            badge: 'Đăng ký làm trợ giảng',
+            badgeColor: 'purple',
+            subText: `GV phụ trách: ${c.teacherName || 'Chưa rõ'} • Khối: ${c.grade} • Nhấn để đăng ký trợ giảng`,
+            actionType: 'apply_assistant',
+            classItem: c,
+          });
+        }
+      } else if (effectiveRole === 'superadmin' || effectiveRole === 'admin') {
+        results.push({
+          id: c.id,
+          label: `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
+          badge: c.code,
+          badgeColor: 'indigo',
+          subText: `GV: ${c.teacherName || 'Chưa rõ'} • Phòng: ${c.room || 'Phòng học'}`,
+          actionType: 'select',
+          classItem: c,
+        });
+      } else {
+        // Học sinh
+        const isEnrolled = isStudentEnrolledInClass(c);
+        if (isEnrolled) {
+          results.push({
+            id: c.id,
+            label: `${c.code} — ${c.name}`,
+            badge: 'Đã tham gia',
+            badgeColor: 'indigo',
+            subText: `GV: ${c.teacherName || 'Chưa rõ'} • Phòng: ${c.room || 'Phòng học'}`,
+            actionType: 'select',
+            classItem: c,
+          });
+        } else {
+          // Học sinh nhập tên lớp bên ngoài danh sách -> tìm thấy trong hệ thống -> cho phép đăng ký học
+          results.push({
+            id: c.id,
+            label: `${c.code} — ${c.name}`,
+            badge: 'Đăng ký học',
+            badgeColor: 'amber',
+            subText: `GV: ${c.teacherName || 'Chưa rõ'} • Khối: ${c.grade} • Nhấn để đăng ký tham gia lớp`,
+            actionType: 'register_student',
+            classItem: c,
+          });
+        }
+      }
+    });
+
+    // Đối với Giáo viên hoặc Quản trị:
+    // Khả năng 2: Nếu chưa có (hoặc muốn mở lớp mới với tên vừa nhập) -> đăng ký mở lớp mới
+    if (effectiveRole === 'teacher' || effectiveRole === 'superadmin' || effectiveRole === 'admin') {
+      const hasExactClass = classes.some(
+        c =>
+          normalizeVietnamese(c.name) === cleanSearch ||
+          normalizeVietnamese(c.code) === cleanSearch
+      );
+      if (!hasExactClass && query.trim().length > 0) {
+        results.push({
+          id: `create_new_class_action`,
+          label: `➕ Đăng ký mở lớp mới: "${query.trim()}"`,
+          badge: 'Mở lớp mới',
+          badgeColor: 'emerald',
+          subText: `Chưa có lớp "${query.trim()}". Nhấn để khởi tạo và mở lớp học mới ngay.`,
+          actionType: 'create_class',
+          extraData: { suggestedName: query.trim() },
+        });
+      }
+    }
+
+    return results;
+  };
+
+  const handleSelectClassOption = (opt: ComboboxOption) => {
+    if (opt.actionType === 'register_student') {
+      if (opt.classItem) {
+        setRegisteringClass(opt.classItem);
+        setRegisterPinInput('');
+        setRegisterNote('');
+      }
+      return;
+    }
+
+    if (opt.actionType === 'apply_assistant') {
+      if (opt.classItem) {
+        setAssistantApplyingClass(opt.classItem);
+        setAssistantNote('');
+      }
+      return;
+    }
+
+    if (opt.actionType === 'create_class') {
+      const suggested = opt.extraData?.suggestedName || '';
+      setNewClassName(suggested);
+      setNewClassCode(
+        suggested
+          ? `LOP-${suggested.replace(/\s+/g, '').toUpperCase().slice(0, 8)}`
+          : `LOP-${Date.now().toString().slice(-4)}`
+      );
+      setNewClassSubject('Toán');
+      setNewClassGrade('Khối 10');
+      setNewClassRoom('Phòng học bộ môn');
+      setNewClassPin('');
+      setNewClassRequirePin(false);
+      setNewClassCoords(DEFAULT_KTL_COORDS);
+      setShowCreateClassModal(true);
+      return;
+    }
+
+    // Mặc định chọn lớp
+    handleClassChange(opt.id);
+  };
+
+  // Xác nhận học sinh đăng ký học lớp ngoài danh sách
+  const handleConfirmStudentRegister = async () => {
+    if (!registeringClass) return;
+
+    if (registeringClass.requirePin) {
+      if (!registerPinInput.trim()) {
+        alert('Vui lòng nhập mã PIN của lớp học để tiếp tục.');
+        return;
+      }
+      if (
+        registerPinInput.trim().toUpperCase() !==
+        registeringClass.pinCode?.trim().toUpperCase()
+      ) {
+        alert('Mã PIN không chính xác! Vui lòng liên hệ giáo viên phụ trách để nhận mã PIN.');
+        return;
+      }
+    }
+
+    // 1. Cập nhật danh sách học sinh của lớp
+    const currentStudentIds = registeringClass.studentIds || [];
+    const updatedStudentIds = Array.from(new Set([...currentStudentIds, activeStudentId]));
+    const updatedClass: ClassItem = {
+      ...registeringClass,
+      studentIds: updatedStudentIds,
+      studentCount: updatedStudentIds.length,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveClass(updatedClass);
+
+    // 2. Cập nhật hồ sơ học sinh
+    if (studentProfile) {
+      const currentClassIds = studentProfile.classIds || [];
+      const updatedClassIds = Array.from(new Set([...currentClassIds, registeringClass.id]));
+      const updatedProfile: UserProfile = {
+        ...studentProfile,
+        classIds: updatedClassIds,
+      };
+      await saveUser(updatedProfile);
+      setStudentProfile(updatedProfile);
+    }
+
+    // 3. Ghi nhận yêu cầu tham gia đã duyệt
+    const newReq: PinJoinRequest = {
+      id: `req_${Date.now()}`,
+      studentId: activeStudentId,
+      studentName: studentProfile?.name || 'Học sinh',
+      studentEmail: activeEmail,
+      classId: registeringClass.id,
+      className: registeringClass.name,
+      submittedPin: registerPinInput.trim().toUpperCase(),
+      status: 'approved',
+      requestDate: new Date().toLocaleString('vi-VN'),
+    };
+    setPinRequests(prev => [newReq, ...prev]);
+
+    // 4. Cập nhật state lớp và tự động chọn lớp vừa đăng ký
+    setClasses(prev => prev.map(c => (c.id === updatedClass.id ? updatedClass : c)));
+    setSelectedClassId(registeringClass.id);
+    setSelectedMaterialId('');
+    setRegisteringClass(null);
+    setRegisterPinInput('');
+    setRegisterNote('');
+
+    setNotification(`Chúc mừng bạn đã đăng ký tham gia lớp "${registeringClass.name}" thành công!`);
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Xác nhận giáo viên đăng ký làm trợ giảng (Khả năng 1)
+  const handleConfirmAssistantRegister = async () => {
+    if (!assistantApplyingClass) return;
+
+    const currentAssistantIds = assistantApplyingClass.assistantIds || [];
+    const currentAssistantNames = assistantApplyingClass.assistantNames || [];
+
+    const teacherName = studentProfile?.name || activeEmail || 'Giáo viên trợ giảng';
+    const updatedAssistantIds = Array.from(new Set([...currentAssistantIds, activeStudentId]));
+    const updatedAssistantNames = Array.from(new Set([...currentAssistantNames, teacherName]));
+
+    const updatedClass: ClassItem = {
+      ...assistantApplyingClass,
+      assistantIds: updatedAssistantIds,
+      assistantNames: updatedAssistantNames,
+      updatedAt: new Date().toISOString(),
+    };
+    await saveClass(updatedClass);
+
+    // Cập nhật profile của giáo viên
+    if (studentProfile) {
+      const currentClassIds = studentProfile.classIds || [];
+      const updatedClassIds = Array.from(
+        new Set([...currentClassIds, assistantApplyingClass.id])
+      );
+      const updatedProfile: UserProfile = {
+        ...studentProfile,
+        classIds: updatedClassIds,
+      };
+      await saveUser(updatedProfile);
+      setStudentProfile(updatedProfile);
+    }
+
+    // Cập nhật state lớp và tự động chọn lớp
+    setClasses(prev => prev.map(c => (c.id === updatedClass.id ? updatedClass : c)));
+    setSelectedClassId(assistantApplyingClass.id);
+    setSelectedMaterialId('');
+    setAssistantApplyingClass(null);
+    setAssistantNote('');
+
+    setNotification(
+      `Chúc mừng thầy/cô đã đăng ký làm trợ giảng cho lớp "${assistantApplyingClass.name}" thành công!`
+    );
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Xác nhận giáo viên đăng ký mở lớp mới (Khả năng 2)
+  const handleConfirmCreateClass = async () => {
+    if (!newClassName.trim()) {
+      alert('Vui lòng nhập tên lớp học!');
+      return;
+    }
+
+    const classCode = (
+      newClassCode.trim() ||
+      `LOP-${newClassName.replace(/\s+/g, '').toUpperCase().slice(0, 8)}`
+    ).toUpperCase();
+
+    const newClassItem: ClassItem = {
+      id: `cls_${Date.now()}`,
+      name: newClassName.trim(),
+      code: classCode,
+      subject: newClassSubject.trim() || 'Chung',
+      grade: newClassGrade.trim() || 'Khối 10',
+      room: newClassRoom.trim() || 'Phòng học bộ môn',
+      pinCode: newClassPin.trim().toUpperCase() || '000000',
+      requirePin: newClassRequirePin,
+      studentCount: 0,
+      academicYear: '2025-2026',
+      semester: 'Học kỳ I',
+      color: 'indigo',
+      description: `Lớp học ${newClassName.trim()} do thầy/cô ${studentProfile?.name || 'Giáo viên'} phụ trách`,
+      teacherId: activeStudentId,
+      teacherName: studentProfile?.name || activeEmail || 'Giáo viên bộ môn',
+      studentIds: [],
+      assistantIds: [],
+      assistantNames: [],
+      lessons: [],
+      gpsCoords: newClassCoords.trim() || DEFAULT_KTL_COORDS,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveClass(newClassItem);
+
+    // Cập nhật profile giáo viên
+    if (studentProfile) {
+      const currentClassIds = studentProfile.classIds || [];
+      const updatedClassIds = Array.from(new Set([...currentClassIds, newClassItem.id]));
+      const updatedProfile: UserProfile = {
+        ...studentProfile,
+        classIds: updatedClassIds,
+      };
+      await saveUser(updatedProfile);
+      setStudentProfile(updatedProfile);
+    }
+
+    // Thêm vào danh sách lớp và tự động chọn lớp mới
+    setClasses(prev => [newClassItem, ...prev]);
+    setSelectedClassId(newClassItem.id);
+    setSelectedMaterialId('');
+    setShowCreateClassModal(false);
+
+    setNotification(
+      `Đã khởi tạo và mở lớp học "${newClassItem.name}" (Mã: ${newClassItem.code}) thành công!`
+    );
+    setTimeout(() => setNotification(null), 5000);
+  };
+
   const materialComboboxOptions: ComboboxOption[] = useMemo(() => {
     return classMaterials.map(mat => {
       let badgeColor: 'emerald' | 'amber' | 'indigo' | 'slate' = 'indigo';
@@ -899,8 +1384,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               value={selectedClassId}
               options={classComboboxOptions}
               onChange={handleClassChange}
+              onSelectOption={handleSelectClassOption}
+              getDynamicOptions={getClassSearchOptions}
               placeholder="Nhập tên lớp, mã lớp hoặc chọn từ danh sách..."
-              emptyText="Không tìm thấy lớp học phù hợp"
+              emptyText="Không tìm thấy lớp học phù hợp trong hệ thống"
             />
 
             {currentClass && (
@@ -1630,6 +2117,367 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           onClose={() => setShowGpsModal(false)}
           onConfirm={handleConfirmGps}
         />
+      )}
+
+      {/* 1. MODAL HỌC SINH ĐĂNG KÝ HỌC (Khi tìm lớp ngoài danh sách) */}
+      {registeringClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600">
+                  <UserPlus className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Đăng Ký Tham Gia Lớp Học</h3>
+                  <p className="text-xs text-slate-500">Ghi danh vào lớp học trong hệ thống</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRegisteringClass(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Tên lớp:</span>
+                <span className="font-bold text-slate-900">{registeringClass.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Mã lớp:</span>
+                <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                  {registeringClass.code}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Giáo viên phụ trách:</span>
+                <span className="font-semibold text-slate-800">{registeringClass.teacherName || 'Chưa phân công'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Môn &amp; Khối:</span>
+                <span className="text-slate-700">{registeringClass.subject} • {registeringClass.grade}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Phòng học:</span>
+                <span className="text-slate-700">{registeringClass.room || 'Phòng học'}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-200/60 pt-2">
+                <span className="text-slate-600 font-medium">Học sinh đăng ký:</span>
+                <span className="font-bold text-indigo-900">{studentProfile?.name || 'Học sinh'} ({activeEmail || activeStudentId})</span>
+              </div>
+            </div>
+
+            {registeringClass.requirePin ? (
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Mã PIN lớp học <span className="text-rose-500">* (Bắt buộc)</span>
+                </label>
+                <input
+                  type="text"
+                  value={registerPinInput}
+                  onChange={e => setRegisterPinInput(e.target.value.toUpperCase())}
+                  placeholder="Nhập mã PIN lớp học..."
+                  maxLength={10}
+                  className="w-full text-center font-mono tracking-widest text-lg font-bold py-2.5 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-amber-500 focus:outline-hidden bg-slate-50 focus:bg-white"
+                />
+                <p className="text-[11px] text-amber-700">
+                  * Lớp học này cài đặt bảo vệ bằng mã PIN. Vui lòng hỏi giáo viên phụ trách để nhận mã.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-center gap-2 font-medium">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Lớp học mở tự do, không yêu cầu mã PIN. Bạn có thể xác nhận tham gia ngay!</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Ghi chú / Lời nhắn (Tùy chọn)
+              </label>
+              <textarea
+                rows={2}
+                value={registerNote}
+                onChange={e => setRegisterNote(e.target.value)}
+                placeholder="Nhập lời nhắn gửi đến giáo viên phụ trách..."
+                className="w-full text-xs py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden bg-slate-50 focus:bg-white resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setRegisteringClass(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmStudentRegister}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <UserPlus className="w-4 h-4" />
+                <span>Xác nhận đăng ký học</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. MODAL GIÁO VIÊN ĐĂNG KÝ TRỢ GIẢNG (Khả năng 1: Tên lớp đã có) */}
+      {assistantApplyingClass && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Đăng Ký Làm Trợ Giảng</h3>
+                  <p className="text-xs text-slate-500">Hỗ trợ giảng dạy và quản lý lớp học</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setAssistantApplyingClass(null)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 rounded-xl bg-purple-50/60 border border-purple-100 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Tên lớp:</span>
+                <span className="font-bold text-slate-900">{assistantApplyingClass.name}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Mã lớp:</span>
+                <span className="font-mono font-bold text-purple-700 bg-purple-100/70 px-2 py-0.5 rounded border border-purple-200">
+                  {assistantApplyingClass.code}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Giáo viên phụ trách chính:</span>
+                <span className="font-bold text-slate-800">{assistantApplyingClass.teacherName || 'Chưa phân công'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Môn &amp; Khối:</span>
+                <span className="text-slate-700">{assistantApplyingClass.subject} • {assistantApplyingClass.grade}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500">Phòng học:</span>
+                <span className="text-slate-700">{assistantApplyingClass.room || 'Phòng học'}</span>
+              </div>
+              <div className="flex justify-between items-center border-t border-purple-200/60 pt-2">
+                <span className="text-slate-600 font-medium">Giáo viên đăng ký trợ giảng:</span>
+                <span className="font-bold text-purple-900">{studentProfile?.name || activeEmail}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Ghi chú phân công / Chuyên môn hỗ trợ (Tùy chọn)
+              </label>
+              <textarea
+                rows={2}
+                value={assistantNote}
+                onChange={e => setAssistantNote(e.target.value)}
+                placeholder="Ví dụ: Phụ trách chấm bài luyện tập, quản lý điểm danh và bài kiểm tra..."
+                className="w-full text-xs py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-purple-500 focus:outline-hidden bg-slate-50 focus:bg-white resize-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setAssistantApplyingClass(null)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmAssistantRegister}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Xác nhận làm trợ giảng</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. MODAL GIÁO VIÊN ĐĂNG KÝ MỞ LỚP MỚI (Khả năng 2: Tên lớp chưa có) */}
+      {showCreateClassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+                  <PlusCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Đăng Ký Mở Lớp Học Mới</h3>
+                  <p className="text-xs text-slate-500">Khởi tạo lớp học mới và đưa vào hệ thống</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCreateClassModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="sm:col-span-2 space-y-1">
+                <label className="block font-bold text-slate-700">Tên lớp học <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={newClassName}
+                  onChange={e => setNewClassName(e.target.value)}
+                  placeholder="Ví dụ: 10A1 - Toán Chuyên..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Mã lớp <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={newClassCode}
+                  onChange={e => setNewClassCode(e.target.value.toUpperCase())}
+                  placeholder="Ví dụ: 10A1, TOAN-10..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono uppercase font-bold text-indigo-700"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Môn học</label>
+                <input
+                  type="text"
+                  value={newClassSubject}
+                  onChange={e => setNewClassSubject(e.target.value)}
+                  placeholder="Toán, Văn, Ngoại ngữ..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Khối lớp</label>
+                <select
+                  value={newClassGrade}
+                  onChange={e => setNewClassGrade(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white cursor-pointer"
+                >
+                  <option value="Khối 6">Khối 6</option>
+                  <option value="Khối 7">Khối 7</option>
+                  <option value="Khối 8">Khối 8</option>
+                  <option value="Khối 9">Khối 9</option>
+                  <option value="Khối 10">Khối 10</option>
+                  <option value="Khối 11">Khối 11</option>
+                  <option value="Khối 12">Khối 12</option>
+                  <option value="Toàn trường">Toàn trường</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Phòng học</label>
+                <input
+                  type="text"
+                  value={newClassRoom}
+                  onChange={e => setNewClassRoom(e.target.value)}
+                  placeholder="Ví dụ: Phòng 101, Nhà A..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="sm:col-span-2 space-y-1">
+                <label className="block font-bold text-slate-700">Tọa độ lớp học (Dẫn đường Google Maps)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newClassCoords}
+                    onChange={e => setNewClassCoords(e.target.value)}
+                    placeholder="15.173411, 108.667254"
+                    className="flex-1 py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                          pos => {
+                            const lat = pos.coords.latitude.toFixed(6);
+                            const lng = pos.coords.longitude.toFixed(6);
+                            setNewClassCoords(`${lat}, ${lng}`);
+                          },
+                          () => alert('Không thể lấy vị trí hiện tại của thiết bị.')
+                        );
+                      }
+                    }}
+                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors shrink-0 cursor-pointer text-xs"
+                    title="Lấy vị trí GPS hiện tại"
+                  >
+                    Lấy GPS hiện tại
+                  </button>
+                </div>
+              </div>
+
+              <div className="sm:col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={newClassRequirePin}
+                    onChange={e => setNewClassRequirePin(e.target.checked)}
+                    className="w-4 h-4 text-emerald-600 rounded border-slate-300 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <span>Yêu cầu mã PIN khi học sinh tham gia lớp</span>
+                </label>
+                {newClassRequirePin && (
+                  <div className="pt-2">
+                    <input
+                      type="text"
+                      value={newClassPin}
+                      onChange={e => setNewClassPin(e.target.value.toUpperCase())}
+                      placeholder="Nhập mã PIN (ví dụ: 123456)..."
+                      maxLength={10}
+                      className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono uppercase font-bold text-center bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="sm:col-span-2 p-2.5 bg-indigo-50/70 border border-indigo-100 rounded-xl text-indigo-900 font-medium">
+                Giáo viên mở lớp &amp; phụ trách: <span className="font-bold">{studentProfile?.name || activeEmail || 'Giáo viên phụ trách'}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateClassModal(false)}
+                className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmCreateClass}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>Tạo và mở lớp học</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

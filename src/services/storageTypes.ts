@@ -129,6 +129,8 @@ export interface ClassItem {
   color: string;
   updatedAt?: string;
   gpsCoords?: string;
+  assistantIds?: string[];
+  assistantNames?: string[];
 }
 
 export interface ImportDeduplicationReport {
