@@ -255,7 +255,13 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
 
       // Module 1: Không gian Học tập (ModuleHocSinh)
       case 'learning-classes':
-        return <LopHocView />;
+        return (
+          <LopHocView
+            currentRole={currentRole}
+            currentUserProfile={currentUserProfile}
+            firebaseUser={firebaseUser}
+          />
+        );
       case 'learning-seating':
         return <SoDoLopView currentRole={currentRole} onOpenDriveConnect={onOpenDriveConnect} />;
       case 'learning-schedule':
@@ -290,7 +296,13 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
         return <QuanLyThietBiView />;
 
       default:
-        return <LopHocView />;
+        return (
+          <LopHocView
+            currentRole={currentRole}
+            currentUserProfile={currentUserProfile}
+            firebaseUser={firebaseUser}
+          />
+        );
     }
   };
 
