@@ -1159,27 +1159,21 @@ export const PhatHanhTaiLieuView: React.FC = () => {
       })()}
 
       {/* Header Module */}
-      <div className="bg-gradient-to-r from-teal-700 via-emerald-600 to-indigo-700 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-teal-700 via-emerald-600 to-indigo-700 rounded-2xl p-4 text-white shadow-md relative overflow-hidden">
         <div className="absolute right-0 top-0 translate-x-10 -translate-y-10 w-64 h-64 bg-white/10 rounded-full blur-2xl pointer-events-none" />
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-[11px] font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                <Send className="w-3.5 h-3.5" /> Phân Hệ Phát Hành Tài Liệu
-              </span>
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black">Phát Hành Tài Liệu Lớp Học &amp; Bán Kim Cương</h1>
-            <p className="text-xs sm:text-sm text-teal-100 max-w-2xl leading-relaxed">
-              Phát hành bài giảng, chuyên đề học tập vào từng Lớp học cụ thể hoặc bán thu phí Kim Cương (💎). Cấu hình phát hành chi tiết theo cây phân cấp Cấu trúc (Tài liệu -&gt; Chương -&gt; Bài -&gt; Vấn đề -&gt; Chuyên đề -&gt; Luyện tập -&gt; Đánh giá -&gt; KTDG).
-            </p>
+        <div className="relative z-10 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="px-3.5 py-1.5 bg-white/20 backdrop-blur-md rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-2">
+              <Send className="w-4 h-4" /> Phát Hành Tài Liệu
+            </span>
           </div>
 
           <button
             onClick={loadData}
             disabled={isLoading}
-            className="px-4 py-2.5 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-2xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-white/20 shrink-0 self-start md:self-auto"
+            className="px-3.5 py-1.5 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer border border-white/20 shrink-0"
           >
-            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
             <span>Làm Mới</span>
           </button>
         </div>
