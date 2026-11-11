@@ -396,10 +396,18 @@ export const MenuLenLop: React.FC<MenuLenLopProps> = ({
       setCalcInput((prev) => prev.slice(0, -1));
     } else if (val === '=') {
       try {
-        const sanitized = calcInput.replace(/×/g, '*').replace(/÷/g, '/');
-        // eslint-disable-next-line no-eval
-        const res = eval(sanitized);
-        setCalcResult(String(res));
+        const sanitized = calcInput.replace(/×/g, '*').replace(/÷/g, '/').trim();
+        if (!/^[\d\s+\-*/%.()]+$/.test(sanitized)) {
+          setCalcResult('Lỗi biểu thức');
+          return;
+        }
+        const computeSafe = new Function(`"use strict"; return (${sanitized});`);
+        const res = computeSafe();
+        if (typeof res === 'number' && !isNaN(res) && isFinite(res)) {
+          setCalcResult(String(Math.round(res * 100000000) / 100000000));
+        } else {
+          setCalcResult('Lỗi biểu thức');
+        }
       } catch (err) {
         setCalcResult('Lỗi biểu thức');
       }

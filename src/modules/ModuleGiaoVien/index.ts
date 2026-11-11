@@ -5,6 +5,7 @@ export { ModalThemHocSinhExcel } from './NhapHocSinh/ModalThemHocSinhExcel';
 export { ThuongMaiTaiLieuView } from './ThuongMaiTaiLieu/ThuongMaiTaiLieuView';
 export { PhatHanhTaiLieuView } from './PhatHanhTaiLieu/PhatHanhTaiLieuView';
 export { SoanThaoView } from './SoanThao/SoanThaoView';
+export { WordSoanThaoView } from './SoanThao/WordSoanThaoView';
 export { MenuHamSo } from './SoanThao/MenuHamSo';
 export * from './SoanThao/MenuHamSo';
 export { MenuChen } from './SoanThao/MenuChen';

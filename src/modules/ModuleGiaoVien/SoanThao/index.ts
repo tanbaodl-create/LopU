@@ -4,6 +4,7 @@
  */
 
 export { SoanThaoView } from './SoanThaoView';
+export { WordSoanThaoView } from './WordSoanThaoView';
 export { MenuHamSo } from './MenuHamSo';
 export * from './MenuHamSo';
 export { MenuChen } from './MenuChen';
