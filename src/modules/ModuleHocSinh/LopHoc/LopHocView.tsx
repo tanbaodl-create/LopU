@@ -26,6 +26,9 @@ import {
   TeacherDocument,
   PinJoinRequest,
   UserRole,
+  APP_SUBJECTS,
+  AppSubject,
+  isSubjectMatching,
 } from '../../../services/storageTypes';
 import {
   getClasses,
@@ -47,6 +50,10 @@ export const DEFAULT_LOPHOC_PATH = `${DEFAULT_APP_PATH}/LopHoc`;
 
 // Tọa độ mặc định của lớp "Kho Tài Liệu"
 export const DEFAULT_KTL_COORDS = '15.173411, 108.667254';
+
+// Re-export danh sách môn học dùng chung cho toàn bộ ứng dụng
+export { APP_SUBJECTS, isSubjectMatching };
+export type { AppSubject };
 
 // Hàm chuẩn hóa chuỗi tiếng Việt phục vụ tìm kiếm không dấu
 function normalizeVietnamese(str: string): string {
@@ -291,6 +298,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   firebaseUser,
 }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('all');
   const [selectedClassId, setSelectedClassId] = useState<string>('cls_open_library');
   const [selectedMaterialId, setSelectedMaterialId] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(true);
@@ -321,7 +329,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [showCreateClassModal, setShowCreateClassModal] = useState<boolean>(false);
   const [newClassName, setNewClassName] = useState<string>('');
   const [newClassCode, setNewClassCode] = useState<string>('');
-  const [newClassSubject, setNewClassSubject] = useState<string>('Toán');
+  const [newClassSubject, setNewClassSubject] = useState<string>(APP_SUBJECTS[0]);
   const [newClassGrade, setNewClassGrade] = useState<string>('Khối 10');
   const [newClassRoom, setNewClassRoom] = useState<string>('');
   const [newClassPin, setNewClassPin] = useState<string>('');
@@ -756,28 +764,59 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     setSelectedMaterialId('');
   };
 
-  // Danh sách options dạng Combobox để người dùng vừa có thể nhập trực tiếp vừa có thể chọn danh sách
-  const classComboboxOptions: ComboboxOption[] = useMemo(() => {
-    return userClassOptions.map(c => {
-      const isKTL =
-        c.id === 'cls_open_library' ||
-        c.code === 'KTL-OPEN' ||
-        c.code === 'KTL' ||
-        c.name?.toLowerCase().includes('kho tài liệu');
+  // Thay đổi bộ lọc môn học từ dropdown Môn Học
+  const handleSubjectFilterChange = (subj: string) => {
+    setSelectedSubjectFilter(subj);
+    // Nếu lớp hiện tại không thuộc môn học vừa chọn (và không phải Kho Tài Liệu), tự động chuyển sang Kho Tài Liệu hoặc lớp đầu tiên thuộc môn đó
+    if (subj !== 'all' && !isKhoTaiLieu && !isSubjectMatching(currentClass?.subject, subj)) {
+      const firstMatching = userClassOptions.find(
+        c =>
+          c.id !== 'cls_open_library' &&
+          !c.name?.toLowerCase().includes('kho tài liệu') &&
+          isSubjectMatching(c.subject, subj)
+      );
+      if (firstMatching) {
+        setSelectedClassId(firstMatching.id);
+      } else {
+        setSelectedClassId('cls_open_library');
+      }
+      setSelectedMaterialId('');
+    }
+  };
 
-      return {
-        id: c.id,
-        label: isKTL ? 'Kho Tài Liệu' : `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
-        badge: isKTL ? 'Toàn trường' : c.code,
-        badgeColor: isKTL ? 'emerald' : 'indigo',
-        subText: isKTL
-          ? 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)'
-          : c.teacherName
-          ? `Giáo viên: ${c.teacherName} • Địa điểm: ${c.room || 'Chưa cập nhật'}`
-          : undefined,
-      };
-    });
-  }, [userClassOptions]);
+  // Danh sách options dạng Combobox để người dùng vừa có thể nhập trực tiếp vừa có thể chọn danh sách
+  // Tự động lọc theo môn học đã chọn từ dropdown Môn Học (Toán, Lý, Hóa, Sinh, Tin, Anh, Văn)
+  const classComboboxOptions: ComboboxOption[] = useMemo(() => {
+    return userClassOptions
+      .filter(c => {
+        const isKTL =
+          c.id === 'cls_open_library' ||
+          c.code === 'KTL-OPEN' ||
+          c.code === 'KTL' ||
+          c.name?.toLowerCase().includes('kho tài liệu');
+        if (isKTL) return true; // Kho Tài Liệu luôn hiển thị cho tất cả môn
+        return isSubjectMatching(c.subject, selectedSubjectFilter);
+      })
+      .map(c => {
+        const isKTL =
+          c.id === 'cls_open_library' ||
+          c.code === 'KTL-OPEN' ||
+          c.code === 'KTL' ||
+          c.name?.toLowerCase().includes('kho tài liệu');
+
+        return {
+          id: c.id,
+          label: isKTL ? 'Kho Tài Liệu' : `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
+          badge: isKTL ? 'Toàn trường' : (c.subject ? `Môn ${c.subject}` : c.code),
+          badgeColor: isKTL ? 'emerald' : 'indigo',
+          subText: isKTL
+            ? 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)'
+            : c.teacherName
+            ? `Môn: ${c.subject || 'Chung'} • Giáo viên: ${c.teacherName} • Địa điểm: ${c.room || 'Chưa cập nhật'}`
+            : `Môn: ${c.subject || 'Chung'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
+        };
+      });
+  }, [userClassOptions, selectedSubjectFilter]);
 
   // Tìm kiếm thông minh theo ký tự gõ vào (incremental search): gõ thêm từ -> lọc bớt, xóa từ -> bổ sung lại
   const getClassSearchOptions = (query: string): ComboboxOption[] => {
@@ -786,13 +825,17 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
     const words = cleanSearch.split(/\s+/).filter(Boolean);
 
-    // 1. Tìm trong toàn bộ danh sách lớp của trường
+    // 1. Tìm trong toàn bộ danh sách lớp của trường (kết hợp lọc môn học nếu có)
     const matchedClasses = classes.filter(c => {
       const isKTL =
         c.id === 'cls_open_library' ||
         c.code === 'KTL-OPEN' ||
         c.code === 'KTL' ||
         c.name?.toLowerCase().includes('kho tài liệu');
+
+      if (!isKTL && !isSubjectMatching(c.subject, selectedSubjectFilter)) {
+        return false;
+      }
 
       const nameNorm = normalizeVietnamese(isKTL ? 'Kho Tài Liệu' : c.name || '');
       const codeNorm = normalizeVietnamese(isKTL ? 'KTL' : c.code || '');
@@ -1010,7 +1053,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           ? `LOP-${suggested.replace(/\s+/g, '').toUpperCase().slice(0, 8)}`
           : `LOP-${Date.now().toString().slice(-4)}`
       );
-      setNewClassSubject('Toán');
+      setNewClassSubject(selectedSubjectFilter !== 'all' ? selectedSubjectFilter : APP_SUBJECTS[0]);
       setNewClassGrade('Khối 10');
       setNewClassRoom('');
       setNewClassPin('');
@@ -1369,16 +1412,49 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         </div>
       )}
 
-      {/* Top Filter Bar: Combobox Chọn Lớp & Combobox Chọn Tài Liệu/Bài Học */}
+      {/* Top Filter Bar: Dropdown Môn Học, Combobox Chọn Lớp & Combobox Chọn Tài Liệu/Bài Học */}
       <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* 1. Combobox Chọn Lớp Học (Nhập trực tiếp hoặc chọn từ danh sách) */}
-          <div>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          {/* 1. Dropdown Chọn Môn Học (phía trước dropdown Lớp học để lọc lớp theo môn) */}
+          <div className="md:col-span-3">
+            <label
+              htmlFor="select-subject-filter"
+              className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
+            >
+              1. Môn Học
+            </label>
+            <div className="relative">
+              <select
+                id="select-subject-filter"
+                value={selectedSubjectFilter}
+                onChange={e => handleSubjectFilterChange(e.target.value)}
+                className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-slate-900 text-sm font-bold py-2.5 px-3.5 pr-8 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden transition-colors shadow-2xs cursor-pointer appearance-none"
+              >
+                <option value="all">📚 Tất cả môn</option>
+                {APP_SUBJECTS.map(subj => (
+                  <option key={subj} value={subj}>
+                    Môn {subj}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute right-3 top-3 pointer-events-none text-slate-400">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+            <p className="mt-2 text-xs text-slate-500 truncate">
+              {selectedSubjectFilter === 'all'
+                ? 'Đang xem tất cả các môn'
+                : `Đang lọc các lớp thuộc môn ${selectedSubjectFilter}`}
+            </p>
+          </div>
+
+          {/* 2. Combobox Chọn Lớp Học (Nhập trực tiếp hoặc chọn từ danh sách) */}
+          <div className="md:col-span-4 lg:col-span-5">
             <label
               htmlFor="select-class-dropdown"
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
             >
-              1. Chọn Lớp Học (Nhập trực tiếp hoặc chọn danh sách)
+              2. Chọn Lớp Học (Nhập trực tiếp hoặc chọn danh sách)
             </label>
             <SearchableCombobox
               id="select-class-dropdown"
@@ -1443,13 +1519,13 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             )}
           </div>
 
-          {/* 2. Combobox Chọn Tài Liệu / Bài Học của Lớp (Nhập trực tiếp hoặc chọn từ danh sách) */}
-          <div>
+          {/* 3. Combobox Chọn Tài Liệu / Bài Học của Lớp (Nhập trực tiếp hoặc chọn từ danh sách) */}
+          <div className="md:col-span-5 lg:col-span-4">
             <label
               htmlFor="select-material-dropdown"
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
             >
-              2. Chọn Tài Liệu / Bài Học Của Lớp ({classMaterials.length} tài liệu)
+              3. Chọn Tài Liệu / Bài Học Của Lớp ({classMaterials.length} tài liệu)
             </label>
             <SearchableCombobox
               id="select-material-dropdown"
@@ -2360,14 +2436,18 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Môn học</label>
-                <input
-                  type="text"
+                <label className="block font-bold text-slate-700">Môn học <span className="text-rose-500">*</span></label>
+                <select
                   value={newClassSubject}
                   onChange={e => setNewClassSubject(e.target.value)}
-                  placeholder="Toán, Văn, Ngoại ngữ..."
-                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
-                />
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden bg-white cursor-pointer font-semibold text-slate-900"
+                >
+                  {APP_SUBJECTS.map(subj => (
+                    <option key={subj} value={subj}>
+                      Môn {subj}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1">

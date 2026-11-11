@@ -11,6 +11,60 @@ export type UserRole =
 export const SUPERADMIN_EMAILS = ['tanbaobg@gmail.com', 'tanbaodl@gmail.com'] as const;
 
 /**
+ * Danh sách các môn học chuẩn dùng chung cho toàn bộ ứng dụng LopU
+ * Toán, Lý, Hóa, Sinh, Tin, Anh, Văn
+ */
+export const APP_SUBJECTS = [
+  'Toán',
+  'Lý',
+  'Hóa',
+  'Sinh',
+  'Tin',
+  'Anh',
+  'Văn',
+] as const;
+
+export type AppSubject = (typeof APP_SUBJECTS)[number];
+
+/**
+ * Hàm kiểm tra môn học có khớp với môn học đích không (hỗ trợ cả các tên viết dài như Toán học, Vật lý, Ngữ văn...)
+ */
+export function isSubjectMatching(classSubject?: string, targetSubject?: string): boolean {
+  if (!targetSubject || targetSubject === 'all' || targetSubject === 'Tất cả môn') return true;
+  if (!classSubject) return false;
+
+  const cleanClass = classSubject.toLowerCase().trim();
+  const cleanTarget = targetSubject.toLowerCase().trim();
+
+  // Kho Tài Liệu hoặc lớp chung
+  if (cleanClass.includes('chung') || cleanClass.includes('tất cả')) return true;
+
+  if (cleanTarget === 'toán' || cleanTarget === 'toan') {
+    return cleanClass.includes('toán') || cleanClass.includes('toan') || cleanClass.includes('math');
+  }
+  if (cleanTarget === 'lý' || cleanTarget === 'ly') {
+    return cleanClass.includes('lý') || cleanClass.includes('ly') || cleanClass.includes('vật');
+  }
+  if (cleanTarget === 'hóa' || cleanTarget === 'hoa') {
+    return cleanClass.includes('hóa') || cleanClass.includes('hoa') || cleanClass.includes('chem');
+  }
+  if (cleanTarget === 'sinh') {
+    return cleanClass.includes('sinh') || cleanClass.includes('bio');
+  }
+  if (cleanTarget === 'tin') {
+    return cleanClass.includes('tin') || cleanClass.includes('it') || cleanClass.includes('info');
+  }
+  if (cleanTarget === 'anh') {
+    return cleanClass.includes('anh') || cleanClass.includes('eng');
+  }
+  if (cleanTarget === 'văn' || cleanTarget === 'van') {
+    return cleanClass.includes('văn') || cleanClass.includes('van') || cleanClass.includes('ngữ');
+  }
+
+  return cleanClass.includes(cleanTarget);
+}
+
+/**
  * Kiểm tra vai trò từ Giáo viên trở lên (Superadmin, Admin, Manager, Teacher, Assistant)
  */
 export function isTeacherOrHigher(role?: UserRole): boolean {
