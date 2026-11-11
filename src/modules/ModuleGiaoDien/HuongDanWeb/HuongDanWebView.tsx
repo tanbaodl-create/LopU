@@ -88,11 +88,11 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         id: 'LopHoc',
         name: 'LopHoc (Lớp học & Kho Tài Liệu 💎)',
         folderPath: 'src/modules/ModuleHocSinh/LopHoc',
-        description: 'Xem danh sách lớp học cá nhân, tích hợp nút "➕ Tham gia lớp mới" nhập mã PIN trực tiếp, Lớp học Công khai "Kho Tài Liệu 💎" (chứa tài liệu Miễn phí 🆓 và Trả phí Kim Cương 💎 cho tất cả người dùng), lọc bài học đã mở khóa, lấy tọa độ GPS Google Maps, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đường dẫn mặc định: myApp/LopU/LopHoc.',
+        description: 'Xem danh sách lớp học cá nhân, tích hợp nút "➕ Tham gia lớp mới" nhập mã PIN trực tiếp, Lớp học Công khai "Kho Tài Liệu 💎" (chứa tài liệu Miễn phí 🆓 và Trả phí Kim Cương 💎 cho tất cả người dùng), lọc bài học đã mở khóa, dẫn đường Google Maps, nộp bài tập và cập nhật tiến độ học tập cá nhân. Đường dẫn mặc định: myApp/LopU/LopHoc.',
         purpose: 'Học tập trực tiếp, Đăng ký tham gia lớp mới (Mã PIN) & Kho Tài Liệu 💎 (Đường dẫn mặc định: myApp/LopU/LopHoc)',
         viewId: 'learning-classes',
         icon: BookOpen,
-        tags: ['Lớp học', 'Tham gia lớp mới (Mã PIN)', 'Kho Tài Liệu 💎', 'Đường dẫn myApp/LopU/LopHoc', 'lấy tọa độ GPS', 'Miễn phí 🆓 & Kim Cương 💎'],
+        tags: ['Lớp học', 'Tham gia lớp mới (Mã PIN)', 'Kho Tài Liệu 💎', 'Đường dẫn myApp/LopU/LopHoc', 'dẫn đường Google Maps', 'Miễn phí 🆓 & Kim Cương 💎'],
       },
 
       {

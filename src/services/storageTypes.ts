@@ -72,7 +72,7 @@ export interface UserProfile {
   email: string; // 5. Google Email
   role: UserRole; // Vai trò chính
   roles?: UserRole[]; // 6. Vai Trò (Có thể có nhiều vai trò)
-  gps?: string; // 7. Tọa Độ GPS (Google Maps: lat, lng)
+  gps?: string; // 7. Dẫn đường (Google Maps: lat, lng)
   gpsAddress?: string;
   phone?: string; // 8. SĐT
   homeAddress?: string; // 9. Địa chỉ nhà

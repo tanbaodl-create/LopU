@@ -77,10 +77,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         pos => {
           setSelectedLat(pos.coords.latitude);
           setSelectedLng(pos.coords.longitude);
-          setNotification('Đã lấy thành công vị trí GPS từ thiết bị!');
+          setNotification('Đã lấy thành công vị trí dẫn đường từ thiết bị!');
         },
         () => {
-          alert('Không thể lấy vị trí GPS từ thiết bị.');
+          alert('Không thể lấy vị trí dẫn đường từ thiết bị.');
         }
       );
     } else {
@@ -92,7 +92,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     const coords = `${selectedLat.toFixed(6)}, ${selectedLng.toFixed(6)}`;
     setGpsCoords(coords);
     setShowGpsModal(false);
-    setNotification(`Đã xác nhận lấy tọa độ GPS lớp học: ${coords}`);
+    setNotification(`Đã xác nhận vị trí dẫn đường lớp học: ${coords}`);
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -122,33 +122,12 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         room: 'Kho Học Liệu Công Khai',
         pinCode: '000000',
         requirePin: false,
-        studentCount: 999,
+        studentCount: 0,
         academicYear: '2025-2026',
         semester: 'Học kỳ I',
         color: 'emerald',
         description: 'Kho tài liệu công khai dành cho tất cả thành viên truy cập (chứa các tài liệu bán và tài liệu miễn phí 0 kim cương)',
-        lessons: [
-          {
-            id: 'les_lib_01',
-            title: 'Bộ Đề Thi Thử THPT Quốc Gia - Chuyên Đề Toán 12',
-            unit: 'Chuyên đề 01',
-            description: 'Tài liệu tổng hợp đề thi thử chuẩn cấu trúc Bộ GD&ĐT có đáp án và lời giải chi tiết.',
-            isUnlocked: true,
-            estimatedMinutes: 90,
-            unlockDate: '2025-09-01',
-            tags: ['Đề thi', 'Toán 12', 'Miễn phí (0 💎)'],
-          },
-          {
-            id: 'les_lib_02',
-            title: 'Bí Quyết Ôn Thi Siêu Tốc & Bài Tập Phân Loại Cao 9+',
-            unit: 'Chuyên đề 02',
-            description: 'Chuyên đề bài tập phân hóa vận dụng cao lấy điểm 9+ kèm sơ đồ tư duy tóm tắt.',
-            isUnlocked: true,
-            estimatedMinutes: 120,
-            unlockDate: '2025-09-05',
-            tags: ['Vận dụng cao', 'Toán 12', 'Kim Cương 💎'],
-          },
-        ],
+        lessons: [],
       };
     }
 
@@ -447,10 +426,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     type="button"
                     onClick={handleOpenGpsModal}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors"
-                    title="Mở Google Maps chọn/lấy tọa độ GPS"
+                    title="Mở Google Maps dẫn đường"
                   >
                     <MapPin className="w-3.5 h-3.5" />
-                    <span>lấy tọa độ GPS</span>
+                    <span>Dẫn đường</span>
                   </button>
                   {gpsCoords && (
                     <span className="font-mono text-[11px] font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
@@ -797,10 +776,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL GOOGLE MAPS XEM/CHỌN TỌA ĐỘ GPS LỚP HỌC */}
+      {/* MODAL GOOGLE MAPS DẪN ĐƯỜNG LỚP HỌC */}
       {showGpsModal && (
         <GpsPickerModal
-          title="Google Maps — Bản Đồ Vị Trí GPS Lớp Học"
+          title="Google Maps — Bản Đồ Dẫn Đường Lớp Học"
           userNameOrContext={currentClass ? `${currentClass.name} (${currentClass.code})` : undefined}
           initialLat={selectedLat}
           initialLng={selectedLng}
@@ -808,7 +787,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           onConfirm={(coordsStr) => {
             setGpsCoords(coordsStr);
             setShowGpsModal(false);
-            setNotification(`Đã xác nhận lấy tọa độ GPS lớp học: [${coordsStr}]`);
+            setNotification(`Đã xác nhận vị trí dẫn đường lớp học: [${coordsStr}]`);
             setTimeout(() => setNotification(null), 4000);
           }}
         />

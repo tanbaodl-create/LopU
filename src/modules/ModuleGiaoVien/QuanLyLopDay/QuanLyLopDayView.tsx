@@ -540,16 +540,16 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
             )}
           </select>
 
-          {/* Nút Xem GPS Bản đồ Lớp Học (THPT Ba Gia) */}
+          {/* Nút Xem Dẫn đường Bản đồ Lớp Học (THPT Ba Gia) */}
           <button
             id="btn-open-gps-bagia"
             type="button"
             onClick={() => setShowGpsModal(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-slate-100 hover:bg-slate-200 text-indigo-700 border border-slate-200 transition-colors cursor-pointer"
-            title="Mở bản đồ vị trí GPS (Trường THPT Ba Gia: 15.172233, 108.667440)"
+            title="Mở bản đồ dẫn đường (Trường THPT Ba Gia: 15.172233, 108.667440)"
           >
             <MapPin className="w-3.5 h-3.5 text-indigo-600" />
-            <span>📍 Bản đồ GPS THPT Ba Gia</span>
+            <span>📍 Dẫn đường THPT Ba Gia</span>
           </button>
 
           {/* Tab buttons */}
@@ -642,7 +642,7 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
                   <th className="py-2.5 px-3">Mức Độ (1-6)</th>
                   <th className="py-2.5 px-3">Ví Kim Cương</th>
                   <th className="py-2.5 px-3">Mã Học Sinh</th>
-                  <th className="py-2.5 px-3">Tọa Độ GPS</th>
+                  <th className="py-2.5 px-3">Dẫn đường</th>
                   <th className="py-2.5 px-3">Số Điện Thoại</th>
                   <th className="py-2.5 px-3 text-center">Xóa khỏi lớp</th>
                 </tr>
@@ -1205,17 +1205,17 @@ export const QuanLyLopDayView: React.FC<QuanLyLopDayViewProps> = ({ currentRole 
         />
       )}
 
-      {/* Modal Bản Đồ Vị Trí GPS - Trường THPT Ba Gia */}
+      {/* Modal Bản Đồ Dẫn Đường - Trường THPT Ba Gia */}
       {showGpsModal && (
         <GpsPickerModal
-          title="Google Maps — Bản Đồ GPS Trường THPT Ba Gia"
+          title="Google Maps — Bản Đồ Dẫn Đường Trường THPT Ba Gia"
           userNameOrContext={`Lớp ${currentClass?.name || 'THPT Ba Gia'}`}
           initialLat={15.172233}
           initialLng={108.667440}
           onClose={() => setShowGpsModal(false)}
           onConfirm={(coordsStr, lat, lng) => {
             setShowGpsModal(false);
-            setNotification(`Đã xác nhận vị trí GPS lớp học: ${coordsStr} (Trường THPT Ba Gia)`);
+            setNotification(`Đã xác nhận vị trí dẫn đường lớp học: ${coordsStr} (Trường THPT Ba Gia)`);
             setTimeout(() => setNotification(null), 4000);
           }}
         />

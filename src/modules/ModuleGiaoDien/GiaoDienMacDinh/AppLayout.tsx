@@ -121,15 +121,16 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
         return;
       }
 
-      // Revert to mock profiles when offline or not logged in
+      // Lấy profile thực tế từ danh sách người dùng trong hệ thống
       try {
         const users = await getUsers();
-        let userId = 'u_hs01'; // Mặc định học sinh Lê Minh Khang
-        if (currentRole === 'superadmin') userId = 'u_superadmin_2'; // Superadmin Tân Bảo (ĐL)
-        else if (currentRole === 'admin') userId = 'u_admin';
-        else if (currentRole === 'teacher') userId = 'u_gv01'; // Mặc định giáo viên Nguyễn Văn An
+        const found = users.find(u => {
+          if (currentRole === 'superadmin') return u.roles?.includes('superadmin') || u.role === 'superadmin';
+          if (currentRole === 'admin') return u.roles?.includes('admin') || u.role === 'admin';
+          if (currentRole === 'teacher') return u.roles?.includes('teacher') || u.role === 'teacher';
+          return u.roles?.includes('student') || u.role === 'student';
+        }) || users[0];
         
-        const found = users.find(u => u.id === userId);
         if (found) {
           setCurrentUserProfile(found);
         }

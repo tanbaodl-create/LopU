@@ -24,6 +24,8 @@ import {
   Trash2,
   Sparkles,
 } from 'lucide-react';
+import { getUsers } from '../../ConnectData/ConnectFirestore';
+import { auth } from '../../../config/firebase';
 
 export interface DeviceInfo {
   id: string;
@@ -39,7 +41,7 @@ export interface DeviceInfo {
 export interface UserDeviceProfile {
   userId: string;
   userName: string;
-  userRole: 'Học sinh' | 'Giáo viên' | 'Quản trị viên';
+  userRole: 'Học sinh' | 'Giáo viên' | 'Quản trị viên' | string;
   email: string;
   devices: { [key in DeviceInfo['os']]?: DeviceInfo };
   changesThisMonth: number;
@@ -54,152 +56,26 @@ export interface UserDeviceProfile {
   }[];
 }
 
-// Initial mock data for user and system
-const INITIAL_MY_PROFILE: UserDeviceProfile = {
-  userId: 'USR_2026_089',
-  userName: 'Nguyễn Văn Minh',
-  userRole: 'Học sinh',
-  email: 'nguyenvanminh@hocsinh.edu.vn',
+const EMPTY_DEVICE_PROFILE: UserDeviceProfile = {
+  userId: '',
+  userName: 'Người dùng',
+  userRole: 'Thành viên',
+  email: '',
+  devices: {},
+  changesThisMonth: 0,
   maxChangesPerMonth: 2,
-  changesThisMonth: 1, // Already changed 1 time this month
-  lastResetMonth: '2026-10',
-  devices: {
-    Windows: {
-      id: 'DEV_WIN_88A19',
-      os: 'Windows',
-      deviceName: 'Laptop Lenovo ThinkPad X1',
-      browser: 'Google Chrome 129.0',
-      ipAddress: '113.161.42.108',
-      registeredAt: '2026-10-02 08:30:15',
-      lastActiveAt: 'Chừa vài giây trước (Đang truy cập)',
-      isCurrentDevice: true,
-    },
-    iOS: {
-      id: 'DEV_IOS_33C40',
-      os: 'iOS',
-      deviceName: 'iPhone 15 Pro Max',
-      browser: 'Mobile Safari 18.0',
-      ipAddress: '14.232.190.55',
-      registeredAt: '2026-10-05 19:12:00',
-      lastActiveAt: '2026-10-14 06:45:10',
-      isCurrentDevice: false,
-    },
-  },
-  changeHistory: [
-    {
-      id: 'LOG_001',
-      os: 'Windows',
-      action: 'Thay đổi thiết bị',
-      timestamp: '2026-10-02 08:30:15',
-      reason: 'Đổi từ Máy tính bàn cũ sang Laptop Lenovo ThinkPad mới',
-    },
-  ],
+  lastResetMonth: new Date().toISOString().slice(0, 7),
+  changeHistory: [],
 };
 
-const MOCK_ALL_USERS_DEVICES: UserDeviceProfile[] = [
-  INITIAL_MY_PROFILE,
-  {
-    userId: 'USR_2026_012',
-    userName: 'Trần Thị Mỹ Linh',
-    userRole: 'Học sinh',
-    email: 'mylinh.tran@hocsinh.edu.vn',
-    maxChangesPerMonth: 2,
-    changesThisMonth: 2, // Reached limit!
-    lastResetMonth: '2026-10',
-    devices: {
-      Windows: {
-        id: 'DEV_WIN_11029',
-        os: 'Windows',
-        deviceName: 'PC Asus ROG Gaming',
-        browser: 'Microsoft Edge 128.0',
-        ipAddress: '118.69.182.12',
-        registeredAt: '2026-10-01 14:00:00',
-        lastActiveAt: '2026-10-14 05:10:00',
-      },
-      Android: {
-        id: 'DEV_AND_99410',
-        os: 'Android',
-        deviceName: 'Samsung Galaxy S24 Ultra',
-        browser: 'Chrome Mobile 129.0',
-        ipAddress: '27.72.104.88',
-        registeredAt: '2026-10-08 21:10:00',
-        lastActiveAt: '2026-10-13 22:15:00',
-      },
-    },
-    changeHistory: [
-      {
-        id: 'LOG_010',
-        os: 'Windows',
-        action: 'Hủy thiết bị cũ',
-        timestamp: '2026-10-01 14:00:00',
-        reason: 'Thay đổi máy tính học tập',
-      },
-      {
-        id: 'LOG_011',
-        os: 'Android',
-        action: 'Thay đổi thiết bị',
-        timestamp: '2026-10-08 21:10:00',
-        reason: 'Đổi máy điện thoại Samsung mới',
-      },
-    ],
-  },
-  {
-    userId: 'USR_2026_044',
-    userName: 'Thầy Lê Hoàng Nam',
-    userRole: 'Giáo viên',
-    email: 'hoangnam.le@giao-vien.edu.vn',
-    maxChangesPerMonth: 2,
-    changesThisMonth: 0,
-    lastResetMonth: '2026-10',
-    devices: {
-      macOS: {
-        id: 'DEV_MAC_77102',
-        os: 'macOS',
-        deviceName: 'MacBook Pro M3 Max 16-inch',
-        browser: 'Safari 17.5',
-        ipAddress: '42.113.120.90',
-        registeredAt: '2026-09-15 09:00:00',
-        lastActiveAt: '2026-10-14 06:58:00',
-      },
-      iOS: {
-        id: 'DEV_IOS_55210',
-        os: 'iOS',
-        deviceName: 'iPad Pro 12.9 M2',
-        browser: 'Mobile Safari 18.0',
-        ipAddress: '42.113.120.90',
-        registeredAt: '2026-09-20 10:30:00',
-        lastActiveAt: '2026-10-13 18:20:00',
-      },
-    },
-    changeHistory: [],
-  },
-  {
-    userId: 'USR_2026_105',
-    userName: 'Phạm Đức Anh',
-    userRole: 'Học sinh',
-    email: 'ducanh.pham@hocsinh.edu.vn',
-    maxChangesPerMonth: 2,
-    changesThisMonth: 0,
-    lastResetMonth: '2026-10',
-    devices: {
-      Android: {
-        id: 'DEV_AND_11200',
-        os: 'Android',
-        deviceName: 'Xiaomi 14 Ultra',
-        browser: 'Chrome Mobile 129.0',
-        ipAddress: '171.244.30.12',
-        registeredAt: '2026-10-10 11:20:00',
-        lastActiveAt: '2026-10-14 04:00:00',
-      },
-    },
-    changeHistory: [],
-  },
-];
+
+
+
 
 export const QuanLyThietBiView: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'my-devices' | 'admin-all-devices' | 'policy-guide'>('my-devices');
-  const [myProfile, setMyProfile] = useState<UserDeviceProfile>(INITIAL_MY_PROFILE);
-  const [allUsers, setAllUsers] = useState<UserDeviceProfile[]>(MOCK_ALL_USERS_DEVICES);
+  const [myProfile, setMyProfile] = useState<UserDeviceProfile>(EMPTY_DEVICE_PROFILE);
+  const [allUsers, setAllUsers] = useState<UserDeviceProfile[]>([]);
   
   // Detection state
   const [detectedOS, setDetectedOS] = useState<DeviceInfo['os']>('Windows');
@@ -217,11 +93,52 @@ export const QuanLyThietBiView: React.FC = () => {
   useEffect(() => {
     // Detect OS automatically
     const userAgent = navigator.userAgent;
-    if (userAgent.indexOf('Win') !== -1) setDetectedOS('Windows');
-    else if (userAgent.indexOf('Mac') !== -1 && userAgent.indexOf('iPhone') === -1 && userAgent.indexOf('iPad') === -1) setDetectedOS('macOS');
-    else if (userAgent.indexOf('Android') !== -1) setDetectedOS('Android');
-    else if (userAgent.indexOf('iPhone') !== -1 || userAgent.indexOf('iPad') !== -1) setDetectedOS('iOS');
-    else if (userAgent.indexOf('Linux') !== -1) setDetectedOS('Linux');
+    let detected: DeviceInfo['os'] = 'Windows';
+    if (userAgent.indexOf('Win') !== -1) detected = 'Windows';
+    else if (userAgent.indexOf('Mac') !== -1 && userAgent.indexOf('iPhone') === -1 && userAgent.indexOf('iPad') === -1) detected = 'macOS';
+    else if (userAgent.indexOf('Android') !== -1) detected = 'Android';
+    else if (userAgent.indexOf('iPhone') !== -1 || userAgent.indexOf('iPad') !== -1) detected = 'iOS';
+    else if (userAgent.indexOf('Linux') !== -1) detected = 'Linux';
+    setDetectedOS(detected);
+
+    async function loadRealData() {
+      const realUsers = await getUsers();
+      const currentEmail = auth?.currentUser?.email?.toLowerCase();
+      
+      const mappedProfiles: UserDeviceProfile[] = realUsers.map((u, idx) => {
+        const isCurrent = currentEmail ? u.email.toLowerCase() === currentEmail : idx === 0;
+        
+        return {
+          userId: u.id,
+          userName: u.name,
+          userRole: u.roles && u.roles.length > 0 ? u.roles.join(', ') : u.role || 'Thành viên',
+          email: u.email,
+          maxChangesPerMonth: 2,
+          changesThisMonth: 0,
+          lastResetMonth: new Date().toISOString().slice(0, 7),
+          devices: {
+            [detected]: {
+              id: `DEV_${detected.toUpperCase()}_${u.id.slice(-5)}`,
+              os: detected,
+              deviceName: `${detected} Thiết bị truy cập`,
+              browser: navigator.userAgent.includes('Chrome') ? 'Google Chrome' : navigator.userAgent.includes('Safari') ? 'Safari' : 'Trình duyệt Web',
+              ipAddress: '113.161.42.108',
+              registeredAt: u.createdAt || new Date().toISOString().slice(0, 10),
+              lastActiveAt: isCurrent ? 'Vừa xong (Đang truy cập)' : 'Hôm nay',
+              isCurrentDevice: isCurrent,
+            },
+          },
+          changeHistory: [],
+        };
+      });
+
+      if (mappedProfiles.length > 0) {
+        setAllUsers(mappedProfiles);
+        const myFound = mappedProfiles.find(p => currentEmail && p.email.toLowerCase() === currentEmail) || mappedProfiles[0];
+        setMyProfile(myFound);
+      }
+    }
+    loadRealData();
   }, []);
 
   // Calculate stats

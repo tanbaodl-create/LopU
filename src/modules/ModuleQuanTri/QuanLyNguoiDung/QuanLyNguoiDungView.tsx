@@ -170,7 +170,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
   const [editingNicknameUserId, setEditingNicknameUserId] = useState<string | null>(null);
   const [editingNicknameValue, setEditingNicknameValue] = useState<string>('');
 
-  // Modal Google Maps chọn tọa độ GPS
+  // Modal Google Maps dẫn đường
   const [gpsModalUser, setGpsModalUser] = useState<ExtendedUserProfile | null>(null);
   const [selectedLat, setSelectedLat] = useState<number>(21.028511);
   const [selectedLng, setSelectedLng] = useState<number>(105.854444);
@@ -516,10 +516,10 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         pos => {
           setSelectedLat(parseFloat(pos.coords.latitude.toFixed(6)));
           setSelectedLng(parseFloat(pos.coords.longitude.toFixed(6)));
-          setSelectedAddress('Vị trí GPS thiết bị thực tế');
+          setSelectedAddress('Vị trí dẫn đường thực tế');
         },
         () => {
-          alert('Không thể truy cập GPS thiết bị. Vui lòng click chọn trực tiếp trên bản đồ.');
+          alert('Không thể truy cập vị trí dẫn đường từ thiết bị. Vui lòng click chọn trực tiếp trên bản đồ.');
         }
       );
     } else {
@@ -547,7 +547,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
       setDetailModalUser(updated);
     }
     setGpsModalUser(null);
-    setNotification(`Hệ thống đã lấy thành công tọa độ GPS tại vị trí chọn trên bản đồ: [${coordsStr}] cho "${updated.name}"!`);
+    setNotification(`Hệ thống đã cập nhật thành công vị trí dẫn đường trên bản đồ: [${coordsStr}] cho "${updated.name}"!`);
     setTimeout(() => setNotification(null), 4000);
   };
 
@@ -680,7 +680,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
       '4. Nơi Công Tác/Học Tập': u.workplace || '',
       '5. Google Email': u.email,
       '6. Vai Trò': u.roles && u.roles.length > 0 ? u.roles.join(', ') : u.role || 'guest',
-      '7. GPS': u.gps || '',
+      '7. Dẫn đường': u.gps || '',
       '8. Số Điện Thoại': u.phone || '',
       '9. Địa Chỉ Nhà': u.homeAddress || '',
       '10. Các Lớp Dạy/Học': u.classIds?.join(', ') || '',
@@ -707,7 +707,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         '4. Nơi Công Tác/Học Tập': 'THPT Chuyên',
         '5. Google Email': 'nguyenvanan@lopu.edu.vn',
         '6. Vai Trò': 'teacher, manager',
-        '7. GPS': '21.028511, 105.854444',
+        '7. Dẫn đường': '21.028511, 105.854444',
         '8. Số Điện Thoại': '0901111222',
         '9. Địa Chỉ Nhà': '123 Đường Lê Lợi, Hà Nội',
         '10. Các Lớp Dạy/Học': '10A1, 10A2',
@@ -723,7 +723,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         '4. Nơi Công Tác/Học Tập': 'Lớp 10A1',
         '5. Google Email': 'khang.le@student.lopu.edu.vn',
         '6. Vai Trò': 'student',
-        '7. GPS': '21.030000, 105.850000',
+        '7. Dẫn đường': '21.030000, 105.850000',
         '8. Số Điện Thoại': '0903333444',
         '9. Địa Chỉ Nhà': '45 Phố Huế, Hà Nội',
         '10. Các Lớp Dạy/Học': '10A1',
@@ -772,7 +772,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         const rolesArr = roleStr.split(',').map(r => r.trim() as UserRole).filter(Boolean);
         const primaryRole = rolesArr[0] || 'student';
 
-        const gps = String(row['7. GPS'] || row['7. Tọa Độ GPS'] || row['Tọa Độ GPS'] || row['GPS'] || '').trim();
+        const gps = String(row['7. Dẫn đường'] || row['7. GPS'] || row['7. Tọa Độ GPS'] || row['Tọa Độ GPS'] || row['Dẫn đường'] || row['GPS'] || '').trim();
         const phone = String(row['8. Số Điện Thoại'] || row['Số Điện Thoại'] || row['SĐT'] || '').trim();
         const homeAddress = String(row['9. Địa Chỉ Nhà'] || row['Địa Chỉ Nhà'] || '').trim();
 
@@ -912,7 +912,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         : [];
     const matchTitle = classTitleFilter === 'all' || userTitles.includes(classTitleFilter);
 
-    // 6. Lọc Trạng thái GPS
+    // 6. Lọc Trạng thái Dẫn đường
     const hasGps = Boolean(u.gps && u.gps.trim().length > 0);
     const matchGps =
       gpsFilter === 'all' || (gpsFilter === 'has_gps' ? hasGps : !hasGps);
@@ -1411,19 +1411,19 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
             </select>
           </div>
 
-          {/* Lọc Trạng thái GPS */}
+          {/* Lọc Trạng thái Dẫn đường */}
           <div>
             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-              Trạng Thái GPS
+              Trạng Thái Dẫn Đường
             </label>
             <select
               value={gpsFilter}
               onChange={e => setGpsFilter(e.target.value)}
               className="w-full py-1.5 px-2 bg-slate-50 border border-slate-200 rounded-lg font-semibold text-slate-700"
             >
-              <option value="all">Tất cả GPS</option>
-              <option value="has_gps">Đã có tọa độ GPS</option>
-              <option value="no_gps">Chưa có GPS</option>
+              <option value="all">Tất cả vị trí dẫn đường</option>
+              <option value="has_gps">Đã có vị trí dẫn đường</option>
+              <option value="no_gps">Chưa có dẫn đường</option>
             </select>
           </div>
         </div>
@@ -1456,7 +1456,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
                 <th className="py-3 px-4">Tên & Biệt Danh</th>
                 <th className="py-3 px-4">Google Email</th>
                 <th className="py-3 px-4">Các Vai Trò System</th>
-                <th className="py-3 px-4">GPS</th>
+                <th className="py-3 px-4">Dẫn đường</th>
                 <th className="py-3 px-4">Chức Danh Trong Lớp</th>
                 <th className="py-3 px-4 text-center">Chi tiết 14 Trường & Thao Tác</th>
               </tr>
@@ -1615,7 +1615,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
                         </div>
                       </td>
 
-                      {/* TỌA ĐỘ GPS */}
+                      {/* DẪN ĐƯỜNG */}
                       <td className="py-3 px-4">
                         {hasApprovedRole ? (
                           <div className="flex items-center gap-1.5 flex-wrap">
@@ -1623,10 +1623,10 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
                               type="button"
                               onClick={() => handleOpenGpsModal(u)}
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-indigo-600 hover:bg-indigo-700 text-white shadow-2xs cursor-pointer"
-                              title="Kích chọn lấy tọa độ GPS"
+                              title="Kích chọn vị trí dẫn đường"
                             >
                               <MapPin className="w-3 h-3" />
-                              <span>GPS</span>
+                              <span>Dẫn đường</span>
                             </button>
 
                             {u.gps ? (
@@ -1634,7 +1634,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
                                 {u.gps}
                               </span>
                             ) : (
-                              <span className="text-[11px] text-amber-600 italic">Chưa có GPS</span>
+                              <span className="text-[11px] text-amber-600 italic">Chưa có dẫn đường</span>
                             )}
                           </div>
                         ) : (
@@ -1740,8 +1740,8 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
                                 <span className="font-bold text-indigo-700 uppercase">{rolesList.join(', ')}</span>
                               </div>
                               <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
-                                <span className="text-slate-400 block text-[10px] font-bold uppercase">7. GPS</span>
-                                <span className="font-mono text-slate-700">{u.gps || 'Chưa có GPS'}</span>
+                                <span className="text-slate-400 block text-[10px] font-bold uppercase">7. Dẫn đường</span>
+                                <span className="font-mono text-slate-700">{u.gps || 'Chưa có dẫn đường'}</span>
                               </div>
                               <div className="p-2 bg-slate-50 rounded-lg border border-slate-100">
                                 <span className="text-slate-400 block text-[10px] font-bold uppercase">8. Số Điện Thoại</span>
@@ -1925,10 +1925,10 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL GOOGLE MAPS TƯƠNG TÁC LẤY TỌA ĐỘ GPS */}
+      {/* MODAL GOOGLE MAPS TƯƠNG TÁC LẤY VỊ TRÍ DẪN ĐƯỜNG */}
       {gpsModalUser && (
         <GpsPickerModal
-          title="Google Maps — Chọn Tọa Độ GPS Cho Tài Khoản"
+          title="Google Maps — Chọn Vị Trí Dẫn Đường Cho Tài Khoản"
           userNameOrContext={gpsModalUser.name}
           initialLat={
             gpsModalUser.gps
@@ -1953,7 +1953,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
             }
             setGpsModalUser(null);
             setNotification(
-              `Hệ thống đã lấy thành công tọa độ GPS tại vị trí chọn trên bản đồ: [${coordsStr}] cho "${updated.name}"!`
+              `Hệ thống đã lưu thành công vị trí dẫn đường trên bản đồ: [${coordsStr}] cho "${updated.name}"!`
             );
             setTimeout(() => setNotification(null), 4000);
           }}

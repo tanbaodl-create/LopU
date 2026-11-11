@@ -26,7 +26,7 @@ interface GpsPickerModalProps {
 }
 
 export const GpsPickerModal: React.FC<GpsPickerModalProps> = ({
-  title = 'Google Maps — Bản Đồ Vị Trí GPS Lớp Học',
+  title = 'Google Maps — Bản Đồ Dẫn Đường',
   userNameOrContext,
   initialLat = 15.172233,
   initialLng = 108.667440,
@@ -447,7 +447,7 @@ export const GpsPickerModal: React.FC<GpsPickerModalProps> = ({
               ) : (
                 <Navigation className="w-3.5 h-3.5 text-indigo-600" />
               )}
-              <span>{isGeolocating ? 'Đang định vị...' : 'Lấy GPS máy'}</span>
+              <span>{isGeolocating ? 'Đang định vị...' : 'Vị trí hiện tại'}</span>
             </button>
 
             <a
@@ -492,7 +492,7 @@ export const GpsPickerModal: React.FC<GpsPickerModalProps> = ({
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 font-semibold block uppercase tracking-wider">
-                  Tọa độ GPS đã ghim:
+                  Vị trí dẫn đường đã ghim:
                 </span>
                 <span className="font-mono font-black text-sm text-indigo-300">
                   {selectedLat.toFixed(6)}, {selectedLng.toFixed(6)}
@@ -514,7 +514,7 @@ export const GpsPickerModal: React.FC<GpsPickerModalProps> = ({
                 className="px-6 py-2 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white shadow-lg flex items-center gap-2 cursor-pointer transition-all border border-indigo-400/30"
               >
                 <Check className="w-4 h-4" />
-                <span>Xác nhận lấy tọa độ GPS</span>
+                <span>Xác nhận vị trí dẫn đường</span>
               </button>
             </div>
           </div>

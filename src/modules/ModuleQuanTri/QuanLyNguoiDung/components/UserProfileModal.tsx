@@ -117,11 +117,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
       }
     }
 
-    // GPS validation (if provided)
+    // Dẫn đường validation (if provided)
     if (formData.gps && formData.gps.trim().length > 0) {
       const gpsRegex = /^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/;
       if (!gpsRegex.test(formData.gps.trim())) {
-        setValidationError('Tọa độ GPS không đúng định dạng. Cần dạng: "vĩ độ, kinh độ" (Ví dụ: 21.028511, 105.854444).');
+        setValidationError('Vị trí dẫn đường không đúng định dạng. Cần dạng: "vĩ độ, kinh độ" (Ví dụ: 21.028511, 105.854444).');
         return false;
       }
     }
@@ -277,14 +277,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
             <div>
               <div className="flex items-center justify-between mb-0.5">
                 <label className="block font-bold text-slate-700 uppercase">
-                  7. GPS
+                  7. Dẫn đường
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowGpsPicker(true)}
                   className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded cursor-pointer transition-colors shadow-xs"
                 >
-                  Lấy tọa độ GPS
+                  Lấy vị trí dẫn đường
                 </button>
               </div>
               <input
@@ -433,7 +433,7 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
       {showGpsPicker && (
         <Suspense fallback={null}>
           <GpsPickerModal
-            title="Google Maps — Chọn Tọa Độ GPS Cho Hồ Sơ"
+            title="Google Maps — Chọn Vị Trí Dẫn Đường Cho Hồ Sơ"
             userNameOrContext={formData.name}
             initialLat={
               formData.gps

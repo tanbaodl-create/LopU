@@ -129,8 +129,8 @@ function mergeAndResolveConflicts<T extends { id: string; updatedAt?: string; mo
 
 // Initializer to seed local data if empty
 export function seedInitialDataIfNeeded(): void {
-  // Clear old demo data keys to ensure a clean state
-  if (!localStorage.getItem('lopu_demo_cleared_v5')) {
+  // Xóa sạch toàn bộ dữ liệu demo cũ còn sót trong localStorage để đảm bảo 100% dữ liệu thực
+  if (!localStorage.getItem('lopu_clean_real_data_v6')) {
     localStorage.removeItem(STORAGE_KEYS.CLASSES);
     localStorage.removeItem(STORAGE_KEYS.USERS);
     localStorage.removeItem(STORAGE_KEYS.PROGRESS);
@@ -138,7 +138,7 @@ export function seedInitialDataIfNeeded(): void {
     localStorage.removeItem(STORAGE_KEYS.PIN_REQUESTS);
     localStorage.removeItem(STORAGE_KEYS.DOCUMENTS);
     localStorage.removeItem('lopu_google_drive_files_v1');
-    localStorage.setItem('lopu_demo_cleared_v5', 'true');
+    localStorage.setItem('lopu_clean_real_data_v6', 'true');
   }
 
   if (!localStorage.getItem(STORAGE_KEYS.CLASSES)) {
