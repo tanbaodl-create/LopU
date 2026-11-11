@@ -696,15 +696,28 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         return false;
       }
 
-      // Kiểm tra tài liệu có bán bằng Kim Cương hay không
-      const isForDiamondSale = Boolean(
-        (doc.isForSale && (doc.priceDiamonds ?? 0) > 0) ||
-        (typeof doc.priceDiamonds === 'number' && doc.priceDiamonds > 0)
+      // Kiểm tra tài liệu hoặc bất kỳ mục con nào (Chương/bài/vấn đề/chuyên đề/lý thuyết/luyện tập/KTDG) có giá bán >= 0 kim cương
+      const hasSalePriceGe0 = Boolean(
+        (doc.isForSale && typeof doc.priceDiamonds === 'number' && doc.priceDiamonds >= 0) ||
+        (typeof doc.priceDiamonds === 'number' && doc.priceDiamonds >= 0) ||
+        doc.publishedToClasses?.includes('open-library') ||
+        doc.publishedToClasses?.includes('cls_open_library') ||
+        doc.publishedToClasses?.includes('KTL') ||
+        doc.publishedToClasses?.includes('KTL-OPEN') ||
+        (doc.nodeConfigs &&
+          Object.values(doc.nodeConfigs).some(
+            nc =>
+              nc &&
+              ((nc.isForSale && typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+                nc.publishedToClasses?.includes('open-library') ||
+                nc.publishedToClasses?.includes('cls_open_library'))
+          ))
       );
 
       if (isKhoTaiLieu) {
-        // Tài liệu nào có bán kim cương thì mới vào lớp học Kho tài liệu
-        if (!isForDiamondSale) return false;
+        // Tài liệu hoặc mục con có giá bán >= 0 kim cương sẽ tự động thuộc Kho tài liệu
+        if (!hasSalePriceGe0) return false;
       } else {
         // Khi phát hành tài liệu vào lớp nào thì nó mới hiện trong danh sách tài liệu của lớp đó
         const targetClasses = doc.publishedToClasses || [];
@@ -723,22 +736,27 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           (doc.nodeConfigs &&
             Object.values(doc.nodeConfigs).some(
               nc =>
-                nc.publishedToClasses?.includes(selectedClassId) ||
-                (currentClass?.id && nc.publishedToClasses?.includes(currentClass.id)) ||
-                (currentClass?.code &&
-                  nc.publishedToClasses?.some(
-                    tc => tc && tc.toLowerCase().trim() === currentClass.code.toLowerCase().trim()
-                  ))
+                nc &&
+                (nc.publishedToClasses?.includes(selectedClassId) ||
+                  (currentClass?.id && nc.publishedToClasses?.includes(currentClass.id)) ||
+                  (currentClass?.code &&
+                    nc.publishedToClasses?.some(
+                      tc => tc && tc.toLowerCase().trim() === currentClass.code.toLowerCase().trim()
+                    )))
             ));
 
         if (!isTargetedToThisClass) return false;
       }
 
+      // Kiểm tra thời hạn phát hành độc lập của từng lớp (hoặc Kho tài liệu)
       const sched =
         doc.classSchedules?.[selectedClassId] ||
+        (currentClass?.id && doc.classSchedules?.[currentClass.id]) ||
+        (currentClass?.code && doc.classSchedules?.[currentClass.code]) ||
         (isKhoTaiLieu
           ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library'])
           : undefined);
+
       if (sched) {
         if (sched.startDate) {
           const startMs = new Date(sched.startDate).getTime();
@@ -746,6 +764,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         }
         if (sched.endDate) {
           const endMs = new Date(sched.endDate).getTime();
+          // Tự thu hồi phát hành với lớp đó khi đã tới thời điểm kết thúc
           if (nowMs > endMs) return false;
         }
       }
@@ -1747,6 +1766,29 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                       💎 {selectedDoc.priceDiamonds} Kim Cương
                     </span>
                   )}
+
+                  {(() => {
+                    const sched =
+                      selectedDoc.classSchedules?.[selectedClassId] ||
+                      (currentClass?.id && selectedDoc.classSchedules?.[currentClass.id]) ||
+                      (isKhoTaiLieu
+                        ? (selectedDoc.classSchedules?.['open-library'] || selectedDoc.classSchedules?.['cls_open_library'])
+                        : undefined);
+                    if (sched?.endDate) {
+                      return (
+                        <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-rose-500" />
+                          Hạn phát hành: {new Date(sched.endDate).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </span>
+                      );
+                    }
+                    return (
+                      <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-50 text-slate-600 border border-slate-200 flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        Phát hành: Vô thời hạn
+                      </span>
+                    );
+                  })()}
                 </div>
 
                 <div className="text-xs text-slate-500">
@@ -1899,7 +1941,27 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                           </p>
                         </div>
 
-                        <div className="pt-1 border-t border-slate-200/50 flex justify-end">
+                        <div className="pt-1 border-t border-slate-200/50 flex items-center justify-between gap-1">
+                          {(() => {
+                            const sched =
+                              doc.classSchedules?.[selectedClassId] ||
+                              (currentClass?.id && doc.classSchedules?.[currentClass.id]) ||
+                              (isKhoTaiLieu
+                                ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library'])
+                                : undefined);
+                            if (sched?.endDate) {
+                              return (
+                                <span className="text-[9px] text-rose-600 font-semibold flex items-center gap-0.5" title={`Hạn thu hồi: ${new Date(sched.endDate).toLocaleString('vi-VN')}`}>
+                                  <Clock className="w-2.5 h-2.5 text-rose-500" /> Hạn: {new Date(sched.endDate).toLocaleDateString('vi-VN')}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
+                                <Clock className="w-2.5 h-2.5 text-slate-400" /> Vô thời hạn
+                              </span>
+                            );
+                          })()}
                           {isOwned ? (
                             <button
                               onClick={e => {
@@ -2192,7 +2254,27 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                             </p>
                           </div>
 
-                          <div className="pt-1 border-t border-slate-100/50 flex justify-end">
+                          <div className="pt-1 border-t border-slate-100/50 flex items-center justify-between gap-1">
+                            {(() => {
+                              const sched =
+                                doc.classSchedules?.[selectedClassId] ||
+                                (currentClass?.id && doc.classSchedules?.[currentClass.id]) ||
+                                (isKhoTaiLieu
+                                  ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library'])
+                                  : undefined);
+                              if (sched?.endDate) {
+                                return (
+                                  <span className="text-[9px] text-rose-600 font-semibold flex items-center gap-0.5" title={`Hạn thu hồi: ${new Date(sched.endDate).toLocaleString('vi-VN')}`}>
+                                    <Clock className="w-2.5 h-2.5 text-rose-500" /> Hạn: {new Date(sched.endDate).toLocaleDateString('vi-VN')}
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
+                                  <Clock className="w-2.5 h-2.5 text-slate-400" /> Vô thời hạn
+                                </span>
+                              );
+                            })()}
                             {isOwned ? (
                               <button
                                 onClick={() => {

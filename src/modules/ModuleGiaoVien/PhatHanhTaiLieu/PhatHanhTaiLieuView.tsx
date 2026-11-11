@@ -115,7 +115,20 @@ export const PhatHanhTaiLieuView: React.FC = () => {
       // Khởi tạo cấu hình phát hành từ dữ liệu Firestore
       const configs: Record<string, any> = {};
       docs.forEach((doc) => {
-        const hasDiamondPrice = (doc.isForSale ?? false) && (doc.priceDiamonds ?? 0) > 0;
+        const hasNodeDiamondPrice = Boolean(
+          doc.nodeConfigs &&
+          Object.values(doc.nodeConfigs).some(
+            (nc) =>
+              nc &&
+              ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
+                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+                nc.publishedToClasses?.includes('open-library'))
+          )
+        );
+        const hasDiamondPrice =
+          ((doc.isForSale ?? false) && (doc.priceDiamonds ?? 0) >= 0) ||
+          (typeof doc.priceDiamonds === 'number' && doc.priceDiamonds >= 0) ||
+          hasNodeDiamondPrice;
         let publishedClasses = doc.publishedToClasses ?? [];
         if (hasDiamondPrice) {
           if (!publishedClasses.includes('open-library')) {
@@ -190,13 +203,25 @@ export const PhatHanhTaiLieuView: React.FC = () => {
       if (field === 'isForSale' || field === 'priceDiamonds') {
         const nextIsForSale = field === 'isForSale' ? Boolean(value) : updated.isForSale;
         const nextPrice = field === 'priceDiamonds' ? Number(value) : updated.priceDiamonds;
-        const hasDiamondPrice = nextIsForSale && nextPrice > 0;
+        const hasNodeDiamondPrice = Boolean(
+          updated.nodeConfigs &&
+          Object.values(updated.nodeConfigs).some(
+            (nc) =>
+              nc &&
+              ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
+                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+                nc.publishedToClasses?.includes('open-library'))
+          )
+        );
+        const hasDiamondPrice = (Boolean(nextIsForSale) && (nextPrice ?? 0) >= 0) || hasNodeDiamondPrice;
 
         let updatedClasses = updated.publishedToClasses || [];
         if (hasDiamondPrice) {
           if (!updatedClasses.includes('open-library')) {
             updatedClasses = [...updatedClasses, 'open-library'];
           }
+        } else {
+          updatedClasses = updatedClasses.filter((id) => id !== 'open-library');
         }
         updated.publishedToClasses = updatedClasses;
       }
@@ -356,7 +381,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
       if (field === 'isForSale' || field === 'priceDiamonds') {
         const nextIsForSale = field === 'isForSale' ? Boolean(value) : (updatedNC.isForSale ?? false);
         const nextPrice = field === 'priceDiamonds' ? Number(value) : (updatedNC.priceDiamonds ?? 0);
-        const hasDiamondPrice = Boolean(nextIsForSale) && (nextPrice ?? 0) > 0;
+        const hasDiamondPrice = Boolean(nextIsForSale) && (nextPrice ?? 0) >= 0;
 
         let updatedClasses = updatedNC.publishedToClasses || [];
         if (hasDiamondPrice) {
@@ -582,8 +607,18 @@ export const PhatHanhTaiLieuView: React.FC = () => {
     const originalDoc = documents.find((d) => d.id === docId);
     if (!originalDoc) return;
 
-    const finalPrice = config.isForSale ? Math.max(0, config.priceDiamonds) : 0;
-    const hasDiamondPrice = config.isForSale && finalPrice > 0;
+    const finalPrice = config.isForSale ? Math.max(0, config.priceDiamonds ?? 0) : 0;
+    const hasNodeDiamondPrice = Boolean(
+      config.nodeConfigs &&
+      Object.values(config.nodeConfigs).some(
+        (nc) =>
+          nc &&
+          ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
+            (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+            nc.publishedToClasses?.includes('open-library'))
+      )
+    );
+    const hasDiamondPrice = (Boolean(config.isForSale) && finalPrice >= 0) || hasNodeDiamondPrice;
 
     let finalClasses = config.publishedToClasses || [];
     if (hasDiamondPrice) {
@@ -599,7 +634,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
     const updatedDoc: TeacherDocument = {
       ...originalDoc,
       isPublished: isPub,
-      isForSale: config.isForSale && finalPrice > 0,
+      isForSale: Boolean(config.isForSale),
       priceDiamonds: finalPrice,
       publishedToClasses: finalClasses,
       classSchedules: config.classSchedules,
@@ -654,7 +689,17 @@ export const PhatHanhTaiLieuView: React.FC = () => {
         return !isPub;
       }
       if (activeTab === 'open_library') {
-        return (isSale && price > 0) || pubClasses.includes('open-library');
+        const hasNodeDiamondPrice = Boolean(
+          config?.nodeConfigs &&
+          Object.values(config.nodeConfigs).some(
+            (nc) =>
+              nc &&
+              ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
+                (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+                nc.publishedToClasses?.includes('open-library'))
+          )
+        );
+        return (isSale && price >= 0) || pubClasses.includes('open-library') || hasNodeDiamondPrice;
       }
 
       return true;
@@ -1120,7 +1165,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                         <span className="text-xs font-bold text-amber-800">Kim Cương (💎)</span>
                       </div>
                       <p className="text-[11px] text-amber-800 leading-relaxed">
-                        Ví dụ: Đặt giá 5 💎 cho riêng Bài kiểm tra KTDG này hoặc Bài tập Luyện tập này. Khi giá bán Kim Cương &gt; 0, vị trí này sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho người học tự do mua/mở khóa.
+                        Ví dụ: Đặt giá cho riêng Chương, Bài học, Vấn đề, Chuyên đề hoặc Bài kiểm tra KTDG này. Khi giá bán Kim Cương &ge; 0 (kể cả miễn phí 0 💎), vị trí này sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho tất cả học viên truy cập hoặc mở khóa.
                       </p>
                     </div>
                   ) : (
@@ -1479,7 +1524,7 @@ export const PhatHanhTaiLieuView: React.FC = () => {
                             <span className="text-xs font-bold text-amber-700">Kim Cương (💎)</span>
                           </div>
                           <p className="text-[11px] text-amber-800 leading-snug">
-                            Tài liệu có giá bán Kim Cương &gt; 0 sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho tất cả giáo viên &amp; học sinh mua/mở khóa.
+                            Tài liệu hoặc vị trí có giá bán Kim Cương &ge; 0 (kể cả miễn phí 0 💎) sẽ <strong>tự động thuộc Kho tài liệu 💎</strong> cho tất cả giáo viên &amp; học sinh mua/mở khóa hoặc xem tự do.
                           </p>
                         </div>
                       ) : (

@@ -114,8 +114,18 @@ export const ThuongMaiTaiLieuView: React.FC = () => {
     if (!originalDoc) return;
 
     // Chuẩn hóa giá bán nếu bật tính phí
-    const finalPrice = config.isForSale ? Math.max(0, config.priceDiamonds) : 0;
-    const hasDiamondPrice = config.isForSale && finalPrice > 0;
+    const finalPrice = config.isForSale ? Math.max(0, config.priceDiamonds ?? 0) : 0;
+    const hasNodeDiamondPrice = Boolean(
+      originalDoc.nodeConfigs &&
+      Object.values(originalDoc.nodeConfigs).some(
+        (nc) =>
+          nc &&
+          ((nc.isForSale && (nc.priceDiamonds ?? 0) >= 0) ||
+            (typeof nc.priceDiamonds === 'number' && nc.priceDiamonds >= 0) ||
+            nc.publishedToClasses?.includes('open-library'))
+      )
+    );
+    const hasDiamondPrice = (Boolean(config.isForSale) && finalPrice >= 0) || hasNodeDiamondPrice;
 
     let finalClasses = config.publishedToClasses || [];
     if (hasDiamondPrice) {
@@ -128,7 +138,7 @@ export const ThuongMaiTaiLieuView: React.FC = () => {
 
     const updatedDoc: TeacherDocument = {
       ...originalDoc,
-      isForSale: config.isForSale && finalPrice > 0,
+      isForSale: Boolean(config.isForSale),
       priceDiamonds: finalPrice,
       publishedToClasses: finalClasses,
       isPublished: finalClasses.length > 0 || Boolean(originalDoc.isPublished),
@@ -431,13 +441,13 @@ export const ThuongMaiTaiLieuView: React.FC = () => {
                       <label className="text-[11px] font-bold text-amber-900">Đơn giá bán:</label>
                       <input
                         type="number"
-                        min={5}
+                        min={0}
                         max={1000}
                         value={config.priceDiamonds}
-                        onChange={e => handleConfigChange(doc.id, 'priceDiamonds', Math.max(5, parseInt(e.target.value) || 5))}
+                        onChange={e => handleConfigChange(doc.id, 'priceDiamonds', Math.max(0, parseInt(e.target.value) || 0))}
                         className="w-24 py-1 px-2 text-xs font-black text-amber-800 bg-white border border-amber-300 rounded-lg text-center font-mono"
                       />
-                      <span className="text-[10px] text-amber-700 font-bold">💎 (Phạm vi: 5 - 1000)</span>
+                      <span className="text-[10px] text-amber-700 font-bold">💎 (Phạm vi: 0 - 1000)</span>
                     </div>
                   )}
 
