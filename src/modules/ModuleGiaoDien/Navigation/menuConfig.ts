@@ -30,7 +30,6 @@ export type ViewId =
   | 'teaching-drive'
   | 'teaching-monetization'
   | 'teaching-interactive'
-  | 'teaching-students'
   | 'reports-progress'
   | 'settings-users'
   | 'settings-permissions'
@@ -111,13 +110,6 @@ export const MENU_GROUPS: MenuGroup[] = [
         badge: 'TV / Live 📺',
         icon: Tv,
         description: 'Cửa sổ Lên lớp chọn Tài liệu & Nội dung dạy học, Bảng cuộn vô hạn, chiếu TV (Extend Mode) & Dạy Trực Tuyến Live',
-      },
-      {
-        id: 'teaching-students',
-        label: 'Sổ điểm & Lưu Drive Giáo viên',
-        badge: 'Drive giáo viên',
-        icon: LineChart,
-        description: 'Bảng điểm số & đánh giá nhận xét - tự động lưu trữ vào Google Drive của giáo viên mở lớp',
       },
     ],
   },

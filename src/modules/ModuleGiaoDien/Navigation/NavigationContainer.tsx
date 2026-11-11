@@ -35,9 +35,6 @@ const PhatHanhTaiLieuView = lazy(() =>
 const DayHocInteractiveView = lazy(() =>
   import('../../ModuleGiaoVien').then((m) => ({ default: m.DayHocInteractiveView }))
 );
-const TheoDoiHocSinhView = lazy(() =>
-  import('../../ModuleGiaoVien').then((m) => ({ default: m.TheoDoiHocSinhView }))
-);
 
 // Phân hệ 3: Quản trị & Báo cáo Giám sát (ModuleQuanTri)
 const BaoCaoGiamSatView = lazy(() =>
@@ -111,8 +108,7 @@ export function isViewAllowedForRole(viewId: ViewId, role: UserRole): boolean {
 
   if (
     viewId === 'settings-permissions' ||
-    viewId === 'teaching-monetization' ||
-    viewId === 'teaching-students'
+    viewId === 'teaching-monetization'
   ) {
     return (
       role === 'superadmin' ||
@@ -274,8 +270,6 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
         return <PhatHanhTaiLieuView />;
       case 'teaching-interactive':
         return <DayHocInteractiveView />;
-      case 'teaching-students':
-        return <TheoDoiHocSinhView />;
 
       // Module 3: Quản trị & Báo cáo Giám sát (ModuleQuanTri)
       case 'reports-progress':

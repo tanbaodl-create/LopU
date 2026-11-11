@@ -152,16 +152,6 @@ const MODULE_TREE_DATA: ModuleNode[] = [
         tags: ['Google UID/Email', 'nhapHocSinhService', 'Chuẩn hóa VTM', 'Đồng bộ vị trí cố định', 'Excel chống trùng'],
       },
       {
-        id: 'TheoDoiHocSinh',
-        name: 'TheoDoiHocSinh (Sổ điểm, Lưu Drive GV mở lớp & Theo dõi TKB con em)',
-        folderPath: 'src/modules/ModuleGiaoVien/TheoDoiHocSinh',
-        description: 'Quản lý điểm miệng, 15 phút, 1 tiết, học kỳ; ghi nhận xét và tự động lưu trữ bảng điểm từng lớp trực tiếp trên Google Drive cá nhân của giáo viên mở lớp đó. Tích hợp phân hệ "Theo dõi Thời Khóa Biểu Học Sinh / Con Em" cho phép giáo viên/phụ huynh tạo và quản lý nhiều hồ sơ lịch học của con, em, học sinh cần theo dõi.',
-        purpose: 'Đánh giá, Lưu Drive GV & Theo dõi thời khóa biểu học sinh/con em',
-        viewId: 'teaching-students',
-        icon: LineChart,
-        tags: ['Sổ điểm', 'Drive GV mở lớp', 'Đánh giá', 'Theo dõi TKB con em', 'Đa hồ sơ TKB'],
-      },
-      {
         id: 'QuanLyDrive',
         name: 'QuanLyDrive (Module con ẩn UI - Giải Pháp 1: Drive-First Strict Sync & Cache FolderID Siêu Tốc)',
         folderPath: 'src/modules/ModuleGiaoVien/QuanLyDrive',

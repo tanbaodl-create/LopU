@@ -93,16 +93,6 @@ export const MODULE_TARGETS: ModuleOption[] = [
     defaultAction: 'Thêm/xóa học sinh và nhập danh sách Excel chống trùng lặp theo định danh Google',
   },
   {
-    id: 'TheoDoiHocSinh',
-    name: 'Theo Dõi & Điểm Danh Học Sinh',
-    submodule: 'TheoDoiHocSinh',
-    folderPath: 'src/modules/ModuleGiaoVien/TheoDoiHocSinh',
-    parentModule: 'ModuleGiaoVien',
-    mainFile: 'TheoDoiHocSinhView.tsx',
-    keywords: ['theo dõi', 'điểm danh', 'chuyên cần', 'nhận xét', 'sổ theo dõi', 'theodoihocsinh', 'vắng', 'muộn', 'hạnh kiểm'],
-    defaultAction: 'Cập nhật chức năng điểm danh nhanh, theo dõi chuyên cần và nhận xét học sinh',
-  },
-  {
     id: 'TaiLieuCaNhan',
     name: 'Tài Liệu Dạy Học Drive 4 Cấp (Quy ước Tên & Phân Cấp Drive)',
     submodule: 'TaiLieuCaNhan',
