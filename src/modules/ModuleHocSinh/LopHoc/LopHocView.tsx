@@ -323,7 +323,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [newClassCode, setNewClassCode] = useState<string>('');
   const [newClassSubject, setNewClassSubject] = useState<string>('Toán');
   const [newClassGrade, setNewClassGrade] = useState<string>('Khối 10');
-  const [newClassRoom, setNewClassRoom] = useState<string>('Phòng học bộ môn');
+  const [newClassRoom, setNewClassRoom] = useState<string>('');
   const [newClassPin, setNewClassPin] = useState<string>('');
   const [newClassRequirePin, setNewClassRequirePin] = useState<boolean>(false);
   const [newClassCoords, setNewClassCoords] = useState<string>(DEFAULT_KTL_COORDS);
@@ -772,7 +772,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         subText: isKTL
           ? 'Kho tài liệu công khai toàn trường (Tọa độ: 15.173411, 108.667254)'
           : c.teacherName
-          ? `Giáo viên: ${c.teacherName} • Phòng: ${c.room || 'Phòng học'}`
+          ? `Giáo viên: ${c.teacherName} • Địa điểm: ${c.room || 'Chưa cập nhật'}`
           : undefined,
       };
     });
@@ -895,7 +895,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             label: `${c.code} — ${c.name}`,
             badge: 'Lớp bạn dạy',
             badgeColor: 'indigo',
-            subText: `Phòng: ${c.room || 'Phòng học'} • Sĩ số: ${c.studentCount || 0} HS`,
+            subText: `Địa điểm: ${c.room || 'Chưa cập nhật'} • Sĩ số: ${c.studentCount || 0} HS`,
             actionType: 'select',
             classItem: c,
           });
@@ -905,7 +905,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             label: `${c.code} — ${c.name}`,
             badge: 'Trợ giảng',
             badgeColor: 'emerald',
-            subText: `GV chính: ${c.teacherName || 'Chưa rõ'} • Phòng: ${c.room || 'Phòng học'}`,
+            subText: `GV chính: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
             actionType: 'select',
             classItem: c,
           });
@@ -927,7 +927,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           label: `${c.code} — ${c.name}${c.teacherName ? ` (${c.teacherName})` : ''}`,
           badge: c.code,
           badgeColor: 'indigo',
-          subText: `GV: ${c.teacherName || 'Chưa rõ'} • Phòng: ${c.room || 'Phòng học'}`,
+          subText: `GV: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
           actionType: 'select',
           classItem: c,
         });
@@ -940,7 +940,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             label: `${c.code} — ${c.name}`,
             badge: 'Đã tham gia',
             badgeColor: 'indigo',
-            subText: `GV: ${c.teacherName || 'Chưa rõ'} • Phòng: ${c.room || 'Phòng học'}`,
+            subText: `GV: ${c.teacherName || 'Chưa rõ'} • Địa điểm: ${c.room || 'Chưa cập nhật'}`,
             actionType: 'select',
             classItem: c,
           });
@@ -1011,7 +1011,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       );
       setNewClassSubject('Toán');
       setNewClassGrade('Khối 10');
-      setNewClassRoom('Phòng học bộ môn');
+      setNewClassRoom('');
       setNewClassPin('');
       setNewClassRequirePin(false);
       setNewClassCoords(DEFAULT_KTL_COORDS);
@@ -1154,7 +1154,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
       code: classCode,
       subject: newClassSubject.trim() || 'Chung',
       grade: newClassGrade.trim() || 'Khối 10',
-      room: newClassRoom.trim() || 'Phòng học bộ môn',
+      room: newClassRoom.trim() || 'Chưa cập nhật',
       pinCode: newClassPin.trim().toUpperCase() || '000000',
       requirePin: newClassRequirePin,
       studentCount: 0,
@@ -1398,7 +1398,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   </p>
                 ) : (
                   <p className="text-slate-500">
-                    Phòng: <span className="font-semibold text-slate-700">{currentClass.room || 'Phòng học bộ môn'}</span>
+                    Địa điểm: <span className="font-semibold text-slate-700">{currentClass.room || 'Chưa cập nhật'}</span>
                     {currentClass.teacherName && (
                       <>
                         {' '}• Giáo viên: <span className="font-semibold text-slate-700">{currentClass.teacherName}</span>
@@ -1430,11 +1430,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                     <button
                       type="button"
                       onClick={handleOpenGpsModal}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-[11px] border border-amber-200 transition-colors cursor-pointer"
-                      title="Chỉnh sửa tọa độ lớp học (Dành riêng cho Quản trị viên, Quản lý & Giáo viên mở lớp)"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs border border-amber-200 transition-colors cursor-pointer shadow-2xs"
+                      title="Lấy và chỉnh sửa tọa độ lớp học qua Google Maps hoặc GPS (Dành riêng cho Quản trị viên, Quản lý & Giáo viên mở lớp)"
                     >
-                      <Edit3 className="w-3 h-3 text-amber-600" />
-                      <span>Sửa tọa độ</span>
+                      <MapPin className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Lấy tọa độ</span>
                     </button>
                   )}
                 </div>
@@ -2107,10 +2107,10 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         </div>
       </div>
 
-      {/* MODAL GOOGLE MAPS CHỈNH SỬA TỌA ĐỘ LỚP HỌC (Dành riêng cho Quản trị, Quản lý, GV mở lớp) */}
+      {/* MODAL GOOGLE MAPS LẤY TỌA ĐỘ LỚP HỌC (Dành riêng cho Quản trị, Quản lý, GV mở lớp) */}
       {showGpsModal && canEditCoordinates && (
         <GpsPickerModal
-          title={`Google Maps — Chỉnh Sửa Tọa Độ Lớp: ${currentClass ? currentClass.name : 'Kho Tài Liệu'}`}
+          title={`Google Maps — Lấy Tọa Độ Lớp: ${currentClass ? currentClass.name : 'Kho Tài Liệu'}`}
           userNameOrContext={currentClass ? `${currentClass.name} (${currentClass.code})` : undefined}
           initialLat={selectedLat}
           initialLng={selectedLng}
@@ -2161,8 +2161,8 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 <span className="text-slate-700">{registeringClass.subject} • {registeringClass.grade}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Phòng học:</span>
-                <span className="text-slate-700">{registeringClass.room || 'Phòng học'}</span>
+                <span className="text-slate-500">Địa điểm:</span>
+                <span className="text-slate-700">{registeringClass.room || 'Chưa cập nhật'}</span>
               </div>
               <div className="flex justify-between items-center border-t border-slate-200/60 pt-2">
                 <span className="text-slate-600 font-medium">Học sinh đăng ký:</span>
@@ -2270,8 +2270,8 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 <span className="text-slate-700">{assistantApplyingClass.subject} • {assistantApplyingClass.grade}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-slate-500">Phòng học:</span>
-                <span className="text-slate-700">{assistantApplyingClass.room || 'Phòng học'}</span>
+                <span className="text-slate-500">Địa điểm:</span>
+                <span className="text-slate-700">{assistantApplyingClass.room || 'Chưa cập nhật'}</span>
               </div>
               <div className="flex justify-between items-center border-t border-purple-200/60 pt-2">
                 <span className="text-slate-600 font-medium">Giáo viên đăng ký trợ giảng:</span>
@@ -2388,12 +2388,12 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block font-bold text-slate-700">Phòng học</label>
+                <label className="block font-bold text-slate-700">Địa điểm</label>
                 <input
                   type="text"
                   value={newClassRoom}
                   onChange={e => setNewClassRoom(e.target.value)}
-                  placeholder="Ví dụ: Phòng 101, Nhà A..."
+                  placeholder="Ví dụ: Phòng 101, Nhà A, Cơ sở 1..."
                   className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500 focus:outline-hidden"
                 />
               </div>
@@ -2418,14 +2418,17 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                             const lng = pos.coords.longitude.toFixed(6);
                             setNewClassCoords(`${lat}, ${lng}`);
                           },
-                          () => alert('Không thể lấy vị trí hiện tại của thiết bị.')
+                          () => alert('Không thể lấy vị trí hiện tại của thiết bị. Vui lòng cho phép quyền truy cập vị trí trên trình duyệt.')
                         );
+                      } else {
+                        alert('Trình duyệt không hỗ trợ Geolocation.');
                       }
                     }}
-                    className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors shrink-0 cursor-pointer text-xs"
-                    title="Lấy vị trí GPS hiện tại"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors shrink-0 cursor-pointer text-xs"
+                    title="Lấy tọa độ GPS hiện tại của thiết bị"
                   >
-                    Lấy GPS hiện tại
+                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Lấy tọa độ</span>
                   </button>
                 </div>
               </div>
