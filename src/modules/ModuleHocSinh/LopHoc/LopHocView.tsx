@@ -18,6 +18,8 @@ import {
   UserPlus,
   PlusCircle,
   GraduationCap,
+  Trash2,
+  Save,
 } from 'lucide-react';
 import {
   ClassItem,
@@ -40,6 +42,7 @@ import {
   getPinRequests,
   saveClass,
   saveUser,
+  deleteClass,
 } from '../../ConnectData/ConnectFirestore';
 import { auth } from '../../../config/firebase';
 import { GpsPickerModal } from '../../../components/GpsPickerModal';
@@ -337,6 +340,21 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [newClassCoords, setNewClassCoords] = useState<string>(DEFAULT_KTL_COORDS);
   const [showNewClassGpsModal, setShowNewClassGpsModal] = useState<boolean>(false);
 
+  // Modal State: Giáo viên sửa thông tin & cập nhật lớp học do mình mở
+  const [showEditClassModal, setShowEditClassModal] = useState<boolean>(false);
+  const [editClassName, setEditClassName] = useState<string>('');
+  const [editClassCode, setEditClassCode] = useState<string>('');
+  const [editClassSubject, setEditClassSubject] = useState<string>(APP_SUBJECTS[0]);
+  const [editClassGrade, setEditClassGrade] = useState<string>('Khối 10');
+  const [editClassRoom, setEditClassRoom] = useState<string>('');
+  const [editClassPin, setEditClassPin] = useState<string>('');
+  const [editClassRequirePin, setEditClassRequirePin] = useState<boolean>(false);
+  const [editClassCoords, setEditClassCoords] = useState<string>(DEFAULT_KTL_COORDS);
+  const [editClassDescription, setEditClassDescription] = useState<string>('');
+  const [editClassAcademicYear, setEditClassAcademicYear] = useState<string>('2025-2026');
+  const [editClassSemester, setEditClassSemester] = useState<string>('Học kỳ I');
+  const [showEditClassGpsModal, setShowEditClassGpsModal] = useState<boolean>(false);
+
   const activeStudentId = studentProfile?.id || currentStudentId;
   const activeEmail = (
     firebaseUser?.email ||
@@ -551,23 +569,34 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     );
   }, [selectedClassId, currentClass]);
 
-  // Quyền chỉnh sửa tọa độ: Chỉ quản trị, quản lý và chính giáo viên mở lớp mới có quyền
-  const canEditCoordinates = useMemo(() => {
+  // Quyền quản trị lớp học: Chỉ giáo viên chính mở lớp (hoặc Quản trị/Quản lý) mới có quyền sửa thông tin, cập nhật tọa độ và xóa lớp
+  const isOwnerTeacher = useMemo(() => {
+    if (isKhoTaiLieu) return false;
     if (effectiveRole === 'superadmin' || effectiveRole === 'admin') {
       return true;
     }
     if (effectiveRole === 'teacher' && currentClass) {
-      const isOwnerTeacher =
+      const isMatchId =
         (currentClass.teacherId &&
           (currentClass.teacherId === activeStudentId ||
             currentClass.teacherId === studentProfile?.id)) ||
+        false;
+      const isMatchName =
         (studentProfile?.name &&
           currentClass.teacherName?.toLowerCase().trim() ===
-            studentProfile.name.toLowerCase().trim());
-      if (isOwnerTeacher) return true;
+            studentProfile.name.toLowerCase().trim()) ||
+        false;
+      return Boolean(isMatchId || isMatchName);
     }
     return false;
-  }, [effectiveRole, currentClass, activeStudentId, studentProfile]);
+  }, [effectiveRole, currentClass, activeStudentId, studentProfile, isKhoTaiLieu]);
+
+  const canEditCoordinates = useMemo(() => {
+    if (effectiveRole === 'superadmin' || effectiveRole === 'admin') {
+      return true;
+    }
+    return isOwnerTeacher;
+  }, [effectiveRole, isOwnerTeacher]);
 
   // Tọa độ điểm đến của lớp học (Kho Tài Liệu mặc định là 15.173411, 108.667254)
   const currentGpsCoords = useMemo(() => {
@@ -1242,6 +1271,95 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     setTimeout(() => setNotification(null), 5000);
   };
 
+  // Mở modal sửa thông tin lớp học do chính giáo viên mở
+  const handleOpenEditClassModal = () => {
+    if (!currentClass || isKhoTaiLieu) return;
+    setEditClassName(currentClass.name || '');
+    setEditClassCode(currentClass.code || '');
+    setEditClassSubject(currentClass.subject || APP_SUBJECTS[0]);
+    setEditClassGrade(currentClass.grade || 'Khối 10');
+    setEditClassRoom(currentClass.room || '');
+    setEditClassPin(currentClass.pinCode || '');
+    setEditClassRequirePin(Boolean(currentClass.requirePin));
+    setEditClassCoords(currentClass.gpsCoords || DEFAULT_KTL_COORDS);
+    setEditClassDescription(currentClass.description || '');
+    setEditClassAcademicYear(currentClass.academicYear || '2025-2026');
+    setEditClassSemester(currentClass.semester || 'Học kỳ I');
+    setShowEditClassModal(true);
+  };
+
+  // Xác nhận lưu cập nhật thông tin lớp học
+  const handleConfirmUpdateClass = async () => {
+    if (!currentClass || isKhoTaiLieu) return;
+    if (!editClassName.trim()) {
+      alert('Vui lòng nhập tên lớp học!');
+      return;
+    }
+
+    const updatedClass: ClassItem = {
+      ...currentClass,
+      name: editClassName.trim(),
+      code: (editClassCode.trim() || currentClass.code).toUpperCase(),
+      subject: editClassSubject.trim() || currentClass.subject,
+      grade: editClassGrade.trim() || currentClass.grade,
+      room: editClassRoom.trim() || 'Chưa cập nhật',
+      pinCode: editClassPin.trim().toUpperCase() || '000000',
+      requirePin: editClassRequirePin,
+      gpsCoords: editClassCoords.trim() || DEFAULT_KTL_COORDS,
+      description: editClassDescription.trim() || currentClass.description,
+      academicYear: editClassAcademicYear.trim() || currentClass.academicYear || '2025-2026',
+      semester: editClassSemester.trim() || currentClass.semester || 'Học kỳ I',
+      updatedAt: new Date().toISOString(),
+    };
+
+    await saveClass(updatedClass);
+
+    setClasses(prev => prev.map(c => (c.id === updatedClass.id ? updatedClass : c)));
+    setShowEditClassModal(false);
+
+    setNotification(`Đã cập nhật thông tin lớp "${updatedClass.name}" thành công!`);
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Xác nhận xóa vĩnh viễn lớp học do chính giáo viên mở
+  const handleDeleteClass = async () => {
+    if (!currentClass || isKhoTaiLieu) return;
+
+    const confirmed = window.confirm(
+      `⚠️ CẢNH BÁO XÓA LỚP HỌC:\n\nThầy/cô có chắc chắn muốn xóa vĩnh viễn lớp "${currentClass.name}" (${currentClass.code}) không?\n\nToàn bộ dữ liệu lớp học sẽ bị xóa khỏi hệ thống và không thể hoàn tác.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const classIdToDelete = currentClass.id;
+      const classNameToDelete = currentClass.name;
+
+      // 1. Xóa khỏi Firestore & localStorage
+      await deleteClass(classIdToDelete);
+
+      // 2. Cập nhật hồ sơ giáo viên nếu có lưu classIds
+      if (studentProfile?.classIds && studentProfile.classIds.includes(classIdToDelete)) {
+        const updatedProfile: UserProfile = {
+          ...studentProfile,
+          classIds: studentProfile.classIds.filter(cid => cid !== classIdToDelete),
+        };
+        await saveUser(updatedProfile);
+        setStudentProfile(updatedProfile);
+      }
+
+      // 3. Cập nhật state lớp và tự động chuyển về Kho Tài Liệu
+      setClasses(prev => prev.filter(c => c.id !== classIdToDelete));
+      setSelectedClassId('cls_open_library');
+      setSelectedMaterialId('');
+      setShowEditClassModal(false);
+
+      setNotification(`Đã xóa vĩnh viễn lớp học "${classNameToDelete}" thành công.`);
+      setTimeout(() => setNotification(null), 5000);
+    } catch (err: any) {
+      alert(`Lỗi khi xóa lớp học: ${err?.message || 'Vui lòng thử lại.'}`);
+    }
+  };
+
   const materialComboboxOptions: ComboboxOption[] = useMemo(() => {
     return classMaterials.map(mat => {
       let badgeColor: 'emerald' | 'amber' | 'indigo' | 'slate' = 'indigo';
@@ -1513,6 +1631,30 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                       <MapPin className="w-3.5 h-3.5 text-amber-600" />
                       <span>Lấy tọa độ</span>
                     </button>
+                  )}
+
+                  {isOwnerTeacher && !isKhoTaiLieu && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleOpenEditClassModal}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+                        title="Chỉnh sửa và cập nhật thông tin lớp học do chính thầy/cô mở"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Sửa lớp</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleDeleteClass}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors cursor-pointer shadow-2xs"
+                        title="Xóa vĩnh viễn lớp học do chính thầy/cô mở"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                        <span>Xóa lớp</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -2568,6 +2710,229 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           onConfirm={coordsStr => {
             setNewClassCoords(coordsStr);
             setShowNewClassGpsModal(false);
+          }}
+        />
+      )}
+
+      {/* 4. MODAL GIÁO VIÊN SỬA THÔNG TIN & CẬP NHẬT LỚP HỌC DO MÌNH MỞ */}
+      {showEditClassModal && currentClass && !isKhoTaiLieu && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
+                  <Edit3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Sửa Thông Tin Lớp Học</h3>
+                  <p className="text-xs text-slate-500">Cập nhật thông tin lớp: {currentClass.name}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEditClassModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="sm:col-span-2 space-y-1">
+                <label className="block font-bold text-slate-700">Tên lớp học <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={editClassName}
+                  onChange={e => setEditClassName(e.target.value)}
+                  placeholder="Ví dụ: 10A1 - Toán Chuyên..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-semibold text-slate-900"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Mã lớp <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={editClassCode}
+                  onChange={e => setEditClassCode(e.target.value.toUpperCase())}
+                  placeholder="Ví dụ: 10A1, TOAN-10..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono uppercase font-bold text-indigo-700"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Môn học <span className="text-rose-500">*</span></label>
+                <select
+                  value={editClassSubject}
+                  onChange={e => setEditClassSubject(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden bg-white cursor-pointer font-semibold text-slate-900"
+                >
+                  {APP_SUBJECTS.map(subj => (
+                    <option key={subj} value={subj}>
+                      Môn {subj}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Khối lớp</label>
+                <select
+                  value={editClassGrade}
+                  onChange={e => setEditClassGrade(e.target.value)}
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden bg-white cursor-pointer"
+                >
+                  <option value="Khối 6">Khối 6</option>
+                  <option value="Khối 7">Khối 7</option>
+                  <option value="Khối 8">Khối 8</option>
+                  <option value="Khối 9">Khối 9</option>
+                  <option value="Khối 10">Khối 10</option>
+                  <option value="Khối 11">Khối 11</option>
+                  <option value="Khối 12">Khối 12</option>
+                  <option value="Toàn trường">Toàn trường</option>
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Địa điểm</label>
+                <input
+                  type="text"
+                  value={editClassRoom}
+                  onChange={e => setEditClassRoom(e.target.value)}
+                  placeholder="Ví dụ: Phòng 101, Nhà A, Cơ sở 1..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="sm:col-span-2 space-y-1">
+                <label className="block font-bold text-slate-700">Tọa độ lớp học (Dẫn đường Google Maps)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editClassCoords}
+                    onChange={e => setEditClassCoords(e.target.value)}
+                    placeholder="15.173411, 108.667254"
+                    className="flex-1 py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowEditClassGpsModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold transition-colors shrink-0 cursor-pointer text-xs border border-indigo-200"
+                    title="Mở bản đồ Google Maps ghim vị trí hoặc lấy tọa độ lớp học"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>Lấy tọa độ</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Niên khóa</label>
+                <input
+                  type="text"
+                  value={editClassAcademicYear}
+                  onChange={e => setEditClassAcademicYear(e.target.value)}
+                  placeholder="2025-2026"
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block font-bold text-slate-700">Học kỳ</label>
+                <input
+                  type="text"
+                  value={editClassSemester}
+                  onChange={e => setEditClassSemester(e.target.value)}
+                  placeholder="Học kỳ I"
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="sm:col-span-2 space-y-1">
+                <label className="block font-bold text-slate-700">Mô tả lớp học</label>
+                <textarea
+                  rows={2}
+                  value={editClassDescription}
+                  onChange={e => setEditClassDescription(e.target.value)}
+                  placeholder="Mô tả nội dung chương trình hoặc ghi chú của lớp..."
+                  className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden resize-none"
+                />
+              </div>
+
+              <div className="sm:col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
+                <label className="flex items-center gap-2 font-bold text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={editClassRequirePin}
+                    onChange={e => setEditClassRequirePin(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                  />
+                  <span>Yêu cầu mã PIN khi học sinh tham gia lớp</span>
+                </label>
+                {editClassRequirePin && (
+                  <div className="pt-2">
+                    <input
+                      type="text"
+                      value={editClassPin}
+                      onChange={e => setEditClassPin(e.target.value.toUpperCase())}
+                      placeholder="Nhập mã PIN (ví dụ: 123456)..."
+                      maxLength={10}
+                      className="w-full py-2 px-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden font-mono uppercase font-bold text-center bg-white"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={handleDeleteClass}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Xóa vĩnh viễn lớp học này"
+              >
+                <Trash2 className="w-4 h-4 text-rose-500" />
+                <span>Xóa lớp này</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowEditClassModal(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmUpdateClass}
+                  className="px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Lưu cập nhật</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL GOOGLE MAPS LẤY TỌA ĐỘ KHI SỬA LỚP */}
+      {showEditClassGpsModal && (
+        <GpsPickerModal
+          title={`Google Maps — Lấy Tọa Độ Lớp: ${editClassName || currentClass?.name}`}
+          userNameOrContext={editClassName ? `${editClassName} (${editClassCode || currentClass?.code})` : undefined}
+          initialLat={(() => {
+            const parts = editClassCoords.split(',').map(s => parseFloat(s.trim()));
+            return parts.length === 2 && !isNaN(parts[0]) ? parts[0] : 15.173411;
+          })()}
+          initialLng={(() => {
+            const parts = editClassCoords.split(',').map(s => parseFloat(s.trim()));
+            return parts.length === 2 && !isNaN(parts[1]) ? parts[1] : 108.667254;
+          })()}
+          onClose={() => setShowEditClassGpsModal(false)}
+          onConfirm={coordsStr => {
+            setEditClassCoords(coordsStr);
+            setShowEditClassGpsModal(false);
           }}
         />
       )}
