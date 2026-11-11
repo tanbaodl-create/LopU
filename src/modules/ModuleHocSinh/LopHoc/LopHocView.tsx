@@ -327,6 +327,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const [newClassPin, setNewClassPin] = useState<string>('');
   const [newClassRequirePin, setNewClassRequirePin] = useState<boolean>(false);
   const [newClassCoords, setNewClassCoords] = useState<string>(DEFAULT_KTL_COORDS);
+  const [showNewClassGpsModal, setShowNewClassGpsModal] = useState<boolean>(false);
 
   const activeStudentId = studentProfile?.id || currentStudentId;
   const activeEmail = (
@@ -2410,24 +2411,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() => {
-                      if (navigator.geolocation) {
-                        navigator.geolocation.getCurrentPosition(
-                          pos => {
-                            const lat = pos.coords.latitude.toFixed(6);
-                            const lng = pos.coords.longitude.toFixed(6);
-                            setNewClassCoords(`${lat}, ${lng}`);
-                          },
-                          () => alert('Không thể lấy vị trí hiện tại của thiết bị. Vui lòng cho phép quyền truy cập vị trí trên trình duyệt.')
-                        );
-                      } else {
-                        alert('Trình duyệt không hỗ trợ Geolocation.');
-                      }
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors shrink-0 cursor-pointer text-xs"
-                    title="Lấy tọa độ GPS hiện tại của thiết bị"
+                    onClick={() => setShowNewClassGpsModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold transition-colors shrink-0 cursor-pointer text-xs border border-indigo-200"
+                    title="Mở bản đồ Google Maps ghim vị trí hoặc lấy tọa độ lớp học"
                   >
-                    <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600" />
                     <span>Lấy tọa độ</span>
                   </button>
                 </div>
@@ -2481,6 +2469,27 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL GOOGLE MAPS LẤY TỌA ĐỘ CHO LỚP MỚI */}
+      {showNewClassGpsModal && (
+        <GpsPickerModal
+          title={`Google Maps — Lấy Tọa Độ Lớp: ${newClassName || 'Lớp mới'}`}
+          userNameOrContext={newClassName ? `${newClassName} (${newClassCode || 'Mã lớp'})` : 'Lớp học mới'}
+          initialLat={(() => {
+            const parts = newClassCoords.split(',').map(s => parseFloat(s.trim()));
+            return parts.length === 2 && !isNaN(parts[0]) ? parts[0] : 15.173411;
+          })()}
+          initialLng={(() => {
+            const parts = newClassCoords.split(',').map(s => parseFloat(s.trim()));
+            return parts.length === 2 && !isNaN(parts[1]) ? parts[1] : 108.667254;
+          })()}
+          onClose={() => setShowNewClassGpsModal(false)}
+          onConfirm={coordsStr => {
+            setNewClassCoords(coordsStr);
+            setShowNewClassGpsModal(false);
+          }}
+        />
       )}
     </div>
   );
