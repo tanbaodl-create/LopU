@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { User, Sparkles, CheckSquare, Square, AlertCircle } from 'lucide-react';
 import { UserRole } from '../../../../services/storageTypes';
 import { ExtendedUserProfile } from '../QuanLyNguoiDungView';
-import { GpsPickerModal } from '../../../../components/GpsPickerModal';
+
+const GpsPickerModal = lazy(() =>
+  import('../../../../components/GpsPickerModal').then((m) => ({ default: m.GpsPickerModal }))
+);
 
 interface UserProfileModalProps {
   user: ExtendedUserProfile | null;
@@ -428,25 +431,27 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ user, onClos
       </div>
 
       {showGpsPicker && (
-        <GpsPickerModal
-          title="Google Maps — Chọn Tọa Độ GPS Cho Hồ Sơ"
-          userNameOrContext={formData.name}
-          initialLat={
-            formData.gps
-              ? parseFloat(formData.gps.split(',')[0]) || 21.028511
-              : 21.028511
-          }
-          initialLng={
-            formData.gps
-              ? parseFloat(formData.gps.split(',')[1]) || 105.854444
-              : 105.854444
-          }
-          onClose={() => setShowGpsPicker(false)}
-          onConfirm={(coordsStr) => {
-            setFormData({ ...formData, gps: coordsStr });
-            setShowGpsPicker(false);
-          }}
-        />
+        <Suspense fallback={null}>
+          <GpsPickerModal
+            title="Google Maps — Chọn Tọa Độ GPS Cho Hồ Sơ"
+            userNameOrContext={formData.name}
+            initialLat={
+              formData.gps
+                ? parseFloat(formData.gps.split(',')[0]) || 21.028511
+                : 21.028511
+            }
+            initialLng={
+              formData.gps
+                ? parseFloat(formData.gps.split(',')[1]) || 105.854444
+                : 105.854444
+            }
+            onClose={() => setShowGpsPicker(false)}
+            onConfirm={(coordsStr) => {
+              setFormData({ ...formData, gps: coordsStr });
+              setShowGpsPicker(false);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

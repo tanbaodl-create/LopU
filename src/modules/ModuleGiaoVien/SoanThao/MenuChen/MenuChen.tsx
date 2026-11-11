@@ -12,7 +12,6 @@ import {
   FileUp,
   FolderArchive,
 } from 'lucide-react';
-import mammoth from 'mammoth';
 import { MenuChenProps } from './types';
 import { TableInsertModal } from './TableInsertModal';
 import { renderLatexInHtml } from '../latexUtils';
@@ -27,9 +26,11 @@ const extractFileContentToHtml = async (file: File): Promise<string> => {
 
   let rawHtml = '';
 
-  // 1. Tệp Word Binary (.docx): Dùng mammoth chuyển đổi sang HTML chuẩn
+  // 1. Tệp Word Binary (.docx): Dynamic import mammoth chuyển đổi sang HTML chuẩn
   if (ext === 'docx') {
     try {
+      const mammothModule = await import('mammoth');
+      const mammoth = mammothModule.default || mammothModule;
       const arrayBuffer = await file.arrayBuffer();
       const result = await (mammoth as any).convertToHtml({ arrayBuffer });
       if (result.value && result.value.trim()) {

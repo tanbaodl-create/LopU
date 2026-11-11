@@ -13,7 +13,6 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { Download, FileSpreadsheet, FileText, BarChart3 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 
 const subjectScoreData = [
   { subject: 'Toán Học', dtb: 8.4, pass: 95, fail: 5 },
@@ -39,7 +38,8 @@ const scoreDistributionData = [
 
 export const BangBieuDoRechartsHocSinh: React.FC = () => {
   // Export Excel (.xlsx)
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+    const XLSX = await import('xlsx');
     const ws = XLSX.utils.json_to_sheet(subjectScoreData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'DiemTB_CacMon');

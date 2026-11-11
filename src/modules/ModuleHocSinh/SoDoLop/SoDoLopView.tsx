@@ -58,8 +58,6 @@ import {
   formatAvoidNearGroups,
   isAvoidNearViolation,
 } from '../../ModuleGiaoVien/NhapHocSinh/nhapHocSinhService';
-import { read, utils, write } from 'xlsx';
-import ExcelJS from 'exceljs';
 
 // Đường dẫn mặc định của app và module Sơ đồ lớp
 export const DEFAULT_APP_PATH = 'myApp/LopU';
@@ -1732,6 +1730,8 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
 
   const handleDownloadTemplate = async () => {
     try {
+      const ExcelJSModule = await import('exceljs');
+      const ExcelJS = ExcelJSModule.default || ExcelJSModule;
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('DS_Mau_So_Do_Lop');
 
@@ -1846,8 +1846,9 @@ export const SoDoLopView: React.FC<LearningSeatingViewProps> = ({
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
+        const { read, utils } = await import('xlsx');
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as XLSX from 'xlsx';
 import {
   FileSpreadsheet,
   Download,
@@ -672,7 +671,8 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
   };
 
   // Xuất file Excel (.xlsx) 14 trường thông tin
-  const handleExportExcel14Fields = () => {
+  const handleExportExcel14Fields = async () => {
+    const XLSX = await import('xlsx');
     const exportData = filteredUsers.map(u => ({
       '1. Họ và Tên': u.name,
       '2. Biệt Danh': u.nickname || '',
@@ -697,7 +697,8 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
   };
 
   // Tải file Excel mẫu (.xlsx) 14 trường
-  const handleDownloadSampleTemplate = () => {
+  const handleDownloadSampleTemplate = async () => {
+    const XLSX = await import('xlsx');
     const sampleData = [
       {
         '1. Họ và Tên': 'Nguyễn Văn An',
@@ -746,6 +747,7 @@ export const QuanLyNguoiDungView: React.FC<QuanLyNguoiDungViewProps> = ({
 
     setIsImporting(true);
     try {
+      const XLSX = await import('xlsx');
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
       const firstSheet = workbook.SheetNames[0];
