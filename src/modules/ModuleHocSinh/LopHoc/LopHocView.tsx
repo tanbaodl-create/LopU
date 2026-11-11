@@ -105,21 +105,21 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     setPublishedDocuments(allDocs);
   };
 
-  // Luôn luôn hiển thị Lớp "Kho tài liệu 💎" cho tất cả người dùng (học sinh, giáo viên, quản trị viên, khách)
+  // Luôn luôn hiển thị "Kho Tài Liệu" cho tất cả người dùng (học sinh, giáo viên, quản trị viên, khách)
   const userClassOptions = useMemo(() => {
     let openClass = classes.find(
-      c => c.id === 'cls_open_library' || c.code === 'KTL-OPEN' || c.code === 'TVM-OPEN' || c.name?.toLowerCase().includes('kho tài liệu')
+      c => c.id === 'cls_open_library' || c.code === 'KTL-OPEN' || c.code === 'KTL' || c.name?.toLowerCase().includes('kho tài liệu')
     );
     if (!openClass) {
       openClass = {
         id: 'cls_open_library',
-        name: 'Kho tài liệu 💎',
-        code: 'KTL-OPEN',
+        name: 'Kho Tài Liệu',
+        code: 'KTL',
         subject: 'Chung (Tất cả môn)',
         grade: 'Toàn trường',
         teacherId: 'u_superadmin_1',
-        teacherName: 'Hệ thống & Tất cả GV',
-        room: 'Kho Học Liệu Công Khai',
+        teacherName: '',
+        room: 'Kho Tài Liệu',
         pinCode: '000000',
         requirePin: false,
         studentCount: 0,
@@ -128,6 +128,12 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         color: 'emerald',
         description: 'Kho tài liệu công khai dành cho tất cả thành viên truy cập (chứa các tài liệu bán và tài liệu miễn phí 0 kim cương)',
         lessons: [],
+      };
+    } else {
+      openClass = {
+        ...openClass,
+        name: 'Kho Tài Liệu',
+        teacherName: '',
       };
     }
 
@@ -386,11 +392,19 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   {userClassOptions.length === 0 ? (
                     <option value="">-- (Danh sách rỗng) --</option>
                   ) : (
-                    userClassOptions.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.code} — {c.name} ({c.teacherName})
-                      </option>
-                    ))
+                    userClassOptions.map(c => {
+                      const isKhoTaiLieu =
+                        c.id === 'cls_open_library' ||
+                        c.code === 'KTL-OPEN' ||
+                        c.code === 'KTL' ||
+                        c.name?.toLowerCase().includes('kho tài liệu');
+
+                      return (
+                        <option key={c.id} value={c.id}>
+                          {isKhoTaiLieu ? 'Kho Tài Liệu' : `${c.code} — ${c.name} (${c.teacherName})`}
+                        </option>
+                      );
+                    })
                   )}
                 </select>
                 <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-3.5 pointer-events-none" />
@@ -415,11 +429,19 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
             </div>
             {currentClass && (
               <div className="mt-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
-                <p className="text-slate-500">
-                  Phòng: <span className="font-semibold text-slate-700">{currentClass.room}</span> • Giáo viên:{' '}
-                  <span className="font-semibold text-slate-700">{currentClass.teacherName}</span> • Nơi học tập:{' '}
-                  <span className="font-semibold text-indigo-700">Trường THPT Chuyên</span>
-                </p>
+                {selectedClassId === 'cls_open_library' ||
+                currentClass.id === 'cls_open_library' ||
+                currentClass.name?.toLowerCase().includes('kho tài liệu') ? (
+                  <p className="text-slate-500">
+                    <span className="font-semibold text-indigo-700">Kho Tài Liệu</span> • Dành cho tất cả giáo viên và học sinh
+                  </p>
+                ) : (
+                  <p className="text-slate-500">
+                    Phòng: <span className="font-semibold text-slate-700">{currentClass.room}</span> • Giáo viên:{' '}
+                    <span className="font-semibold text-slate-700">{currentClass.teacherName}</span> • Nơi học tập:{' '}
+                    <span className="font-semibold text-indigo-700">Trường THPT Chuyên</span>
+                  </p>
+                )}
 
                 <div className="flex items-center gap-2">
                   <button

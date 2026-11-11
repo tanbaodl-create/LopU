@@ -34,13 +34,13 @@ export const INITIAL_USERS: UserProfile[] = [
 export const INITIAL_CLASSES: ClassItem[] = [
   {
     id: 'cls_open_library',
-    name: 'Kho tài liệu 💎',
-    code: 'KTL-OPEN',
+    name: 'Kho Tài Liệu',
+    code: 'KTL',
     subject: 'Chung (Tất cả môn)',
     grade: 'Toàn trường',
     teacherId: 'u_superadmin_1',
-    teacherName: 'Hệ thống & Tất cả GV',
-    room: 'Kho Học Liệu Công Khai',
+    teacherName: '',
+    room: 'Kho Tài Liệu',
     pinCode: '000000',
     requirePin: false,
     studentCount: 0,
