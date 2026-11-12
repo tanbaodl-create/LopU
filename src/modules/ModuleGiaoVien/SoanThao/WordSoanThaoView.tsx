@@ -549,7 +549,8 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   };
 
   const isTeacherOrHigher = (role?: UserRole): boolean => {
-    return role !== 'student' && role !== 'parent' && role !== 'guest' && (!role || role === 'teacher' || role === 'manager' || role === 'admin' || role === 'superadmin' || role === 'assistant');
+    const r = role || currentRole;
+    return r === 'teacher' || r === 'manager' || r === 'admin' || r === 'superadmin' || r === 'assistant';
   };
   const isChuyenDeSelected = Boolean(chuyenDe && chuyenDe.trim());
 
@@ -5999,58 +6000,63 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         ))}
                       </select>
 
-                      {/* Nút Thêm mới */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const defaultNew = `Kiến thức ${list.length + 1}`;
-                          setItemActionModal({
-                            type: 'rename',
-                            category: 'kienThuc',
-                            item: '',
-                            newName: defaultNew,
-                          });
-                        }}
-                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
-                        title="Thêm file kiến thức mới"
-                      >
-                        + Thêm bài
-                      </button>
+                      {/* Nút thao tác dành riêng cho giáo viên */}
+                      {isTeacherOrHigher(currentRole) && (
+                        <>
+                          {/* Nút Thêm mới */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const defaultNew = `Kiến thức ${list.length + 1}`;
+                              setItemActionModal({
+                                type: 'rename',
+                                category: 'kienThuc',
+                                item: '',
+                                newName: defaultNew,
+                              });
+                            }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
+                            title="Thêm file kiến thức mới"
+                          >
+                            + Thêm bài
+                          </button>
 
-                      {/* Nút Sửa tên */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItemActionModal({
-                            type: 'rename',
-                            category: 'kienThuc',
-                            item: curVal,
-                            newName: curVal,
-                          });
-                        }}
-                        className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
-                        title="Đổi tên bài kiến thức đang chọn"
-                      >
-                        <Edit3 className="w-3.5 h-3.5" />
-                      </button>
+                          {/* Nút Sửa tên */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemActionModal({
+                                type: 'rename',
+                                category: 'kienThuc',
+                                item: curVal,
+                                newName: curVal,
+                              });
+                            }}
+                            className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                            title="Đổi tên bài kiến thức đang chọn"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
 
-                      {/* Nút Xóa */}
-                      {list.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemActionModal({
-                              type: 'delete',
-                              category: 'kienThuc',
-                              item: curVal,
-                              newName: '',
-                            });
-                          }}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Xóa bài kiến thức này"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {/* Nút Xóa */}
+                          {list.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItemActionModal({
+                                  type: 'delete',
+                                  category: 'kienThuc',
+                                  item: curVal,
+                                  newName: '',
+                                });
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Xóa bài kiến thức này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   );
@@ -6090,59 +6096,64 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         )}
                       </select>
 
-                      {/* Nút Thêm mới */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItemActionModal({
-                            type: 'rename',
-                            category: 'luyenTap',
-                            item: '',
-                            newName: '',
-                          });
-                        }}
-                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
-                        title="Thêm bài luyện tập mới"
-                      >
-                        + Thêm bài
-                      </button>
+                      {/* Nút thao tác dành riêng cho giáo viên */}
+                      {isTeacherOrHigher(currentRole) && (
+                        <>
+                          {/* Nút Thêm mới */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemActionModal({
+                                type: 'rename',
+                                category: 'luyenTap',
+                                item: '',
+                                newName: '',
+                              });
+                            }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer shadow-2xs"
+                            title="Thêm bài luyện tập mới"
+                          >
+                            + Thêm bài
+                          </button>
 
-                      {/* Nút Sửa tên */}
-                      {curVal && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemActionModal({
-                              type: 'rename',
-                              category: 'luyenTap',
-                              item: curVal,
-                              newName: curVal,
-                            });
-                          }}
-                          className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Đổi tên bài luyện tập này"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                          {/* Nút Sửa tên */}
+                          {curVal && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItemActionModal({
+                                  type: 'rename',
+                                  category: 'luyenTap',
+                                  item: curVal,
+                                  newName: curVal,
+                                });
+                              }}
+                              className="p-1 rounded-lg text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Đổi tên bài luyện tập này"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                      {/* Nút Xóa */}
-                      {curVal && list.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemActionModal({
-                              type: 'delete',
-                              category: 'luyenTap',
-                              item: curVal,
-                              newName: '',
-                            });
-                          }}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Xóa bài luyện tập này"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {/* Nút Xóa */}
+                          {curVal && list.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItemActionModal({
+                                  type: 'delete',
+                                  category: 'luyenTap',
+                                  item: curVal,
+                                  newName: '',
+                                });
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Xóa bài luyện tập này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   );
@@ -6182,59 +6193,64 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         )}
                       </select>
 
-                      {/* Nút Thêm mới */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setItemActionModal({
-                            type: 'rename',
-                            category: 'ktdg',
-                            item: '',
-                            newName: '',
-                          });
-                        }}
-                        className="px-2 py-1 rounded-lg text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-2xs"
-                        title="Thêm bài kiểm tra đánh giá mới"
-                      >
-                        + Thêm đề
-                      </button>
+                      {/* Nút thao tác dành riêng cho giáo viên */}
+                      {isTeacherOrHigher(currentRole) && (
+                        <>
+                          {/* Nút Thêm mới */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemActionModal({
+                                type: 'rename',
+                                category: 'ktdg',
+                                item: '',
+                                newName: '',
+                              });
+                            }}
+                            className="px-2 py-1 rounded-lg text-[11px] font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 cursor-pointer shadow-2xs"
+                            title="Thêm bài kiểm tra đánh giá mới"
+                          >
+                            + Thêm đề
+                          </button>
 
-                      {/* Nút Sửa tên */}
-                      {curVal && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemActionModal({
-                              type: 'rename',
-                              category: 'ktdg',
-                              item: curVal,
-                              newName: curVal,
-                            });
-                          }}
-                          className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Đổi tên bài KTDG này"
-                        >
-                          <Edit3 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                          {/* Nút Sửa tên */}
+                          {curVal && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItemActionModal({
+                                  type: 'rename',
+                                  category: 'ktdg',
+                                  item: curVal,
+                                  newName: curVal,
+                                });
+                              }}
+                              className="p-1 rounded-lg text-slate-600 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Đổi tên bài KTDG này"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
 
-                      {/* Nút Xóa */}
-                      {curVal && list.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemActionModal({
-                              type: 'delete',
-                              category: 'ktdg',
-                              item: curVal,
-                              newName: '',
-                            });
-                          }}
-                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
-                          title="Xóa bài KTDG này"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                          {/* Nút Xóa */}
+                          {curVal && list.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setItemActionModal({
+                                  type: 'delete',
+                                  category: 'ktdg',
+                                  item: curVal,
+                                  newName: '',
+                                });
+                              }}
+                              className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 cursor-pointer shadow-2xs"
+                              title="Xóa bài KTDG này"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </>
                       )}
                     </div>
                   );
@@ -6267,20 +6283,22 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 <span>Quay lại Lớp Học</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setIsHierarchyExpanded(!isHierarchyExpanded)}
-                className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
-                title="Mở rộng / Thu gọn chi tiết Cây phân cấp bài dạy"
-              >
-                {isHierarchyExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                <span>{isHierarchyExpanded ? 'Đóng lại' : 'Đổi chuyên đề'}</span>
-              </button>
+              {isTeacherOrHigher(currentRole) && (
+                <button
+                  type="button"
+                  onClick={() => setIsHierarchyExpanded(!isHierarchyExpanded)}
+                  className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Mở rộng / Thu gọn chi tiết Cây phân cấp bài dạy"
+                >
+                  {isHierarchyExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                  <span>{isHierarchyExpanded ? 'Đóng lại' : 'Đổi chuyên đề'}</span>
+                </button>
+              )}
             </div>
           </div>
 
-          {/* Chi tiết Phân cấp mở rộng khi nhấn nút */}
-          {isHierarchyExpanded && (
+          {/* Chi tiết Phân cấp mở rộng khi nhấn nút (chỉ dành cho giáo viên) */}
+          {isTeacherOrHigher(currentRole) && isHierarchyExpanded && (
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 shadow-sm animate-scale-up flex flex-col md:flex-row gap-4 items-start w-full">
               {/* Cột 1: TÀI LIỆU (40% độ rộng) */}
               <div className="w-full md:w-[40%] bg-white p-4 rounded-xl border border-slate-200 space-y-3 shrink-0">
@@ -6337,10 +6355,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               className="sticky top-16 z-40 bg-white/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-lg flex flex-wrap items-center gap-1.5 transition-all"
               style={{ top: '64px', position: 'sticky' }}
             >
-
-
-            {/* Undo / Redo */}
-            <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
+              {isTeacherOrHigher(currentRole) ? (
+                <>
+                  {/* Undo / Redo */}
+                  <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
               <Undo className="w-4 h-4" />
             </button>
             <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
@@ -6767,22 +6785,102 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
             </div>
 
-            {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
-            <div className="ml-auto flex items-center gap-2">
-              {isBackgroundSyncing && !isTeacherOrHigher(currentRole) && (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-50 border border-red-200 text-red-600 text-xs font-bold animate-pulse" title="Học sinh đang xem bài giảng ngay từ cache, hệ thống đang tự động đồng bộ bản mới nhất từ Google Drive ở nền">
-                  <RotateCcw className="w-3 h-3 animate-spin text-red-600" />
-                  <span>Đang đồng bộ</span>
+                  {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
+                  <div className="ml-auto flex items-center gap-2">
+                    <DongBoDriveButton
+                      isSaving={isSaving}
+                      syncStatus={syncStatus}
+                      lastSavedTime={lastSavedTime}
+                      onClick={handleSaveToDrive}
+                    />
+                  </div>
+                </>
+              ) : (
+                /* TOOLBAR DÀNH CHO HỌC SINH: CHỈ XEM HOẶC TRÌNH CHIẾU */
+                <div className="flex items-center justify-between w-full gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* 1. Nút Xem tài liệu (toàn bộ) */}
+                    <button
+                      type="button"
+                      onClick={() => setWordViewMode('full')}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        wordViewMode === 'full'
+                          ? 'bg-indigo-600 text-white shadow-xs'
+                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                      }`}
+                      title="Chế độ đọc bài & xem tài liệu"
+                    >
+                      <FileText className="w-4 h-4" />
+                      <span>Xem tài liệu</span>
+                    </button>
+
+                    {/* 2. Nút Trình chiếu Slide (PPT) */}
+                    <button
+                      type="button"
+                      onClick={() => setWordViewMode('ppt')}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        wordViewMode === 'ppt'
+                          ? 'bg-purple-600 text-white shadow-xs ring-2 ring-purple-300'
+                          : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200'
+                      }`}
+                      title="Chuyển sang chế độ Trình chiếu Slide PPT"
+                    >
+                      <Tv className="w-4 h-4" />
+                      <span>Trình chiếu Slide (PPT)</span>
+                    </button>
+
+                    <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
+
+                    {/* 3. Tùy chọn cỡ chữ xem tài liệu cho học sinh */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-600">
+                      <span className="font-semibold text-slate-500">Cỡ chữ:</span>
+                      <select
+                        value={fontSize}
+                        onChange={(e) => handleFontSizeChange(e.target.value)}
+                        className="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500"
+                        title="Điều chỉnh cỡ chữ hiển thị bài học"
+                      >
+                        <option value="12px">12px (Nhỏ)</option>
+                        <option value="14px">14px (Mặc định)</option>
+                        <option value="16px">16px (Vừa)</option>
+                        <option value="18px">18px (Lớn)</option>
+                        <option value="20px">20px (Rất lớn)</option>
+                        <option value="22px">22px (Khổng lồ)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Góc phải: Huy hiệu chế độ xem & nút Quay lại lớp */}
+                  <div className="flex items-center gap-2">
+                    {isBackgroundSyncing && (
+                      <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-semibold animate-pulse" title="Đang đồng bộ phiên bản mới nhất từ giáo viên">
+                        <RotateCcw className="w-3 h-3 animate-spin text-emerald-600" />
+                        <span>Đang đồng bộ</span>
+                      </div>
+                    )}
+
+                    <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
+                      <Eye className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>Chế độ: Chỉ xem &amp; Trình chiếu</span>
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(
+                          new CustomEvent('app-navigate-view', { detail: { viewId: 'learning-lophoc' } })
+                        );
+                      }}
+                      className="px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                      title="Quay lại danh sách lớp học"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5 text-teal-700" />
+                      <span>Quay lại Lớp Học</span>
+                    </button>
+                  </div>
                 </div>
               )}
-              <DongBoDriveButton
-                isSaving={isSaving}
-                syncStatus={syncStatus}
-                lastSavedTime={lastSavedTime}
-                onClick={handleSaveToDrive}
-              />
             </div>
-          </div>
 
           {/* Cửa sổ thông báo Đang đồng bộ màu đỏ khi chưa nạp xong nội dung từ Drive hoặc đang xác thực lại nền đối với Giáo viên */}
           {(isLoadingFromDrive || (isTeacherOrHigher(currentRole) && isReauthenticating)) && (
