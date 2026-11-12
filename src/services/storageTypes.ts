@@ -378,6 +378,8 @@ export interface TeacherDocument {
   authorId: string;
   authorEmail?: string;
   contentSnippet?: string;
+  contentHtml?: string;
+  content?: string;
   isForSale?: boolean; // Phát hành có phí thu bằng Kim Cương
   priceDiamonds?: number; // Giá bán tài liệu bằng Kim Cương 💎
   purchasedUserIds?: string[]; // Danh sách các học sinh đã mua tài liệu

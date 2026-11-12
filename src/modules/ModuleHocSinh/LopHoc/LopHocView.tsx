@@ -781,13 +781,19 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     // 1. Tài liệu chuyên đề phát hành của lớp
     currentClassDocuments.forEach(doc => {
       const isFree = !doc.isForSale || (doc.priceDiamonds ?? 0) === 0;
-      const isOwned =
-        isFree || (doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId));
+      const isPurchased = Boolean(
+        doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId)
+      );
+      // Quyền truy cập: học sinh trong lớp phát hành còn hạn hoặc mua bằng kim cương hoặc miễn phí
+      const hasClassAccess = !isKhoTaiLieu;
+      const isAccessible = isFree || isPurchased || hasClassAccess;
 
       let badgeText = '';
-      if (isFree) {
+      if (!isKhoTaiLieu) {
+        badgeText = '🟢 [Lớp học]';
+      } else if (isFree) {
         badgeText = '🆓 [Miễn phí]';
-      } else if (isOwned) {
+      } else if (isPurchased) {
         badgeText = '🟢 [Đã mua]';
       } else {
         badgeText = `💎 [${doc.priceDiamonds} 💎]`;
@@ -801,7 +807,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         subText:
           doc.chuyenDe || doc.subject || (doc.fileType ? doc.fileType.toUpperCase() : 'Tài liệu'),
         doc,
-        isUnlocked: true,
+        isUnlocked: isAccessible,
       });
     });
 
@@ -1442,15 +1448,58 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
   const selectedLesson = currentMaterial?.type === 'lesson' ? currentMaterial.lesson : null;
 
   const isCurrentDocFree = !selectedDoc?.isForSale || (selectedDoc?.priceDiamonds ?? 0) === 0;
-  const isCurrentDocOwned =
-    isCurrentDocFree ||
-    (selectedDoc?.purchasedUserIds && selectedDoc.purchasedUserIds.includes(activeStudentId));
+  const isCurrentDocPurchased = Boolean(
+    selectedDoc?.purchasedUserIds && selectedDoc.purchasedUserIds.includes(activeStudentId)
+  );
+  // Quyền truy cập tài liệu của học sinh:
+  // 1. Học sinh trong lớp phát hành tài liệu còn thời gian phát hành (!isKhoTaiLieu)
+  // 2. Học sinh mua tài liệu bằng điểm kim cương (isCurrentDocPurchased)
+  // 3. Tài liệu miễn phí (isCurrentDocFree)
+  const hasCurrentDocClassAccess = !isKhoTaiLieu;
+  const isCurrentDocAccessible =
+    isCurrentDocFree || isCurrentDocPurchased || hasCurrentDocClassAccess;
+
+  // Mở trực tiếp giao diện chuẩn của tài liệu (WordSoanThaoView)
+  const handleOpenDocumentView = (doc: TeacherDocument) => {
+    if (!doc) return;
+
+    const docData = {
+      id: doc.id,
+      docId: doc.id,
+      title: doc.title,
+      subject: doc.subject,
+      grade: doc.grade,
+      chuong: doc.chuong || 'Chương 1',
+      bai: doc.bai || 'Bài 1',
+      vanDe: doc.vanDe || 'Vấn đề 1',
+      chuyenDe: doc.chuyenDe || doc.title,
+      driveFileId: doc.driveFileId,
+      driveFolderPath: doc.driveFolderPath,
+      fileType: doc.fileType,
+      contentHtml: doc.contentHtml || doc.content || (doc.contentSnippet ? `<p>${doc.contentSnippet}</p>` : ''),
+      content: doc.content,
+    };
+
+    try {
+      sessionStorage.setItem('lopu_pending_open_document', JSON.stringify(docData));
+    } catch (e) {
+      console.warn('Lỗi lưu pending document vào sessionStorage:', e);
+    }
+
+    // Chuyển sang giao diện Soạn thảo / Học tập tài liệu WordSoanThaoView
+    window.dispatchEvent(new CustomEvent('app-open-word-document', { detail: docData }));
+  };
 
   const handlePurchaseDoc = async (docId: string, title: string) => {
     const res = await purchaseDocumentWithDiamonds(activeStudentId, docId);
     if (res.success) {
       setNotification(res.message);
       await loadStudentAndDocs();
+      // Ngay sau khi mua thành công bằng điểm kim cương, tự động chuyển vào đúng giao diện tài liệu đó
+      const boughtDoc = publishedDocuments.find(d => d.id === docId);
+      if (boughtDoc) {
+        handleOpenDocumentView(boughtDoc);
+      }
     } else {
       alert(res.message);
     }
@@ -1745,13 +1794,14 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   <span className="px-2 py-0.5 text-[11px] font-mono font-bold rounded bg-slate-100 text-slate-700 uppercase">
                     {selectedDoc.fileType} • {selectedDoc.fileSize}
                   </span>
-                  {isCurrentDocFree ? (
-                    <span className="px-2.5 py-1 text-xs font-extrabold rounded-lg bg-emerald-50 text-emerald-700">
-                      🆓 Miễn phí (0 💎)
-                    </span>
-                  ) : isCurrentDocOwned ? (
-                    <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800">
-                      🟢 Đã sở hữu
+                  {isCurrentDocAccessible ? (
+                    <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      {!isKhoTaiLieu
+                        ? '🟢 Tài liệu lớp học'
+                        : isCurrentDocFree
+                        ? '🆓 Miễn phí (0 💎)'
+                        : '🟢 Đã mua'}
                     </span>
                   ) : (
                     <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-amber-100 text-amber-900 font-mono">
@@ -1837,22 +1887,34 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
 
               {/* Action Buttons */}
               <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
-                {isCurrentDocOwned ? (
-                  <button
-                    onClick={() => {
-                      if (selectedDoc.driveFileId) {
-                        window.open(`https://drive.google.com/file/d/${selectedDoc.driveFileId}/view`, '_blank');
-                      } else {
-                        alert(
-                          `Đang tải tài liệu "${selectedDoc.title}" (${selectedDoc.fileType.toUpperCase()}) về máy...`
-                        );
-                      }
-                    }}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-xs cursor-pointer"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Tải tài liệu ({selectedDoc.fileType.toUpperCase()})</span>
-                  </button>
+                {isCurrentDocAccessible ? (
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <button
+                      id={`btn-open-doc-${selectedDoc.id}`}
+                      onClick={() => handleOpenDocumentView(selectedDoc)}
+                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md hover:shadow-indigo-200 cursor-pointer animate-pulse"
+                      title="Mở giao diện tài liệu bài giảng tương tác"
+                    >
+                      <BookOpen className="w-4 h-4" />
+                      <span>Vào Học / Xem Tài Liệu Ngay</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        if (selectedDoc.driveFileId) {
+                          window.open(`https://drive.google.com/file/d/${selectedDoc.driveFileId}/view`, '_blank');
+                        } else {
+                          alert(
+                            `Đang tải tài liệu "${selectedDoc.title}" (${selectedDoc.fileType.toUpperCase()}) về máy...`
+                          );
+                        }
+                      }}
+                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Tải file ({selectedDoc.fileType.toUpperCase()})</span>
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex items-center gap-3">
                     <button
@@ -1893,10 +1955,12 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   {currentClassDocuments.map(doc => {
                     const isFree = !doc.isForSale || (doc.priceDiamonds ?? 0) === 0;
-                    const isOwned =
-                      isFree ||
-                      (doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId));
-                    const isSelected = selectedDoc.id === doc.id;
+                    const isPurchased = Boolean(
+                      doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId)
+                    );
+                    const hasClassAccess = !isKhoTaiLieu;
+                    const isAccessible = isFree || isPurchased || hasClassAccess;
+                    const isSelected = selectedDoc?.id === doc.id;
 
                     return (
                       <div
@@ -1906,18 +1970,27 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                             ? 'bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-200'
                             : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
                         }`}
-                        onClick={() => setSelectedMaterialId(`doc_${doc.id}`)}
+                        onClick={() => {
+                          setSelectedMaterialId(`doc_${doc.id}`);
+                          if (isAccessible) {
+                            handleOpenDocumentView(doc);
+                          }
+                        }}
                       >
                         <div className="space-y-1">
                           <div className="flex items-center justify-between text-[10px]">
                             <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded text-[9px] font-bold">
                               {doc.chuyenDe || doc.subject || 'Chuyên đề'}
                             </span>
-                            {isFree ? (
+                            {!isKhoTaiLieu ? (
+                              <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
+                                🟢 Lớp học
+                              </span>
+                            ) : isFree ? (
                               <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
                                 🆓 Miễn phí (0 💎)
                               </span>
-                            ) : isOwned ? (
+                            ) : isPurchased ? (
                               <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded text-[9px]">
                                 🟢 Đã mua
                               </span>
@@ -1954,20 +2027,17 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                               </span>
                             );
                           })()}
-                          {isOwned ? (
+                          {isAccessible ? (
                             <button
                               onClick={e => {
                                 e.stopPropagation();
-                                if (doc.driveFileId) {
-                                  window.open(`https://drive.google.com/file/d/${doc.driveFileId}/view`, '_blank');
-                                } else {
-                                  alert(`Tải tài liệu "${doc.title}" thành công!`);
-                                }
+                                handleOpenDocumentView(doc);
                               }}
-                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-white hover:bg-indigo-50 rounded-lg border border-indigo-200 transition-colors cursor-pointer"
+                              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+                              title="Vào học / Xem tài liệu"
                             >
-                              <Download className="w-3 h-3" />
-                              <span>Tải về</span>
+                              <BookOpen className="w-3 h-3" />
+                              <span>Vào học</span>
                             </button>
                           ) : (
                             <button
@@ -1975,7 +2045,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                                 e.stopPropagation();
                                 handlePurchaseDoc(doc.id, doc.title);
                               }}
-                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all cursor-pointer"
+                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all cursor-pointer shadow-3xs"
                             >
                               <span>Mua {doc.priceDiamonds} 💎</span>
                             </button>
@@ -2212,25 +2282,42 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                     {currentClassDocuments.map(doc => {
                       const isFree = !doc.isForSale || (doc.priceDiamonds ?? 0) === 0;
-                      const isOwned =
-                        isFree ||
-                        (doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId));
+                      const isPurchased = Boolean(
+                        doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId)
+                      );
+                      const hasClassAccess = !isKhoTaiLieu;
+                      const isAccessible = isFree || isPurchased || hasClassAccess;
+                      const isSelected = selectedMaterialId === `doc_${doc.id}`;
 
                       return (
                         <div
                           key={doc.id}
-                          className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex flex-col justify-between gap-2"
+                          className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-200'
+                              : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
+                          }`}
+                          onClick={() => {
+                            setSelectedMaterialId(`doc_${doc.id}`);
+                            if (isAccessible) {
+                              handleOpenDocumentView(doc);
+                            }
+                          }}
                         >
                           <div className="space-y-1">
                             <div className="flex items-center justify-between text-[10px]">
                               <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded text-[9px] font-bold">
-                                {doc.chuyenDe || 'Chuyên đề'}
+                                {doc.chuyenDe || doc.subject || 'Chuyên đề'}
                               </span>
-                              {isFree ? (
+                              {!isKhoTaiLieu ? (
+                                <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
+                                  🟢 Lớp học
+                                </span>
+                              ) : isFree ? (
                                 <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
                                   🆓 Miễn phí (0 💎)
                                 </span>
-                              ) : isOwned ? (
+                              ) : isPurchased ? (
                                 <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded text-[9px]">
                                   🟢 Đã mua
                                 </span>
@@ -2246,7 +2333,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                             </p>
                           </div>
 
-                          <div className="pt-1 border-t border-slate-100/50 flex items-center justify-between gap-1">
+                          <div className="pt-1 border-t border-slate-200/50 flex items-center justify-between gap-1">
                             {(() => {
                               const sched =
                                 doc.classSchedules?.[selectedClassId] ||
@@ -2267,26 +2354,41 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                                 </span>
                               );
                             })()}
-                            {isOwned ? (
-                              <button
-                                onClick={() => {
-                                  if (doc.driveFileId) {
-                                    window.open(`https://drive.google.com/file/d/${doc.driveFileId}/view`, '_blank');
-                                  } else {
-                                    alert(`Tải tài liệu "${doc.title}" thành công!`);
-                                  }
-                                }}
-                                className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Download className="w-3 h-3" />
-                                <span>Tải tài liệu</span>
-                              </button>
+                            {isAccessible ? (
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    handleOpenDocumentView(doc);
+                                  }}
+                                  className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors cursor-pointer"
+                                  title="Vào học / Xem tài liệu"
+                                >
+                                  <BookOpen className="w-3 h-3" />
+                                  <span>Vào học</span>
+                                </button>
+                                {doc.driveFileId && (
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      window.open(`https://drive.google.com/file/d/${doc.driveFileId}/view`, '_blank');
+                                    }}
+                                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Tải tệp từ Google Drive"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
+                              </div>
                             ) : (
                               <button
-                                onClick={() => handlePurchaseDoc(doc.id, doc.title)}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  handlePurchaseDoc(doc.id, doc.title);
+                                }}
                                 className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all cursor-pointer shadow-3xs"
                               >
-                                <span>Mua bằng {doc.priceDiamonds} 💎</span>
+                                <span>Mua {doc.priceDiamonds} 💎</span>
                               </button>
                             )}
                           </div>

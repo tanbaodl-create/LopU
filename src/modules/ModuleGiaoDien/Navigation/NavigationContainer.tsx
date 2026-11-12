@@ -146,16 +146,23 @@ export const NavigationContainer: React.FC<NavigationContainerProps> = ({
   const meta = getViewMeta(activeView);
   const viewTitle = meta.title;
 
-  // Tự động chuyển sang cửa sổ Soạn thảo Word khi mở tài liệu từ module TÀI LIỆU
+  // Tự động chuyển sang cửa sổ Soạn thảo Word khi mở tài liệu từ module TÀI LIỆU hoặc LỚP HỌC
   useEffect(() => {
     const handleOpenWordDoc = () => {
       if (onNavigateToView) {
         onNavigateToView('teaching-soanthao');
       }
     };
+    const handleNavigateView = (e: any) => {
+      if (e.detail?.viewId && onNavigateToView) {
+        onNavigateToView(e.detail.viewId);
+      }
+    };
     window.addEventListener('app-open-word-document', handleOpenWordDoc);
+    window.addEventListener('app-navigate-view', handleNavigateView);
     return () => {
       window.removeEventListener('app-open-word-document', handleOpenWordDoc);
+      window.removeEventListener('app-navigate-view', handleNavigateView);
     };
   }, [onNavigateToView]);
 

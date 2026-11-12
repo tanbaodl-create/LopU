@@ -3958,34 +3958,57 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
   }, [wordDocumentHtml, chuyenDe]);
 
-  // Lắng nghe sự kiện mở tài liệu từ module TÀI LIỆU
+  // Lắng nghe sự kiện mở tài liệu từ module TÀI LIỆU hoặc LỚP HỌC
   useEffect(() => {
+    const applyDocData = (doc: any) => {
+      if (!doc) return;
+      if (doc.title) setTitle(doc.title);
+      if (doc.subject) setSubject(doc.subject);
+      if (doc.grade) setGrade(doc.grade);
+      if (doc.chuong) setChuong(doc.chuong);
+      if (doc.bai) setBai(doc.bai);
+      if (doc.vanDe) setVanDe(doc.vanDe);
+      if (doc.chuyenDe) setChuyenDe(doc.chuyenDe);
+      if (doc.tienTrinh) setTienTrinhChuyenDe(doc.tienTrinh);
+      if (doc.selectedKienThucName) setSelectedKienThucName(doc.selectedKienThucName);
+
+      const html = doc.contentHtml || doc.content || (doc.contentSnippet ? `<p>${doc.contentSnippet}</p>` : '');
+
+      if (html) {
+        lastLoadedDocKeyRef.current = `${doc.title || ''}_${doc.chuyenDe || ''}_${doc.bai || ''}_${tienTrinhChuyenDe}_${selectedKienThucName || ''}_${selectedExerciseName || ''}`;
+        if (editorRef.current) {
+          editorRef.current.innerHTML = html;
+        }
+        setWordDocumentHtml(html);
+        setNotification({
+          text: `Đã mở tài liệu bài giảng "${doc.chuyenDe || doc.title || ''}"!`,
+          type: 'success',
+        });
+        setTimeout(() => setNotification(null), 3500);
+        setTimeout(() => refreshRailMarkers(), 50);
+      } else {
+        // Chưa có html -> kích hoạt nạp từ Google Drive
+        lastLoadedDocKeyRef.current = '';
+      }
+    };
+
+    // Kiểm tra và áp dụng tài liệu chờ mở từ sessionStorage khi mount
+    try {
+      const pendingDocStr = sessionStorage.getItem('lopu_pending_open_document');
+      if (pendingDocStr) {
+        sessionStorage.removeItem('lopu_pending_open_document');
+        const pendingDoc = JSON.parse(pendingDocStr);
+        if (pendingDoc) {
+          applyDocData(pendingDoc);
+        }
+      }
+    } catch (err) {
+      console.warn('Lỗi nạp pending doc từ sessionStorage:', err);
+    }
+
     const handleOpenDocFromTaiLieu = (e: CustomEvent<any>) => {
       if (e.detail) {
-        const doc = e.detail;
-        if (doc.title) setTitle(doc.title);
-        if (doc.chuong) setChuong(doc.chuong);
-        if (doc.bai) setBai(doc.bai);
-        if (doc.vanDe) setVanDe(doc.vanDe);
-        if (doc.chuyenDe) setChuyenDe(doc.chuyenDe);
-        const html = doc.contentHtml || doc.content || (doc.contentSnippet ? `<p>${doc.contentSnippet}</p>` : '');
-        
-        if (html) {
-          lastLoadedDocKeyRef.current = `${doc.title || ''}_${doc.chuyenDe || ''}_${doc.bai || ''}_${tienTrinhChuyenDe}_${selectedKienThucName || ''}_${selectedExerciseName || ''}`;
-          if (editorRef.current) {
-            editorRef.current.innerHTML = html;
-          }
-          setWordDocumentHtml(html);
-          setNotification({
-            text: `Đã mở bài giảng "${doc.chuyenDe || doc.title || ''}" vào trang soạn thảo Word!`,
-            type: 'success'
-          });
-          setTimeout(() => setNotification(null), 3500);
-          setTimeout(() => refreshRailMarkers(), 50);
-        } else {
-          // Chưa có html -> kích hoạt nạp từ Google Drive
-          lastLoadedDocKeyRef.current = '';
-        }
+        applyDocData(e.detail);
       }
     };
     window.addEventListener('app-open-word-document', handleOpenDocFromTaiLieu as EventListener);
@@ -6232,6 +6255,20 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
+                onClick={() => {
+                  window.dispatchEvent(
+                    new CustomEvent('app-navigate-view', { detail: { viewId: 'learning-lophoc' } })
+                  );
+                }}
+                className="px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                title="Quay lại danh sách tài liệu lớp học"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-teal-700" />
+                <span>Quay lại Lớp Học</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setIsHierarchyExpanded(!isHierarchyExpanded)}
                 className="px-3 py-1.5 rounded-xl border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5"
                 title="Mở rộng / Thu gọn chi tiết Cây phân cấp bài dạy"
@@ -6920,41 +6957,48 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               {/* Khung bao tài liệu kèm Thanh Mốc PPT dọc bên lề trái */}
               <div className="relative w-full max-w-5xl flex items-stretch gap-2.5 justify-center">
                 {/* THANH MỐC PPT DỌC BÊN LỀ TRÁI (TỪ ĐẦU ĐẾN CUỐI TÀI LIỆU) DÀNH CHO GIÁO VIÊN */}
-                {isTeacherOrHigher(currentRole) && (
-                  <PptMarkerRail
-                    markers={railMarkers}
-                    lineItems={railLineItems}
-                    totalScrollHeight={editorRef.current?.scrollHeight || 1000}
-                    onRailClick={handlePptRailClick}
-                    onMarkerClick={(marker, e) => {
-                      e.stopPropagation();
-                      setPptRailClickMenu({
-                        elementIndex: marker.elementIndex,
-                        x: e.clientX,
-                        y: e.clientY,
-                        isSlide: marker.type === 'slide',
-                        isEffect: marker.type === 'effect',
-                        snippet: marker.snippet,
-                      });
-                    }}
-                    onLinePlusClick={(lineItem, e) => {
-                      e.stopPropagation();
-                      setPptRailClickMenu({
-                        elementIndex: lineItem.elementIndex,
-                        x: e.clientX,
-                        y: e.clientY,
-                        isSlide: lineItem.hasSlideMarker,
-                        isEffect: lineItem.hasEffectMarker,
-                        snippet: lineItem.snippet,
-                      });
-                    }}
-                    clickMenu={pptRailClickMenu}
-                    onApplyBreak={handleApplyBreakFromRail}
-                    onRemoveBreak={handleRemoveBreakFromRail}
-                    onCloseClickMenu={() => setPptRailClickMenu(null)}
-                    onAutoAnalyze={handleAutoAnalyzeBreaks}
-                  />
-                )}
+                {/* THANH MỐC PPT DỌC BÊN LỀ TRÁI (TỪ ĐẦU ĐẾN CUỐI TÀI LIỆU) */}
+                <PptMarkerRail
+                  markers={railMarkers}
+                  lineItems={railLineItems}
+                  totalScrollHeight={editorRef.current?.scrollHeight || 1000}
+                  onRailClick={isTeacherOrHigher(currentRole) ? handlePptRailClick : () => {}}
+                  onMarkerClick={(marker, e) => {
+                    e.stopPropagation();
+                    if (!isTeacherOrHigher(currentRole)) {
+                      // Với học sinh: Kích chuột vào mốc slide cuộn mượt đến vị trí slide đó
+                      const targetEl = editorRef.current?.children[marker.elementIndex] as HTMLElement | undefined;
+                      if (targetEl) {
+                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                      }
+                      return;
+                    }
+                    setPptRailClickMenu({
+                      elementIndex: marker.elementIndex,
+                      x: e.clientX,
+                      y: e.clientY,
+                      isSlide: marker.type === 'slide',
+                      isEffect: marker.type === 'effect',
+                      snippet: marker.snippet,
+                    });
+                  }}
+                  onLinePlusClick={isTeacherOrHigher(currentRole) ? (lineItem, e) => {
+                    e.stopPropagation();
+                    setPptRailClickMenu({
+                      elementIndex: lineItem.elementIndex,
+                      x: e.clientX,
+                      y: e.clientY,
+                      isSlide: lineItem.hasSlideMarker,
+                      isEffect: lineItem.hasEffectMarker,
+                      snippet: lineItem.snippet,
+                    });
+                  } : undefined}
+                  clickMenu={isTeacherOrHigher(currentRole) ? pptRailClickMenu : null}
+                  onApplyBreak={handleApplyBreakFromRail}
+                  onRemoveBreak={handleRemoveBreakFromRail}
+                  onCloseClickMenu={() => setPptRailClickMenu(null)}
+                  onAutoAnalyze={isTeacherOrHigher(currentRole) ? handleAutoAnalyzeBreaks : undefined}
+                />
 
                 <div
                   ref={editorRef}
