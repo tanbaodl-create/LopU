@@ -1490,6 +1490,46 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
     window.dispatchEvent(new CustomEvent('app-open-word-document', { detail: docData }));
   };
 
+  const handleOpenMaterial = (mat: {
+    id: string;
+    type: 'document' | 'lesson';
+    title: string;
+    doc?: TeacherDocument;
+    lesson?: ClassLesson;
+    isUnlocked?: boolean;
+  }) => {
+    if (mat.type === 'document' && mat.doc) {
+      handleOpenDocumentView(mat.doc);
+      return;
+    }
+    if (mat.type === 'lesson' && mat.lesson) {
+      const les = mat.lesson;
+      const lessonDoc: TeacherDocument = {
+        id: les.id,
+        title: les.title,
+        subject: currentClass?.subject || 'Toán',
+        grade: currentClass?.grade || 'Khối 10',
+        chuong: les.unit || 'Chương 1',
+        bai: les.title,
+        vanDe: 'Vấn đề 1',
+        chuyenDe: les.title,
+        driveFileId: les.driveFileId,
+        driveSynced: Boolean(les.driveSync),
+        category: 'lesson_plan',
+        fileType: 'html',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isPublished: true,
+        publishedToClasses: currentClass ? [currentClass.id] : [],
+        fileSize: '15 KB',
+        authorId: currentClass?.teacherId || '',
+        contentHtml: `<div class="p-6"><h1>${les.title}</h1><p class="text-slate-600">${les.description || ''}</p></div>`,
+        content: les.description || '',
+      };
+      handleOpenDocumentView(lessonDoc);
+    }
+  };
+
   const handlePurchaseDoc = async (docId: string, title: string) => {
     const res = await purchaseDocumentWithDiamonds(activeStudentId, docId);
     if (res.success) {
@@ -1631,11 +1671,11 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
         </div>
       )}
 
-      {/* Top Filter Bar: Dropdown Môn Học, Combobox Chọn Lớp & Combobox Chọn Tài Liệu/Bài Học */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
+      {/* Khung Chọn Lớp Học & Danh Sách Tài Liệu / Bài Học Phát Hành */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
           {/* 1. Dropdown Chọn Môn Học (phía trước dropdown Lớp học để lọc lớp theo môn) */}
-          <div className="md:col-span-3">
+          <div className="md:col-span-4">
             <label
               htmlFor="select-subject-filter"
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
@@ -1668,7 +1708,7 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
           </div>
 
           {/* 2. Combobox Chọn Lớp Học (Nhập trực tiếp hoặc chọn từ danh sách) */}
-          <div className="md:col-span-4 lg:col-span-5">
+          <div className="md:col-span-8">
             <label
               htmlFor="select-class-dropdown"
               className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
@@ -1685,302 +1725,133 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
               placeholder="Nhập tên lớp, mã lớp hoặc chọn từ danh sách..."
               emptyText="Không tìm thấy lớp học phù hợp trong hệ thống"
             />
-
-            {currentClass && (
-              <div className="mt-2.5 flex items-center justify-between gap-2 flex-wrap text-xs">
-                {!isKhoTaiLieu && (
-                  <p className="text-slate-500">
-                    Địa điểm: <span className="font-semibold text-slate-700">{currentClass.room || 'Chưa cập nhật'}</span>
-                    {currentClass.teacherName && (
-                      <>
-                        {' '}• Giáo viên: <span className="font-semibold text-slate-700">{currentClass.teacherName}</span>
-                      </>
-                    )}
-                    {canViewStudentCount && (
-                      <>
-                        {' '}• Sĩ số: <span className="font-semibold text-indigo-700">{currentClass.studentCount || 0} HS</span>
-                      </>
-                    )}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={handleNavigateGoogleMaps}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors"
-                    title="Mở Google Maps chỉ đường từ vị trí hiện tại của bạn đến lớp học"
-                  >
-                    <Navigation className="w-3.5 h-3.5" />
-                    <span>Dẫn đường</span>
-                  </button>
-
-                  {canEditCoordinates && (
-                    <button
-                      type="button"
-                      onClick={handleOpenGpsModal}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs border border-amber-200 transition-colors cursor-pointer shadow-2xs"
-                      title="Lấy và chỉnh sửa tọa độ lớp học qua Google Maps hoặc GPS (Dành riêng cho Quản trị viên, Quản lý & Giáo viên mở lớp)"
-                    >
-                      <MapPin className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Lấy tọa độ</span>
-                    </button>
-                  )}
-
-                  {isOwnerTeacher && !isKhoTaiLieu && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleOpenEditClassModal}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
-                        title="Chỉnh sửa và cập nhật thông tin lớp học do chính thầy/cô mở"
-                      >
-                        <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Sửa lớp</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleDeleteClass}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors cursor-pointer shadow-2xs"
-                        title="Xóa vĩnh viễn lớp học do chính thầy/cô mở"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Xóa lớp</span>
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 3. Combobox Chọn Tài Liệu / Bài Học của Lớp (Nhập trực tiếp hoặc chọn từ danh sách) */}
-          <div className="md:col-span-5 lg:col-span-4">
-            <label
-              htmlFor="select-material-dropdown"
-              className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2"
-            >
-              3. Chọn Tài Liệu / Bài Học Của Lớp ({classMaterials.length} tài liệu)
-            </label>
-            <SearchableCombobox
-              id="select-material-dropdown"
-              value={selectedMaterialId}
-              options={materialComboboxOptions}
-              onChange={val => setSelectedMaterialId(val)}
-              placeholder="Nhập tên tài liệu, bài học hoặc chọn từ danh sách..."
-              emptyText={
-                classMaterials.length === 0
-                  ? 'Lớp học này chưa có tài liệu nào'
-                  : 'Không tìm thấy tài liệu phù hợp'
-              }
-            />
           </div>
         </div>
-      </div>
 
-      {/* Main Content Area: Document View OR Lesson Details Workspace */}
-      {selectedDoc ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left / Center 2 Cols: Document Details & Content */}
-          <div className="lg:col-span-2 space-y-5">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
-              {/* Header Badges */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700">
-                    {selectedDoc.chuyenDe || selectedDoc.subject || 'Chuyên đề học tập'}
-                  </span>
-                  <span className="px-2 py-0.5 text-[11px] font-mono font-bold rounded bg-slate-100 text-slate-700 uppercase">
-                    {selectedDoc.fileType} • {selectedDoc.fileSize}
-                  </span>
-                  {isCurrentDocAccessible ? (
-                    <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-100 text-emerald-800 flex items-center gap-1">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      {!isKhoTaiLieu
-                        ? '🟢 Tài liệu lớp học'
-                        : isCurrentDocFree
-                        ? '🆓 Miễn phí (0 💎)'
-                        : '🟢 Đã mua'}
-                    </span>
-                  ) : (
-                    <span className="px-2.5 py-1 text-xs font-black rounded-lg bg-amber-100 text-amber-900 font-mono">
-                      💎 {selectedDoc.priceDiamonds} Kim Cương
-                    </span>
+        {/* Thông tin lớp học, tên giáo viên & nút thao tác */}
+        {currentClass && (
+          <div className="pt-3 border-t border-slate-100 space-y-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
+              {!isKhoTaiLieu && (
+                <p className="text-slate-500">
+                  Địa điểm: <span className="font-semibold text-slate-700">{currentClass.room || 'Chưa cập nhật'}</span>
+                  {currentClass.teacherName && (
+                    <>
+                      {' '}• Giáo viên: <span className="font-bold text-slate-800">{currentClass.teacherName}</span>
+                    </>
                   )}
-
-                  {(() => {
-                    const sched =
-                      selectedDoc.classSchedules?.[selectedClassId] ||
-                      (currentClass?.id && selectedDoc.classSchedules?.[currentClass.id]) ||
-                      (isKhoTaiLieu
-                        ? (selectedDoc.classSchedules?.['open-library'] || selectedDoc.classSchedules?.['cls_open_library'])
-                        : undefined);
-                    if (sched?.endDate) {
-                      return (
-                        <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-50 text-rose-700 border border-rose-200 flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-rose-500" />
-                          Hạn phát hành: {new Date(sched.endDate).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' })}
-                        </span>
-                      );
-                    }
-                    return (
-                      <span className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-slate-50 text-slate-600 border border-slate-200 flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        Phát hành: Vô thời hạn
-                      </span>
-                    );
-                  })()}
-                </div>
-
-                <div className="text-xs text-slate-500">
-                  Tác giả: <span className="font-semibold text-slate-700">{selectedDoc.authorEmail ? selectedDoc.authorEmail.split('@')[0] : 'Giáo viên phụ trách'}</span>
-                </div>
-              </div>
-
-              {/* Title & Description */}
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 leading-snug">
-                  {selectedDoc.title}
-                </h2>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  {selectedDoc.contentSnippet ||
-                    'Tài liệu học tập chuyên đề chất lượng cao, phục vụ giảng dạy và ôn thi học kỳ.'}
+                  {canViewStudentCount && (
+                    <>
+                      {' '}• Sĩ số: <span className="font-semibold text-indigo-700">{currentClass.studentCount || 0} HS</span>
+                    </>
+                  )}
                 </p>
-              </div>
+              )}
 
-              {/* Objectives & Info */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Thông tin chuyên đề &amp; mục tiêu học tập:
-                </h3>
-                <ul className="space-y-2 text-xs text-slate-700">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>
-                      Phạm vi học tập: {selectedDoc.subject} - Lớp {selectedDoc.grade} • Chuyên đề: {selectedDoc.chuyenDe || selectedDoc.title}.
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>
-                      Phát hành tại: <span className="font-semibold text-indigo-700">{isKhoTaiLieu ? 'Kho Tài Liệu' : currentClass?.name}</span>.
-                    </span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Học sinh tải về hoặc xem trực tuyến để ôn tập trọng tâm và luyện đề thi.</span>
-                  </li>
-                </ul>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={handleNavigateGoogleMaps}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-2xs cursor-pointer transition-colors"
+                  title="Mở Google Maps chỉ đường từ vị trí hiện tại của bạn đến lớp học"
+                >
+                  <Navigation className="w-3.5 h-3.5" />
+                  <span>Dẫn đường</span>
+                </button>
 
-                <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                  <span className="font-bold text-slate-700">Định dạng file:</span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-indigo-700 font-semibold">
-                    📄 {selectedDoc.fileType.toUpperCase()}
-                  </span>
-                  <span className="font-bold text-slate-700 ml-2">Dung lượng:</span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-slate-700 font-semibold">
-                    {selectedDoc.fileSize}
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
-                {isCurrentDocAccessible ? (
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <button
-                      id={`btn-open-doc-${selectedDoc.id}`}
-                      onClick={() => handleOpenDocumentView(selectedDoc)}
-                      className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black bg-indigo-600 hover:bg-indigo-700 text-white transition-all shadow-md hover:shadow-indigo-200 cursor-pointer animate-pulse"
-                      title="Mở giao diện tài liệu bài giảng tương tác"
-                    >
-                      <BookOpen className="w-4 h-4" />
-                      <span>Vào Học / Xem Tài Liệu Ngay</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        if (selectedDoc.driveFileId) {
-                          window.open(`https://drive.google.com/file/d/${selectedDoc.driveFileId}/view`, '_blank');
-                        } else {
-                          alert(
-                            `Đang tải tài liệu "${selectedDoc.title}" (${selectedDoc.fileType.toUpperCase()}) về máy...`
-                          );
-                        }
-                      }}
-                      className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
-                    >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>Tải file ({selectedDoc.fileType.toUpperCase()})</span>
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => handlePurchaseDoc(selectedDoc.id, selectedDoc.title)}
-                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black bg-amber-500 hover:bg-amber-600 text-white transition-all shadow-xs cursor-pointer"
-                    >
-                      <span>💎 Mua tài liệu bằng {selectedDoc.priceDiamonds} Kim Cương</span>
-                    </button>
-                    <span className="text-xs text-slate-500 font-semibold">
-                      Ví của bạn: <span className="font-bold text-amber-700">{studentProfile?.diamonds ?? 0} 💎</span>
-                    </span>
-                  </div>
+                {canEditCoordinates && (
+                  <button
+                    type="button"
+                    onClick={handleOpenGpsModal}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs border border-amber-200 transition-colors cursor-pointer shadow-2xs"
+                    title="Lấy và chỉnh sửa tọa độ lớp học qua Google Maps hoặc GPS (Dành riêng cho Quản trị viên, Quản lý & Giáo viên mở lớp)"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Lấy tọa độ</span>
+                  </button>
                 )}
 
-                <button
-                  onClick={() => handleToggleCompleteDoc(selectedDoc.id, selectedDoc.title)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                    completedDocIds.has(selectedDoc.id)
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
+                {isOwnerTeacher && !isKhoTaiLieu && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleOpenEditClassModal}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs border border-emerald-200 transition-colors cursor-pointer shadow-2xs"
+                      title="Chỉnh sửa và cập nhật thông tin lớp học do chính thầy/cô mở"
+                    >
+                      <Edit3 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Sửa lớp</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleDeleteClass}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs border border-rose-200 transition-colors cursor-pointer shadow-2xs"
+                      title="Xóa vĩnh viễn lớp học do chính thầy/cô mở"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                      <span>Xóa lớp</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* BÊN DƯỚI TÊN GIÁO VIÊN: Mỗi tài liệu / bài được phát hành vào lớp hiển thị gồm tên tài liệu/bài và nút Vào học */}
+            <div className="pt-3 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-indigo-600" />
                   <span>
-                    {completedDocIds.has(selectedDoc.id)
-                      ? 'Đã hoàn thành ôn tập (Bấm để hủy)'
-                      : 'Đánh dấu đã ôn tập'}
+                    Tài liệu &amp; Bài học phát hành vào {isKhoTaiLieu ? 'Kho Tài Liệu' : currentClass.name} ({classMaterials.length}):
                   </span>
-                </button>
+                </h3>
+                {isKhoTaiLieu && (
+                  <span className="text-xs font-semibold text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                    Số dư Kim Cương của bạn: <strong className="font-mono">{studentProfile?.diamonds ?? 0} 💎</strong>
+                  </span>
+                )}
               </div>
 
-              {/* TẤT CẢ TÀI LIỆU PHÁT HÀNH CỦA LỚP */}
-              <div className="pt-4 border-t border-slate-100 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  📁 Tất cả tài liệu phát hành của {isKhoTaiLieu ? 'Kho Tài Liệu' : currentClass.name}:
-                </h3>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  {currentClassDocuments.map(doc => {
-                    const isFree = !doc.isForSale || (doc.priceDiamonds ?? 0) === 0;
-                    const isPurchased = Boolean(
-                      doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId)
-                    );
+              {classMaterials.length === 0 ? (
+                <div className="p-10 text-center bg-slate-50 rounded-2xl border border-slate-200">
+                  <BookOpen className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <h4 className="text-sm font-bold text-slate-700">Lớp học này hiện chưa có tài liệu nào</h4>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {isKhoTaiLieu
+                      ? 'Kho Tài Liệu đang được cập nhật thêm tài liệu mới.'
+                      : 'Giáo viên phụ trách chưa phát hành tài liệu vào lớp này.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {classMaterials.map(mat => {
+                    const doc = mat.doc;
+                    const isFree = doc ? (!doc.isForSale || (doc.priceDiamonds ?? 0) === 0) : true;
+                    const isPurchased = doc ? Boolean(doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId)) : true;
                     const hasClassAccess = !isKhoTaiLieu;
-                    const isAccessible = isFree || isPurchased || hasClassAccess;
-                    const isSelected = selectedDoc?.id === doc.id;
+                    const isAccessible = mat.type === 'lesson' ? Boolean(mat.isUnlocked) : (isFree || isPurchased || hasClassAccess);
+
+                    const sched = doc ? (
+                      doc.classSchedules?.[selectedClassId] ||
+                      (currentClass?.id && doc.classSchedules?.[currentClass.id]) ||
+                      (isKhoTaiLieu ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library']) : undefined)
+                    ) : undefined;
 
                     return (
                       <div
-                        key={doc.id}
-                        className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-200'
-                            : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
-                        }`}
+                        key={mat.id}
                         onClick={() => {
-                          setSelectedMaterialId(`doc_${doc.id}`);
                           if (isAccessible) {
-                            handleOpenDocumentView(doc);
+                            handleOpenMaterial(mat);
                           }
                         }}
+                        className="p-3.5 bg-slate-50 hover:bg-slate-100/70 rounded-xl border border-slate-200 hover:border-indigo-300 transition-all flex flex-col justify-between gap-3 shadow-2xs group cursor-pointer"
                       >
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-[10px]">
-                            <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded text-[9px] font-bold">
-                              {doc.chuyenDe || doc.subject || 'Chuyên đề'}
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between text-[10px] gap-2">
+                            <span className="font-mono bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[9px] font-bold">
+                              {mat.type === 'lesson' ? 'Bài học' : (doc?.chuyenDe || doc?.subject || 'Tài liệu')}
                             </span>
                             {!isKhoTaiLieu ? (
                               <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
@@ -1996,517 +1867,96 @@ export const LopHocView: React.FC<LearningClassesViewProps> = ({
                               </span>
                             ) : (
                               <span className="bg-amber-50 text-amber-800 font-black px-1.5 py-0.5 rounded text-[9px] font-mono">
-                                💎 {doc.priceDiamonds}
+                                💎 {doc?.priceDiamonds} Kim Cương
                               </span>
                             )}
                           </div>
-                          <h4 className="text-xs font-bold text-slate-800 line-clamp-2">{doc.title}</h4>
-                          <p className="text-[10px] text-slate-400">
-                            Định dạng: {doc.fileType.toUpperCase()} • Dung lượng: {doc.fileSize}
-                          </p>
+
+                          <h4 className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-2">
+                            {mat.title}
+                          </h4>
+
+                          <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                            <span>{mat.subText}</span>
+                            {doc?.fileType && (
+                              <>
+                                <span>•</span>
+                                <span className="font-mono uppercase font-semibold">{doc.fileType}</span>
+                              </>
+                            )}
+                            {doc?.fileSize && (
+                              <>
+                                <span>•</span>
+                                <span>{doc.fileSize}</span>
+                              </>
+                            )}
+                          </div>
                         </div>
 
-                        <div className="pt-1 border-t border-slate-200/50 flex items-center justify-between gap-1">
-                          {(() => {
-                            const sched =
-                              doc.classSchedules?.[selectedClassId] ||
-                              (currentClass?.id && doc.classSchedules?.[currentClass.id]) ||
-                              (isKhoTaiLieu
-                                ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library'])
-                                : undefined);
-                            if (sched?.endDate) {
-                              return (
-                                <span className="text-[9px] text-rose-600 font-semibold flex items-center gap-0.5" title={`Hạn thu hồi: ${new Date(sched.endDate).toLocaleString('vi-VN')}`}>
-                                  <Clock className="w-2.5 h-2.5 text-rose-500" /> Hạn: {new Date(sched.endDate).toLocaleDateString('vi-VN')}
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                <Clock className="w-2.5 h-2.5 text-slate-400" /> Vô thời hạn
+                        <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                          <div>
+                            {sched?.endDate ? (
+                              <span className="text-[10px] text-rose-600 font-semibold flex items-center gap-1" title={`Hạn thu hồi: ${new Date(sched.endDate).toLocaleString('vi-VN')}`}>
+                                <Clock className="w-3 h-3 text-rose-500" /> Hạn: {new Date(sched.endDate).toLocaleDateString('vi-VN')}
                               </span>
-                            );
-                          })()}
-                          {isAccessible ? (
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                handleOpenDocumentView(doc);
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors cursor-pointer"
-                              title="Vào học / Xem tài liệu"
-                            >
-                              <BookOpen className="w-3 h-3" />
-                              <span>Vào học</span>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                handlePurchaseDoc(doc.id, doc.title);
-                              }}
-                              className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all cursor-pointer shadow-3xs"
-                            >
-                              <span>Mua {doc.priceDiamonds} 💎</span>
-                            </button>
-                          )}
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-400" /> Vô thời hạn
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            {isAccessible ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenMaterial(mat);
+                                }}
+                                className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-xs transition-colors cursor-pointer"
+                                title="Vào học / Xem tài liệu"
+                              >
+                                <BookOpen className="w-3.5 h-3.5" />
+                                <span>Vào học</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (doc) handlePurchaseDoc(doc.id, mat.title);
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 text-xs font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-xl transition-all cursor-pointer shadow-3xs"
+                              >
+                                <span>Mua {doc?.priceDiamonds} 💎</span>
+                              </button>
+                            )}
+
+                            {doc?.driveFileId && isAccessible && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(`https://drive.google.com/file/d/${doc.driveFileId}/view`, '_blank');
+                                }}
+                                className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                title="Tải tệp từ Google Drive"
+                              >
+                                <Download className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right 1 Col: Class Progress & Materials List */}
-          <div className="space-y-5">
-            {/* Progress summary */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">Tiến Độ Lớp Học</h3>
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
-                  <span>Hoàn thành tài liệu / bài học</span>
-                  <span className="font-bold text-slate-800">
-                    {completedCount}/{classMaterials.length}
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-600 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${classMaterials.length > 0 ? Math.round((completedCount / classMaterials.length) * 100) : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className={`pt-2 border-t border-slate-100 grid ${canViewStudentCount ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-center`}>
-                {canViewStudentCount && (
-                  <div className="p-2.5 bg-slate-50 rounded-xl">
-                    <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
-                    <span className="text-base font-extrabold text-slate-800">
-                      {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
-                    </span>
-                  </div>
-                )}
-                <div className="p-2.5 bg-slate-50 rounded-xl">
-                  <span className="block text-[11px] text-slate-500">Số tài liệu</span>
-                  <span className="text-base font-extrabold text-emerald-600">
-                    {classMaterials.length} tài liệu
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick list of all materials */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Toàn Bộ Danh Mục Tài Liệu Của Lớp
-              </h3>
-
-              <div className="space-y-2">
-                {classMaterials.map((mat, index) => {
-                  const isCurrent = mat.id === selectedMaterialId;
-                  const isDone =
-                    mat.type === 'document'
-                      ? completedDocIds.has(mat.doc?.id || '')
-                      : completedLessonIds.has(mat.lesson?.id || '');
-
-                  return (
-                    <button
-                      key={mat.id}
-                      disabled={mat.type === 'lesson' && !mat.isUnlocked}
-                      onClick={() => setSelectedMaterialId(mat.id)}
-                      className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex items-start gap-2.5 cursor-pointer ${
-                        isCurrent
-                          ? 'border-indigo-500 bg-indigo-50/50 shadow-xs font-semibold'
-                          : mat.isUnlocked
-                          ? 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
-                          : 'border-slate-100 bg-slate-50/60 opacity-60 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="mt-0.5 shrink-0">
-                        {isDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <span className="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-500">
-                            {index + 1}
-                          </span>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-slate-800 truncate">{mat.title}</div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                          <span className="font-medium text-indigo-600">{mat.badgeText}</span>
-                          <span>•</span>
-                          <span className="truncate">{mat.subText}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : selectedLesson ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left / Center 2 Cols: Lesson Content & Materials */}
-          <div className="lg:col-span-2 space-y-5">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-1 text-xs font-bold rounded-lg bg-indigo-50 text-indigo-700">
-                    {selectedLesson.unit}
-                  </span>
-                  {selectedLesson.isUnlocked ? (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                      <Unlock className="w-3.5 h-3.5" /> Đã mở khóa
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-1 text-xs font-semibold text-amber-600 bg-amber-50 px-2.5 py-1 rounded-lg">
-                      <Lock className="w-3.5 h-3.5" /> Chưa mở khóa
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2 text-xs text-slate-500">
-                  <Clock className="w-3.5 h-3.5" />
-                  <span>Thời lượng: {selectedLesson.estimatedMinutes} phút</span>
-                </div>
-              </div>
-
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 leading-snug">
-                  {selectedLesson.title}
-                </h2>
-                <p className="mt-2 text-sm text-slate-600 leading-relaxed">
-                  {selectedLesson.description}
-                </p>
-              </div>
-
-              {/* Tags */}
-              {selectedLesson.tags && selectedLesson.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {selectedLesson.tags.map((t, idx) => (
-                    <span
-                      key={idx}
-                      className="text-xs px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-600 font-medium"
-                    >
-                      #{t}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Interactive Lesson Body & Study Guide */}
-              <div className="p-4 rounded-xl bg-slate-50 border border-slate-100 space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                  Mục tiêu cốt lõi của tài liệu:
-                </h3>
-                <ul className="space-y-2 text-xs text-slate-700">
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Nắm vững các định nghĩa, định lý và công thức trọng tâm của {selectedLesson.unit}.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Thực hành giải quyết các dạng toán điển hình thường xuất hiện trong đề thi học kỳ.</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                    <span>Hoàn thành bài tập tự luyện và đối chiếu lời giải chi tiết của giáo viên.</span>
-                  </li>
-                </ul>
-
-                {/* Gói tài nguyên chuyên đề */}
-                <div className="pt-2 border-t border-slate-200/60 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                  <span className="font-bold text-slate-700">Gói tài nguyên chuyên đề:</span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-indigo-700 font-semibold">
-                    📄 KienThuc.html
-                  </span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-emerald-700 font-semibold">
-                    📁 HinhAnh
-                  </span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-purple-700 font-semibold">
-                    📁 AmThanh
-                  </span>
-                  <span className="font-mono bg-white px-2 py-0.5 rounded border border-slate-200 text-rose-700 font-semibold">
-                    📁 Video
-                  </span>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-2 flex flex-wrap items-center justify-between gap-3">
-                <button
-                  id="btn-toggle-complete-lesson"
-                  onClick={() => handleToggleCompleteLesson(selectedLesson)}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                    completedLessonIds.has(selectedLesson.id)
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                  }`}
-                >
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>
-                    {completedLessonIds.has(selectedLesson.id)
-                      ? 'Đã hoàn thành bài học (Bấm để hủy)'
-                      : 'Đánh dấu hoàn thành bài học'}
-                  </span>
-                </button>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    id="btn-download-notes"
-                    onClick={() =>
-                      alert(`Tải tài liệu PDF bài học "${selectedLesson.title}" từ Google Drive thành công!`)
-                    }
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Tải tài liệu PDF
-                  </button>
-                </div>
-              </div>
-
-              {/* TÀI LIỆU CHUYÊN ĐỀ LỚP HỌC */}
-              {currentClassDocuments.length > 0 && (
-                <div className="pt-4 border-t border-slate-100 space-y-3">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                    📁 Tài liệu chuyên đề lớp học:
-                  </h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                    {currentClassDocuments.map(doc => {
-                      const isFree = !doc.isForSale || (doc.priceDiamonds ?? 0) === 0;
-                      const isPurchased = Boolean(
-                        doc.purchasedUserIds && doc.purchasedUserIds.includes(activeStudentId)
-                      );
-                      const hasClassAccess = !isKhoTaiLieu;
-                      const isAccessible = isFree || isPurchased || hasClassAccess;
-                      const isSelected = selectedMaterialId === `doc_${doc.id}`;
-
-                      return (
-                        <div
-                          key={doc.id}
-                          className={`p-3 rounded-xl border flex flex-col justify-between gap-2 transition-all cursor-pointer ${
-                            isSelected
-                              ? 'bg-indigo-50/50 border-indigo-500 ring-2 ring-indigo-200'
-                              : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200'
-                          }`}
-                          onClick={() => {
-                            setSelectedMaterialId(`doc_${doc.id}`);
-                            if (isAccessible) {
-                              handleOpenDocumentView(doc);
-                            }
-                          }}
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-[10px]">
-                              <span className="font-mono bg-indigo-50 text-indigo-700 px-1 py-0.5 rounded text-[9px] font-bold">
-                                {doc.chuyenDe || doc.subject || 'Chuyên đề'}
-                              </span>
-                              {!isKhoTaiLieu ? (
-                                <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
-                                  🟢 Lớp học
-                                </span>
-                              ) : isFree ? (
-                                <span className="bg-emerald-50 text-emerald-700 font-extrabold px-1.5 py-0.5 rounded text-[9px]">
-                                  🆓 Miễn phí (0 💎)
-                                </span>
-                              ) : isPurchased ? (
-                                <span className="bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded text-[9px]">
-                                  🟢 Đã mua
-                                </span>
-                              ) : (
-                                <span className="bg-amber-50 text-amber-800 font-black px-1.5 py-0.5 rounded text-[9px] font-mono">
-                                  💎 {doc.priceDiamonds}
-                                </span>
-                              )}
-                            </div>
-                            <h4 className="text-xs font-bold text-slate-800 line-clamp-2">{doc.title}</h4>
-                            <p className="text-[10px] text-slate-400">
-                              Định dạng: {doc.fileType.toUpperCase()} • Dung lượng: {doc.fileSize}
-                            </p>
-                          </div>
-
-                          <div className="pt-1 border-t border-slate-200/50 flex items-center justify-between gap-1">
-                            {(() => {
-                              const sched =
-                                doc.classSchedules?.[selectedClassId] ||
-                                (currentClass?.id && doc.classSchedules?.[currentClass.id]) ||
-                                (isKhoTaiLieu
-                                  ? (doc.classSchedules?.['open-library'] || doc.classSchedules?.['cls_open_library'])
-                                  : undefined);
-                              if (sched?.endDate) {
-                                return (
-                                  <span className="text-[9px] text-rose-600 font-semibold flex items-center gap-0.5" title={`Hạn thu hồi: ${new Date(sched.endDate).toLocaleString('vi-VN')}`}>
-                                    <Clock className="w-2.5 h-2.5 text-rose-500" /> Hạn: {new Date(sched.endDate).toLocaleDateString('vi-VN')}
-                                  </span>
-                                );
-                              }
-                              return (
-                                <span className="text-[9px] text-slate-400 font-medium flex items-center gap-0.5">
-                                  <Clock className="w-2.5 h-2.5 text-slate-400" /> Vô thời hạn
-                                </span>
-                              );
-                            })()}
-                            {isAccessible ? (
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleOpenDocumentView(doc);
-                                  }}
-                                  className="flex items-center gap-1 px-3 py-1.5 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition-colors cursor-pointer"
-                                  title="Vào học / Xem tài liệu"
-                                >
-                                  <BookOpen className="w-3 h-3" />
-                                  <span>Vào học</span>
-                                </button>
-                                {doc.driveFileId && (
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      window.open(`https://drive.google.com/file/d/${doc.driveFileId}/view`, '_blank');
-                                    }}
-                                    className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                                    title="Tải tệp từ Google Drive"
-                                  >
-                                    <Download className="w-3.5 h-3.5" />
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  handlePurchaseDoc(doc.id, doc.title);
-                                }}
-                                className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-black text-amber-900 bg-amber-100 hover:bg-amber-200 rounded-lg transition-all cursor-pointer shadow-3xs"
-                              >
-                                <span>Mua {doc.priceDiamonds} 💎</span>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               )}
             </div>
           </div>
-
-          {/* Right 1 Col: Class Progress & Lesson List Overview */}
-          <div className="space-y-5">
-            {/* Class Stats Summary */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">Tiến Độ Lớp Học</h3>
-              </div>
-
-              {/* Progress bar */}
-              <div>
-                <div className="flex items-center justify-between text-xs text-slate-600 mb-1">
-                  <span>Hoàn thành bài học</span>
-                  <span className="font-bold text-slate-800">
-                    {completedLessonIds.size}/{currentClass.lessons.length} bài
-                  </span>
-                </div>
-                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-600 rounded-full transition-all duration-500"
-                    style={{
-                      width: `${currentClass.lessons.length > 0 ? Math.round((completedLessonIds.size / currentClass.lessons.length) * 100) : 0}%`,
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className={`pt-2 border-t border-slate-100 grid ${canViewStudentCount ? 'grid-cols-2' : 'grid-cols-1'} gap-3 text-center`}>
-                {canViewStudentCount && (
-                  <div className="p-2.5 bg-slate-50 rounded-xl">
-                    <span className="block text-[11px] text-slate-500">Sĩ số lớp</span>
-                    <span className="text-base font-extrabold text-slate-800">
-                      {isKhoTaiLieu ? 'Công khai' : `${currentClass?.studentCount || 0} HS`}
-                    </span>
-                  </div>
-                )}
-                <div className="p-2.5 bg-slate-50 rounded-xl">
-                  <span className="block text-[11px] text-slate-500">Số tài liệu</span>
-                  <span className="text-base font-extrabold text-emerald-600">
-                    {classMaterials.length} tài liệu
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick list of all materials */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Toàn Bộ Danh Mục Tài Liệu Của Lớp
-              </h3>
-
-              <div className="space-y-2">
-                {classMaterials.map((mat, index) => {
-                  const isCurrent = mat.id === selectedMaterialId;
-                  const isDone =
-                    mat.type === 'document'
-                      ? completedDocIds.has(mat.doc?.id || '')
-                      : completedLessonIds.has(mat.lesson?.id || '');
-
-                  return (
-                    <button
-                      key={mat.id}
-                      disabled={mat.type === 'lesson' && !mat.isUnlocked}
-                      onClick={() => setSelectedMaterialId(mat.id)}
-                      className={`w-full text-left p-3 rounded-xl border text-xs transition-all flex items-start gap-2.5 cursor-pointer ${
-                        isCurrent
-                          ? 'border-indigo-500 bg-indigo-50/50 shadow-xs font-semibold'
-                          : mat.isUnlocked
-                          ? 'border-slate-200 hover:border-indigo-200 hover:bg-slate-50'
-                          : 'border-slate-100 bg-slate-50/60 opacity-60 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="mt-0.5 shrink-0">
-                        {isDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        ) : (
-                          <span className="w-4 h-4 rounded-full border-2 border-slate-300 flex items-center justify-center text-[9px] font-bold text-slate-500">
-                            {index + 1}
-                          </span>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="font-bold text-slate-800 truncate">{mat.title}</div>
-                        <div className="text-[11px] text-slate-500 flex items-center gap-1.5 mt-0.5">
-                          <span className="font-medium text-indigo-600">{mat.badgeText}</span>
-                          <span>•</span>
-                          <span className="truncate">{mat.subText}</span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="p-12 text-center bg-white rounded-2xl border border-slate-200 shadow-xs">
-          <BookOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-700">Lớp học này hiện chưa có tài liệu nào</h3>
-          <p className="mt-1 text-xs text-slate-500">
-            {isKhoTaiLieu
-              ? 'Kho Tài Liệu đang được cập nhật tài liệu mới.'
-              : 'Giáo viên phụ trách chưa phát hành tài liệu vào lớp này. Vui lòng chọn Kho Tài Liệu hoặc lớp khác.'}
-          </p>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* MODAL GOOGLE MAPS LẤY TỌA ĐỘ LỚP HỌC (Dành riêng cho Quản trị, Quản lý, GV mở lớp) */}
       {showGpsModal && canEditCoordinates && (
