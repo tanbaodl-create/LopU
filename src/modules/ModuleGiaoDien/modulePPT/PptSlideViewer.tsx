@@ -7,6 +7,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { PptSlideItem } from './types';
+import { getEffectLabel, getEffectIcon } from './PptMarkerRail';
 
 interface PptSlideViewerProps {
   slides: PptSlideItem[];
@@ -82,6 +83,85 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
           : 'bg-slate-950 p-4 sm:p-6 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner'
       }`}
     >
+      {/* Định nghĩa các chuyển động CSS của 10 hiệu ứng trình chiếu PPT cơ bản */}
+      <style>{`
+        @keyframes pptFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes pptSlideUp {
+          from { opacity: 0; transform: translateY(28px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pptSlideDown {
+          from { opacity: 0; transform: translateY(-28px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pptSlideLeft {
+          from { opacity: 0; transform: translateX(-32px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pptSlideRight {
+          from { opacity: 0; transform: translateX(32px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes pptZoomIn {
+          from { opacity: 0; transform: scale(0.85); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes pptBounce {
+          0% { opacity: 0; transform: scale(0.4); }
+          60% { opacity: 1; transform: scale(1.08); }
+          85% { transform: scale(0.96); }
+          100% { transform: scale(1); }
+        }
+        @keyframes pptWipe {
+          from { clip-path: inset(0 100% 0 0); opacity: 0.2; }
+          to { clip-path: inset(0 0 0 0); opacity: 1; }
+        }
+        @keyframes pptFlip {
+          from { opacity: 0; transform: perspective(800px) rotateX(-45deg) translateY(-20px); }
+          to { opacity: 1; transform: perspective(800px) rotateX(0deg) translateY(0); }
+        }
+        @keyframes pptGlow {
+          0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.8); background-color: rgba(243, 232, 255, 0.9); }
+          50% { box-shadow: 0 0 0 10px rgba(168, 85, 247, 0.35); background-color: rgba(243, 232, 255, 0.5); }
+          100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); background-color: transparent; }
+        }
+
+        .animate-ppt-fade {
+          animation: pptFadeIn 0.35s ease-out forwards;
+        }
+        .animate-ppt-slide-up {
+          animation: pptSlideUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-ppt-slide-down {
+          animation: pptSlideDown 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-ppt-slide-left {
+          animation: pptSlideLeft 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-ppt-slide-right {
+          animation: pptSlideRight 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-ppt-zoom {
+          animation: pptZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .animate-ppt-bounce {
+          animation: pptBounce 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        .animate-ppt-wipe {
+          animation: pptWipe 0.55s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+        }
+        .animate-ppt-flip {
+          animation: pptFlip 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          transform-origin: top center;
+        }
+        .animate-ppt-glow {
+          animation: pptGlow 1.2s ease-out forwards;
+        }
+      `}</style>
+
       {/* Thanh điều khiển trên cùng của PPT */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-md">
         <div className="flex flex-wrap items-center gap-2">
@@ -93,9 +173,15 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             Slide {Math.min(activeSlideIndex + 1, slides.length)} / {slides.length}
           </span>
           {totalSteps > 1 && (
-            <span className="text-xs text-amber-300 font-bold bg-amber-950/70 border border-amber-600/40 px-2.5 py-1 rounded-lg flex items-center gap-1">
+            <span className="text-xs text-amber-300 font-bold bg-amber-950/70 border border-amber-600/40 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
               <span>⚡ Hiệu ứng:</span>
               <span>{revealAllSteps ? 'Tất cả' : `${activeStepIndex + 1}/${totalSteps}`}</span>
+              {!revealAllSteps && currentSlide?.stepItems?.[activeStepIndex]?.effectType && (
+                <span className="text-[10px] text-amber-300 bg-amber-900/90 px-1.5 py-0.5 rounded-full border border-amber-600/50 flex items-center gap-0.5">
+                  <span>{getEffectIcon(currentSlide.stepItems[activeStepIndex].effectType)}</span>
+                  <span>{getEffectLabel(currentSlide.stepItems[activeStepIndex].effectType)}</span>
+                </span>
+              )}
             </span>
           )}
         </div>
@@ -192,7 +278,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         </div>
       </div>
 
-      {/* Khung Chiếu Slide Chính PPT (Chiếu đúng nội dung của mỗi Slide, chuẩn PowerPoint) */}
+      {/* Khung Chiếu Slide Chính PPT */}
       <div
         onClick={(e) => {
           const target = e.target as HTMLElement;
@@ -205,7 +291,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             }
           }
         }}
-        className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 cursor-pointer select-none transition-all animate-fade-in relative"
+        className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 cursor-pointer select-none transition-all relative"
         title="Nhấp chuột trái vào nền để hiện bước hiệu ứng kế tiếp hoặc chuyển slide"
       >
         <div className="space-y-4">
@@ -217,8 +303,13 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             </h2>
             <div className="flex items-center gap-2">
               {totalSteps > 1 && (
-                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                  ⚡ Bước {revealAllSteps ? totalSteps : activeStepIndex + 1} / {totalSteps}
+                <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span>⚡ Bước {revealAllSteps ? totalSteps : activeStepIndex + 1} / {totalSteps}</span>
+                  {!revealAllSteps && currentSlide?.stepItems?.[activeStepIndex]?.effectType && (
+                    <span className="font-extrabold text-amber-800">
+                      ({getEffectLabel(currentSlide.stepItems[activeStepIndex].effectType)})
+                    </span>
+                  )}
                 </span>
               )}
               <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">
@@ -227,20 +318,71 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             </div>
           </div>
 
-          {/* Nội dung Slide hiển thị đúng và chỉ riêng của slide này */}
+          {/* Nội dung Slide hiển thị theo hiệu ứng chuyển động đã cấu hình khi biên soạn */}
           <div className="prose prose-indigo max-w-none text-slate-800 text-base sm:text-lg leading-relaxed pt-2 space-y-3">
-            {visibleSteps.map((stepHtml, sIdx) => (
-              <div
-                key={`${currentSlide?.id}-step-${sIdx}`}
-                className="animate-fade-in transition-all duration-300"
-                dangerouslySetInnerHTML={{ __html: stepHtml }}
-              />
-            ))}
+            {visibleSteps.map((stepHtml, sIdx) => {
+              const stepItem = currentSlide?.stepItems?.[sIdx];
+              const effectType = stepItem?.effectType || 'fade';
+
+              // Áp dụng animation cho bước mới nhất vừa xuất hiện theo đúng 1 trong 10 hiệu ứng đã chọn
+              const isNewlyRevealed = !revealAllSteps && sIdx === activeStepIndex;
+              let animClass = '';
+              if (isNewlyRevealed) {
+                switch (effectType) {
+                  case 'slide-up':
+                    animClass = 'animate-ppt-slide-up';
+                    break;
+                  case 'slide-down':
+                    animClass = 'animate-ppt-slide-down';
+                    break;
+                  case 'slide-left':
+                    animClass = 'animate-ppt-slide-left';
+                    break;
+                  case 'slide-right':
+                    animClass = 'animate-ppt-slide-right';
+                    break;
+                  case 'zoom':
+                    animClass = 'animate-ppt-zoom';
+                    break;
+                  case 'bounce':
+                    animClass = 'animate-ppt-bounce';
+                    break;
+                  case 'wipe':
+                    animClass = 'animate-ppt-wipe';
+                    break;
+                  case 'flip':
+                    animClass = 'animate-ppt-flip';
+                    break;
+                  case 'glow':
+                  case 'highlight':
+                    animClass = 'animate-ppt-glow rounded-xl p-1';
+                    break;
+                  case 'fade':
+                  default:
+                    animClass = 'animate-ppt-fade';
+                    break;
+                }
+              }
+
+              return (
+                <div
+                  key={`${currentSlide?.id}-step-${sIdx}`}
+                  className={animClass}
+                  dangerouslySetInnerHTML={{ __html: stepHtml }}
+                />
+              );
+            })}
 
             {/* Dấu nhắc bước tiếp theo nếu còn hiệu ứng ẩn */}
             {!revealAllSteps && activeStepIndex < totalSteps - 1 && (
               <div className="pt-2 flex items-center gap-2 text-xs font-bold text-amber-600 animate-pulse">
-                <span>⚡ Nhấp chuột hoặc phím Space để xem tiếp bước {activeStepIndex + 2}...</span>
+                <span>⚡ Nhấp chuột hoặc phím Space để xem tiếp bước {activeStepIndex + 2}
+                  {currentSlide?.stepItems?.[activeStepIndex + 1]?.effectType && (
+                    <span className="italic font-normal">
+                      {' '}(Hiệu ứng {getEffectLabel(currentSlide.stepItems[activeStepIndex + 1].effectType)})
+                    </span>
+                  )}...
+                </span>
               </div>
             )}
           </div>

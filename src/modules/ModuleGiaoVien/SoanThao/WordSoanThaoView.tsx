@@ -20,6 +20,7 @@ import {
 } from '../TaiLieuCaNhan/hierarchyData';
 import {
   ShieldAlert,
+  ShieldCheck,
   ArrowLeft,
   Lock,
   Bold,
@@ -103,9 +104,11 @@ import {
   RailLineItem,
   PptSlideItem,
   PptRailClickMenuData,
+  PptEffectType,
+  getPptEffectDef,
 } from '../../ModuleGiaoDien/modulePPT';
 
-export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData };
+export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType };
 
 export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -129,7 +132,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [isLoadingFromDrive, setIsLoadingFromDrive] = useState<boolean>(false);
   const [isReauthenticating, setIsReauthenticating] = useState<boolean>(false);
   const [isBackgroundSyncing, setIsBackgroundSyncing] = useState<boolean>(false);
-  const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
+  const [notification, setNotification] = useState<{ text: string; type: 'success' | 'info' | 'error' | 'warning' } | null>(null);
 
   // Lắng nghe sự kiện xác thực lại nền Google Drive để đồng bộ giao diện khóa/mở khóa
   useEffect(() => {
@@ -215,6 +218,14 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   const handleConfirmItemAction = async () => {
     if (!itemActionModal) return;
+    if (!hasAuthoringPermission) {
+      setNotification({
+        text: '⚠️ Bạn không có Quyền biên soạn tài liệu! Thao tác sửa hoặc xóa bài chỉ cấp cho Giáo viên.',
+        type: 'warning',
+      });
+      setItemActionModal(null);
+      return;
+    }
     const { type, category, item, newName } = itemActionModal;
     const cleanName = newName.trim();
 
@@ -380,14 +391,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [railMarkers, setRailMarkers] = useState<RailMarker[]>([]);
   const [railLineItems, setRailLineItems] = useState<RailLineItem[]>([]);
   const [selectedPinMenu, setSelectedPinMenu] = useState<{ marker: RailMarker; x: number; y: number } | null>(null);
-  const [pptRailClickMenu, setPptRailClickMenu] = useState<{
-    elementIndex: number;
-    x: number;
-    y: number;
-    isSlide: boolean;
-    isEffect: boolean;
-    snippet: string;
-  } | null>(null);
+  const [pptRailClickMenu, setPptRailClickMenu] = useState<PptRailClickMenuData | null>(null);
   const draggedMarkerRef = useRef<RailMarker | null>(null);
 
   // Modal Chèn Bảng tùy chỉnh số dòng, số cột, có tiêu đề
@@ -552,6 +556,9 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
     const r = role || currentRole;
     return r === 'teacher' || r === 'manager' || r === 'admin' || r === 'superadmin' || r === 'assistant';
   };
+
+  // Quyền biên soạn tài liệu: Quyền chỉnh sửa, thêm, đổi tên hoặc xóa chỉ cấp cho Giáo viên (Học sinh tuyệt đối không có quyền này)
+  const hasAuthoringPermission = isTeacherOrHigher(currentRole);
   const isChuyenDeSelected = Boolean(chuyenDe && chuyenDe.trim());
 
   // Thoát con trỏ ra một dòng mới bên ngoài khối bài giảng
@@ -4039,6 +4046,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         (child.getAttribute('data-effect-break') === 'true' ||
           child.classList.contains('effect-break-point'));
 
+      const effectType = (child.getAttribute('data-effect-type') as PptEffectType) || 'fade';
+
       let currentMarker: RailMarker | undefined = undefined;
 
       if (isSlide) {
@@ -4057,6 +4066,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         currentMarker = {
           id: `pin-effect-${idx}-${Date.now()}`,
           type: 'effect',
+          effectType,
           elementIndex: idx,
           topOffset: child.offsetTop || 0,
           slideNumber: Math.max(1, slideCounter - 1),
@@ -4073,6 +4083,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         snippet: child.textContent?.trim().slice(0, 30) || `Dòng ${idx + 1}`,
         hasSlideMarker: isSlide,
         hasEffectMarker: isEffect,
+        effectType: isEffect ? effectType : undefined,
         marker: currentMarker,
       });
     });
@@ -4091,6 +4102,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Đặt mốc Slide mới tại vị trí con trỏ / đoạn văn đang chọn
   const handleAddSlideBreakAtCurrentSelection = () => {
+    if (!hasAuthoringPermission) {
+      setNotification({ text: '⚠️ Bạn không có Quyền biên soạn tài liệu!', type: 'warning' });
+      return;
+    }
     if (!editorRef.current) return;
     const sel = window.getSelection();
     let targetEl: HTMLElement | null = null;
@@ -4102,6 +4117,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     if (targetEl && editorRef.current.contains(targetEl) && targetEl !== editorRef.current) {
       targetEl.setAttribute('data-slide-break', 'true');
       targetEl.removeAttribute('data-effect-break');
+      targetEl.removeAttribute('data-effect-type');
       targetEl.classList.add('slide-break-point');
       targetEl.classList.remove('effect-break-point');
     } else {
@@ -4121,6 +4137,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Đặt mốc Hiệu ứng hiện dần tại vị trí con trỏ / đoạn văn đang chọn
   const handleAddEffectBreakAtCurrentSelection = () => {
+    if (!hasAuthoringPermission) {
+      setNotification({ text: '⚠️ Bạn không có Quyền biên soạn tài liệu!', type: 'warning' });
+      return;
+    }
     if (!editorRef.current) return;
     const sel = window.getSelection();
     let targetEl: HTMLElement | null = null;
@@ -4131,12 +4151,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
     if (targetEl && editorRef.current.contains(targetEl) && targetEl !== editorRef.current) {
       targetEl.setAttribute('data-effect-break', 'true');
+      targetEl.setAttribute('data-effect-type', 'fade');
       targetEl.removeAttribute('data-slide-break');
       targetEl.classList.add('effect-break-point');
       targetEl.classList.remove('slide-break-point');
     } else {
       const p = document.createElement('p');
       p.setAttribute('data-effect-break', 'true');
+      p.setAttribute('data-effect-type', 'fade');
       p.classList.add('effect-break-point');
       p.innerHTML = '<br>';
       editorRef.current.appendChild(p);
@@ -4149,8 +4171,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     setTimeout(() => setNotification(null), 3000);
   };
 
-  // Kích chuột vào vị trí bất kỳ trên Thanh Mốc PPT dọc để mở popup đặt +Mốc Slide / +Hiệu ứng
+  // Kích chuột vào vị trí bất kỳ trên Thanh Mốc PPT dọc để mở popup đặt +Mốc Slide / +Hiệu ứng (chỉ dành cho giáo viên)
   const handlePptRailClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!hasAuthoringPermission) return;
     if (!editorRef.current) return;
     const clickY = e.clientY;
     const children = Array.from(editorRef.current.children) as HTMLElement[];
@@ -4177,6 +4200,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     const targetEl = updatedChildren[closestIdx];
     const isSlide = targetEl?.getAttribute('data-slide-break') === 'true' || targetEl?.classList.contains('slide-break-point') || false;
     const isEffect = targetEl?.getAttribute('data-effect-break') === 'true' || targetEl?.classList.contains('effect-break-point') || false;
+    const effectType = (targetEl?.getAttribute('data-effect-type') as PptEffectType) || 'fade';
     const snippet = targetEl?.textContent?.trim().slice(0, 40) || `Đoạn ${closestIdx + 1}`;
 
     setPptRailClickMenu({
@@ -4185,12 +4209,24 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       y: e.clientY,
       isSlide,
       isEffect,
+      effectType,
       snippet,
     });
   };
 
-  // Áp dụng đặt mốc Slide hoặc mốc Hiệu ứng từ Thanh Mốc PPT
-  const handleApplyBreakFromRail = (type: 'slide' | 'effect', elementIndex: number) => {
+  // Áp dụng đặt mốc Slide hoặc mốc Hiệu ứng từ Thanh Mốc PPT (kèm cấu hình hiệu ứng cơ bản)
+  const handleApplyBreakFromRail = (
+    type: 'slide' | 'effect',
+    elementIndex: number,
+    effectType: PptEffectType = 'fade'
+  ) => {
+    if (!hasAuthoringPermission) {
+      setNotification({
+        text: '⚠️ Bạn không có Quyền biên soạn tài liệu để đặt mốc PPT!',
+        type: 'warning',
+      });
+      return;
+    }
     if (!editorRef.current) return;
     const children = Array.from(editorRef.current.children) as HTMLElement[];
     const el = children[elementIndex];
@@ -4198,18 +4234,25 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       if (type === 'slide') {
         el.setAttribute('data-slide-break', 'true');
         el.removeAttribute('data-effect-break');
+        el.removeAttribute('data-effect-type');
         el.classList.add('slide-break-point');
         el.classList.remove('effect-break-point');
       } else {
         el.setAttribute('data-effect-break', 'true');
+        el.setAttribute('data-effect-type', effectType);
         el.removeAttribute('data-slide-break');
         el.classList.add('effect-break-point');
         el.classList.remove('slide-break-point');
       }
       setWordDocumentHtml(editorRef.current.innerHTML);
       setTimeout(refreshRailMarkers, 50);
+
+      const effDef = getPptEffectDef(effectType);
+
       setNotification({
-        text: type === 'slide' ? '🎬 Đã đặt Mốc Slide tại vị trí chọn trên Thanh Mốc PPT!' : '✨ Đã đặt Mốc Hiệu ứng tại vị trí chọn trên Thanh Mốc PPT!',
+        text: type === 'slide'
+          ? '🎬 Đã đặt Mốc Slide tại vị trí chọn trên Thanh Mốc PPT!'
+          : `✨ Đã đặt Mốc Hiệu ứng [${effDef.nameVi}] tại vị trí chọn trên Thanh Mốc PPT!`,
         type: 'success',
       });
       setTimeout(() => setNotification(null), 3000);
@@ -4219,12 +4262,20 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Gỡ bỏ mốc khỏi phần tử
   const handleRemoveBreakFromRail = (elementIndex: number) => {
+    if (!hasAuthoringPermission) {
+      setNotification({
+        text: '⚠️ Bạn không có Quyền biên soạn tài liệu để gỡ mốc PPT!',
+        type: 'warning',
+      });
+      return;
+    }
     if (!editorRef.current) return;
     const children = Array.from(editorRef.current.children) as HTMLElement[];
     const el = children[elementIndex];
     if (el) {
       el.removeAttribute('data-slide-break');
       el.removeAttribute('data-effect-break');
+      el.removeAttribute('data-effect-type');
       el.classList.remove('slide-break-point', 'effect-break-point');
       setWordDocumentHtml(editorRef.current.innerHTML);
       setTimeout(refreshRailMarkers, 50);
@@ -5683,6 +5734,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Lưu tài liệu lên Drive
   const handleSaveToDrive = async () => {
+    if (!hasAuthoringPermission) {
+      setNotification({ text: '⚠️ Bạn không có Quyền biên soạn tài liệu!', type: 'warning' });
+      return;
+    }
     if (!title.trim()) {
       setNotification({ text: 'Vui lòng nhập hoặc chọn Tên tài liệu trước khi lưu!', type: 'error' });
       return;
@@ -7077,6 +7132,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                       y: e.clientY,
                       isSlide: marker.type === 'slide',
                       isEffect: marker.type === 'effect',
+                      effectType: marker.effectType || 'fade',
                       snippet: marker.snippet,
                     });
                   }}
@@ -7088,6 +7144,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                       y: e.clientY,
                       isSlide: lineItem.hasSlideMarker,
                       isEffect: lineItem.hasEffectMarker,
+                      effectType: lineItem.effectType || 'fade',
                       snippet: lineItem.snippet,
                     });
                   } : undefined}
