@@ -6842,6 +6842,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
                   {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
                   <div className="ml-auto flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs" title="Tài khoản Giáo viên có Quyền biên soạn tài liệu (Chỉnh sửa, xóa, đổi tên, đặt mốc PPT &amp; hiệu ứng)">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Quyền biên soạn: Đã kích hoạt ✓</span>
+                    </span>
                     <DongBoDriveButton
                       isSaving={isSaving}
                       syncStatus={syncStatus}
@@ -6914,9 +6918,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                       </div>
                     )}
 
-                    <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center gap-1.5" title="Học sinh không có Quyền biên soạn tài liệu (Chỉ xem và Trình chiếu slide)">
                       <Eye className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>Chế độ: Chỉ xem &amp; Trình chiếu</span>
+                      <span>Chế độ: Xem tài liệu (Không có quyền biên soạn)</span>
                     </span>
 
                     <button
@@ -7093,7 +7097,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   border-radius: 6px;
                 }
                 .effect-break-point::before {
-                  content: "⚡ [ĐIỂM DỪNG HIỆU ỨNG]";
+                  content: "⚡ [MỐC HIỆU ỨNG: HIỆN DẦN]";
                   display: inline-block;
                   font-size: 10px;
                   font-weight: 800;
@@ -7105,6 +7109,21 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   margin-bottom: 6px;
                   letter-spacing: 0.05em;
                   user-select: none;
+                }
+                .effect-break-point[data-effect-type="slide-up"]::before {
+                  content: "⬆️ [MỐC HIỆU ỨNG: TRƯỢT LÊN]";
+                }
+                .effect-break-point[data-effect-type="slide-left"]::before {
+                  content: "➡️ [MỐC HIỆU ỨNG: TRƯỢT VÀO]";
+                }
+                .effect-break-point[data-effect-type="zoom"]::before {
+                  content: "🔍 [MỐC HIỆU ỨNG: PHÓNG TO]";
+                }
+                .effect-break-point[data-effect-type="highlight"]::before {
+                  content: "💡 [MỐC HIỆU ỨNG: NỔI BẬT]";
+                }
+                .effect-break-point[data-effect-type="fade"]::before {
+                  content: "💫 [MỐC HIỆU ỨNG: HIỆN DẦN]";
                 }
               `}</style>
               {/* Khung bao tài liệu kèm Thanh Mốc PPT dọc bên lề trái */}

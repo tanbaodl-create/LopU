@@ -163,13 +163,13 @@ const MODULE_TREE_DATA: ModuleNode[] = [
       },
       {
         id: 'SoanThao',
-        name: 'SoanThao / Tài liệu (Soạn Thảo Word, Style Hợp Nhất Nút Soạn Bài 3 Cột, Bảng Màu Chuẩn Mực Word)',
+        name: 'SoanThao / Tài liệu (Quyền Biên Soạn Tài Liệu, Thanh Mốc PPT & Bộ Hiệu Ứng Cơ Bản)',
         folderPath: 'src/modules/ModuleGiaoVien/SoanThao',
-        description: 'Trình soạn thảo văn bản Word & Xuất bản PDF A4: 1) Hợp nhất nút Soạn bài vào nút Style với menu mở rộng bố trí 3 cột cực kỳ thoáng và khoa học; 2) Sử dụng tên ghi tắt chuẩn mực: "Ví dụ" (thay cho Ví dụ minh họa), "Bài" (thay cho Bài tập tự luận), "PPG" (thay cho Phương pháp giải), "TNLC" (thay cho Trắc nghiệm 4 lựa chọn), "TNDS" (thay cho Trắc nghiệm Đúng / Sai), "TLN" (thay cho Trắc nghiệm Trả lời ngắn); 3) Toàn bộ Style văn bản (Normal, Heading 1-4, Tiêu đề lớn/phụ, Điểm nhấn, Trích dẫn) hiển thị 3 cột không giải thích rườm rà; 4) Bố trí thanh công cụ chuẩn mực khoa học theo các khối chức năng; 5) Nạp siêu tốc Google Drive và cơ chế khóa an toàn khi đang đồng bộ đối với Giáo viên.',
-        purpose: 'Soạn thảo Word khoa học với Style hợp nhất nút Soạn bài dạng lưới 3 cột, tên ghi tắt tinh gọn và thanh công cụ chuyên nghiệp',
+        description: 'Trình soạn thảo văn bản Word & Trình chiếu PPT: 1) Quy chuẩn "Quyền biên soạn tài liệu" (chỉnh sửa, thêm, đổi tên, xóa) chỉ cấp cho Giáo viên, học sinh truy cập tài liệu tuyệt đối không có quyền này (chỉ xem và trình chiếu); 2) Tài khoản có quyền biên soạn có thể đặt Mốc PPT (ngắt slide) hoặc Mốc Hiệu ứng; 3) Bổ sung bộ 5 hiệu ứng cơ bản khi biên soạn (Hiện dần Fade in, Trượt lên Slide up, Trượt vào Slide left, Phóng to Zoom in, Nổi bật Highlight); 4) Đồng bộ hiển thị mốc trực quan trên Thước lề trái và trình chiếu PPT chuyển động tương ứng.',
+        purpose: 'Phân quyền biên soạn tài liệu chuẩn mực cho giáo viên, hỗ trợ đặt mốc slide và bộ hiệu ứng cơ bản khi trình chiếu PPT',
         viewId: 'teaching-soanthao',
         icon: FileText,
-        tags: ['Style menu 3 cột', 'Ghi tắt Ví dụ/Bài/PPG/TNLC/TNDS/TLN', 'Hợp nhất Soạn bài vào Style', 'Bảng màu chuẩn mực Word', 'Nạp siêu tốc Drive'],
+        tags: ['Quyền biên soạn tài liệu', 'Chỉ giáo viên biên soạn', 'Học sinh chỉ xem/trình chiếu', 'Mốc PPT & Mốc hiệu ứng', '5 hiệu ứng cơ bản (Fade, Slide up, Slide left, Zoom, Highlight)'],
       },
       {
         id: 'PhatHanhTaiLieu',
