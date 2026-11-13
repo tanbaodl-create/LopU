@@ -706,376 +706,119 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   return (
     <div
       ref={containerRef}
-      className="my-3 rounded-2xl border-2 border-dashed border-indigo-400 bg-white shadow-xl overflow-hidden transition-all no-slide-advance select-none relative"
+      className="group relative my-1 bg-transparent select-none transition-all no-slide-advance"
       onClick={(e) => e.stopPropagation()}
     >
-      {/* VẠCH PHÂN CÁCH TRÊN CỦA KHOẢNG TRỐNG */}
-      <div className="bg-slate-100 text-slate-800 px-3 py-1.5 border-b border-indigo-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-        {/* Tiêu đề & Chọn nền bảng */}
-        <div className="flex items-center gap-2">
-          <span className="font-extrabold text-indigo-700 flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-indigo-50 border border-indigo-200 shadow-2xs">
-            <NoteRendererSpaceIcon className="w-4 h-4 text-indigo-600" />
-            <span>KHOẢNG TRỐNG BÀI GIẢNG / LỜI GIẢI</span>
-          </span>
+      {/* BẢNG CÔNG CỤ NỔI NHẸ NHÀNG KHI RÊ CHUỘT VÀO KHOẢNG TRỐNG (HOVER MINI-TOOLBAR) */}
+      <div className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-xl shadow-md border border-slate-200 select-none">
+        {/* Nút Bút */}
+        <button
+          type="button"
+          onClick={() => setActiveTool('pen')}
+          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+            activeTool === 'pen'
+              ? 'bg-indigo-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+          title="Bút viết tay mực kỹ thuật số"
+        >
+          <Pen className="w-3.5 h-3.5" />
+          <span className="text-[11px]">Bút</span>
+        </button>
 
-          {/* Chọn phong cách bảng / trang giấy */}
-          <div className="flex items-center bg-slate-200/80 p-0.5 rounded-lg border border-slate-300">
+        {/* Nút Tẩy */}
+        <button
+          type="button"
+          onClick={() => setActiveTool('eraser')}
+          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+            activeTool === 'eraser'
+              ? 'bg-rose-600 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+          title="Tẩy xóa nét vẽ"
+        >
+          <Eraser className="w-3.5 h-3.5" />
+          <span className="text-[11px]">Tẩy</span>
+        </button>
+
+        {/* Bảng 3 màu cơ bản: Xanh, Đen, Đỏ */}
+        <div className="flex items-center gap-1 px-1">
+          {[
+            { color: '#1d4ed8', label: 'Xanh' },
+            { color: '#0f172a', label: 'Đen' },
+            { color: '#dc2626', label: 'Đỏ' },
+          ].map((c) => (
             <button
+              key={c.color}
               type="button"
-              onClick={() => handleThemeChange('white')}
-              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                board.theme === 'white'
-                  ? 'bg-white text-indigo-950 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+              onClick={() => {
+                setSelectedColor(c.color);
+                setActiveTool('pen');
+              }}
+              className={`w-3.5 h-3.5 rounded-full border transition-transform cursor-pointer ${
+                selectedColor === c.color && activeTool === 'pen'
+                  ? 'scale-125 border-indigo-700 ring-2 ring-indigo-300 shadow-xs'
+                  : 'border-slate-300 opacity-80 hover:opacity-100 hover:scale-110'
               }`}
-              title="Trang trắng ô ly NoteRenderer"
-            >
-              <span>⚪</span>
-              <span className="hidden sm:inline">Trang trắng</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleThemeChange('green')}
-              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                board.theme === 'green'
-                  ? 'bg-emerald-700 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Bảng xanh trường học kẻ ô ly"
-            >
-              <span>🟢</span>
-              <span className="hidden sm:inline">Bảng xanh</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleThemeChange('black')}
-              className={`px-2 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                board.theme === 'black'
-                  ? 'bg-zinc-800 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-              title="Bảng đen kẻ ô"
-            >
-              <span>⚫</span>
-              <span className="hidden sm:inline">Bảng đen</span>
-            </button>
-          </div>
+              style={{ backgroundColor: c.color }}
+              title={c.label}
+            />
+          ))}
         </div>
 
-        {/* Thanh công cụ: Bút, Tẩy, Thước, Công thức Toán KaTeX, Hình học SVG */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* Bút vẽ mực mượt mà */}
-          <button
-            type="button"
-            onClick={() => setActiveTool('pen')}
-            className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'pen'
-                ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-400'
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-            }`}
-            title="Bút vẽ mực kỹ thuật số (làm mượt Gaussian + Bézier Spline)"
-          >
-            <Pen className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Bút</span>
-          </button>
+        <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
 
-          {/* Tẩy xóa */}
-          <button
-            type="button"
-            onClick={() => setActiveTool('eraser')}
-            className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'eraser'
-                ? 'bg-rose-600 text-white shadow-xs ring-1 ring-rose-400'
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-            }`}
-            title="Tẩy xóa nét vẽ"
-          >
-            <Eraser className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Tẩy</span>
-          </button>
+        {/* Hoàn tác */}
+        <button
+          type="button"
+          disabled={!canUndo}
+          onClick={handleUndo}
+          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          title="Hoàn tác nét vẽ (Undo)"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+        </button>
 
-          {/* Công cụ hình học & đồ thị */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setShowShapeMenu(!showShapeMenu)}
-              className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                ['line', 'arrow', 'circle', 'rect'].includes(activeTool) || showShapeMenu
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-              }`}
-              title="Công cụ vẽ hình học & hệ trục tọa độ Oxy, Oxyz"
-            >
-              <Shapes className="w-3.5 h-3.5" />
-              <span className="text-[11px]">Hình học ▾</span>
-            </button>
+        {/* Làm lại */}
+        <button
+          type="button"
+          disabled={!canRedo}
+          onClick={handleRedo}
+          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
+          title="Làm lại (Redo)"
+        >
+          <Redo2 className="w-3.5 h-3.5" />
+        </button>
 
-            {/* Menu thả xuống chọn hình học */}
-            {showShapeMenu && (
-              <div className="absolute right-0 top-full mt-1.5 z-30 bg-white rounded-xl shadow-2xl border border-purple-200 p-2 w-48 text-slate-800 space-y-1 text-xs">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTool('line');
-                    setShowShapeMenu(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-purple-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <span>📏</span>
-                  <span>Đoạn thẳng</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTool('arrow');
-                    setShowShapeMenu(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-purple-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <span>↗️</span>
-                  <span>Vectơ (Mũi tên)</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTool('circle');
-                    setShowShapeMenu(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-purple-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <span>⭕</span>
-                  <span>Đường tròn</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveTool('rect');
-                    setShowShapeMenu(false);
-                  }}
-                  className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-purple-50 flex items-center gap-2 cursor-pointer"
-                >
-                  <span>▭</span>
-                  <span>Hình chữ nhật</span>
-                </button>
-                <div className="border-t border-slate-200 my-1"></div>
-                <button
-                  type="button"
-                  onClick={() => handleInsertCoordinateSystem('oxy')}
-                  className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-purple-50 font-bold text-purple-900 flex items-center gap-2 cursor-pointer"
-                >
-                  <span>📐</span>
-                  <span>Trục tọa độ Oxy</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleInsertCoordinateSystem('oxyz')}
-                  className="w-full px-2.5 py-1.5 text-left rounded-lg hover:bg-purple-50 font-bold text-indigo-900 flex items-center gap-2 cursor-pointer"
-                >
-                  <span>🧊</span>
-                  <span>Trục không gian Oxyz 3D</span>
-                </button>
-              </div>
-            )}
-          </div>
+        {/* Xóa sạch nét trên bảng */}
+        <button
+          type="button"
+          onClick={handleClear}
+          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
+          title="Xóa toàn bộ nét vẽ trong khoảng trống này"
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+        </button>
 
-          {/* Công thức Toán KaTeX */}
-          <button
-            type="button"
-            onClick={() => setShowMathPanel(!showMathPanel)}
-            className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              showMathPanel
-                ? 'bg-amber-600 text-white'
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-            }`}
-            title="Gõ và chèn công thức Toán học chuẩn LaTeX / KaTeX"
-          >
-            <Sigma className="w-3.5 h-3.5" />
-            <span className="text-[11px]">Toán KaTeX</span>
-          </button>
+        <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
 
-          {/* Cỡ nét */}
-          <div className="flex items-center gap-1 bg-white px-1.5 py-1 rounded-lg border border-slate-300">
-            {[
-              { label: 'Mảnh', size: 2 },
-              { label: 'Vừa', size: 3.5 },
-              { label: 'Đậm', size: 6.5 },
-            ].map((s) => (
-              <button
-                key={s.size}
-                type="button"
-                onClick={() => setStrokeWidth(s.size)}
-                className={`px-1.5 py-0.5 rounded text-[10px] font-bold cursor-pointer transition-all ${
-                  strokeWidth === s.size
-                    ? 'bg-indigo-600 text-white'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Bảng màu */}
-          <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-300">
-            {currentColors.map((c) => (
-              <button
-                key={c.color}
-                type="button"
-                onClick={() => {
-                  setSelectedColor(c.color);
-                  if (activeTool === 'eraser') setActiveTool('pen');
-                }}
-                className={`w-4.5 h-4.5 rounded-full border transition-transform cursor-pointer ${
-                  selectedColor === c.color && activeTool !== 'eraser'
-                    ? 'scale-125 border-indigo-700 ring-2 ring-indigo-300 shadow-xs'
-                    : 'border-slate-400 hover:scale-110 opacity-80 hover:opacity-100'
-                }`}
-                style={{ backgroundColor: c.color }}
-                title={c.label}
-              />
-            ))}
-          </div>
-
-          <div className="h-4 w-[1px] bg-slate-300 mx-0.5"></div>
-
-          {/* Hoàn tác / Làm lại */}
-          <button
-            type="button"
-            disabled={!canUndo}
-            onClick={handleUndo}
-            className="p-1.5 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 border border-slate-300 transition-colors cursor-pointer"
-            title="Hoàn tác nét vẽ (Undo)"
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            disabled={!canRedo}
-            onClick={handleRedo}
-            className="p-1.5 rounded-lg bg-white hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed text-slate-700 border border-slate-300 transition-colors cursor-pointer"
-            title="Làm lại (Redo)"
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Xóa sạch */}
-          <button
-            type="button"
-            onClick={handleClear}
-            className="p-1.5 rounded-lg bg-white hover:bg-rose-50 text-slate-600 hover:text-rose-600 border border-slate-300 transition-colors cursor-pointer"
-            title="Xóa sạch khoảng trống"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Gõ chữ */}
-          <button
-            type="button"
-            onClick={() => onUpdate({ ...board, showTextEditor: !board.showTextEditor })}
-            className={`p-1.5 rounded-lg font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              board.showTextEditor
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-300'
-            }`}
-            title="Gõ ghi chú bằng bàn phím"
-          >
-            <Type className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Tải ảnh */}
-          <button
-            type="button"
-            onClick={handleDownload}
-            className="p-1.5 rounded-lg bg-white hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors cursor-pointer"
-            title="Tải ảnh khoảng trống này"
-          >
-            <Download className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Đóng khoảng trống */}
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm('Thu hẹp và đóng khoảng trống này lại?')) {
-                onDelete(board.id);
-              }
-            }}
-            className="px-2 py-1 rounded-lg bg-slate-200 hover:bg-rose-600 hover:text-white text-slate-700 font-bold text-[11px] transition-colors cursor-pointer"
-            title="Đóng khoảng trống"
-          >
-            ✕ Đóng
-          </button>
-        </div>
+        {/* Xóa / Đóng khoảng trống */}
+        <button
+          type="button"
+          onClick={() => {
+            if (board.strokes.length === 0 || window.confirm('Xóa bỏ khoảng trống này?')) {
+              onDelete(board.id);
+            }
+          }}
+          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-600 hover:text-white text-slate-600 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
+          title="Xóa bỏ khoảng trống này"
+        >
+          <X className="w-3 h-3" />
+          <span>Xóa</span>
+        </button>
       </div>
 
-      {/* THANH GÕ CÔNG THỨC TOÁN HỌC KATEX CHUẨN LATEX */}
-      {showMathPanel && (
-        <div className="p-3 bg-amber-50/90 border-b border-amber-200 text-slate-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-black text-amber-950 flex items-center gap-1.5">
-              <span>📐 Gõ Công thức Toán học (KaTeX / LaTeX):</span>
-            </span>
-            <button
-              type="button"
-              onClick={() => setShowMathPanel(false)}
-              className="text-slate-400 hover:text-slate-700 text-xs p-1 cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-
-          {/* Gợi ý ký hiệu toán học phổ biến */}
-          <div className="flex flex-wrap items-center gap-1">
-            {[
-              { label: 'Phân số', code: '\\frac{a}{b}' },
-              { label: 'Căn', code: '\\sqrt{x}' },
-              { label: 'Số mũ', code: 'x^2' },
-              { label: 'Chỉ số', code: 'x_1' },
-              { label: 'Tích phân', code: '\\int_{a}^{b} f(x)dx' },
-              { label: 'Đạo hàm', code: 'f\'(x)' },
-              { label: 'Giới hạn', code: '\\lim_{x \\to 0}' },
-              { label: 'Vectơ', code: '\\vec{v}' },
-              { label: 'Hệ PT', code: '\\begin{cases} x + y = 1 \\\\ x - y = 0 \\end{cases}' },
-              { label: 'Cộng trừ', code: '\\pm' },
-              { label: 'Vô cực', code: '\\infty' },
-              { label: 'Góc', code: '\\widehat{ABC}' },
-            ].map((sym) => (
-              <button
-                key={sym.label}
-                type="button"
-                onClick={() => setLatexInput((prev) => `${prev} ${sym.code}`)}
-                className="px-2 py-0.5 rounded-md bg-white border border-amber-300 hover:bg-amber-100 text-[11px] font-semibold text-amber-900 transition-colors cursor-pointer shadow-2xs"
-              >
-                {sym.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={latexInput}
-              onChange={(e) => setLatexInput(e.target.value)}
-              placeholder="Nhập mã LaTeX (Ví dụ: y = \frac{ax+b}{cx+d} hoặc \int_0^\pi \sin(x)dx)..."
-              className="flex-1 bg-white text-slate-900 px-3 py-1.5 rounded-xl border border-amber-300 text-xs sm:text-sm font-mono focus:outline-none focus:border-amber-600"
-            />
-            <button
-              type="button"
-              onClick={handleInsertMathToBoard}
-              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-xs transition-all cursor-pointer whitespace-nowrap"
-            >
-              + Chèn vào bảng
-            </button>
-          </div>
-
-          {/* Xem trước KaTeX */}
-          <div className="p-2.5 bg-white rounded-xl border border-amber-200 overflow-x-auto text-center min-h-[44px] flex items-center justify-center">
-            <div dangerouslySetInnerHTML={{ __html: renderedLatexPreview }} />
-          </div>
-        </div>
-      )}
-
-      {/* VÙNG VẼ CHÍNH CỦA KHOẢNG TRỐNG (CANVAS CÓ LƯỚI Ô LY & CÁC THẺ KATEX) */}
+      {/* VÙNG VẼ CHÍNH CỦA KHOẢNG TRỐNG (CANVAS TRẮNG ĐỒNG BỘ VỚI SLIDE, KHÔNG CÓ VIỀN HÌNH CHỮ NHẬT) */}
       <div
         className="relative w-full cursor-crosshair overflow-hidden touch-none"
         style={{ height: `${board.height || 280}px` }}
@@ -1090,7 +833,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           style={{ touchAction: 'none' }}
         />
 
-        {/* Các thẻ công thức Toán học KaTeX được chèn trên bảng */}
+        {/* Các thẻ công thức Toán học KaTeX được chèn trên bảng (nếu có) */}
         {board.mathItems &&
           board.mathItems.map((item) => {
             let mathHtml = '';
@@ -1102,14 +845,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
             return (
               <div
                 key={item.id}
-                className="absolute z-20 group p-2 rounded-xl bg-white/95 border border-indigo-300 shadow-md backdrop-blur-xs flex items-center gap-1.5"
+                className="absolute z-20 group/math p-2 rounded-xl bg-white/95 border border-indigo-300 shadow-md backdrop-blur-xs flex items-center gap-1.5"
                 style={{ left: `${item.x}px`, top: `${item.y}px` }}
               >
                 <div dangerouslySetInnerHTML={{ __html: mathHtml }} />
                 <button
                   type="button"
                   onClick={() => handleRemoveMathItem(item.id)}
-                  className="opacity-0 group-hover:opacity-100 text-rose-500 hover:text-rose-700 p-0.5 rounded cursor-pointer transition-opacity"
+                  className="opacity-0 group-hover/math:opacity-100 text-rose-500 hover:text-rose-700 p-0.5 rounded cursor-pointer transition-opacity"
                   title="Gỡ công thức này"
                 >
                   <X className="w-3.5 h-3.5" />
@@ -1117,61 +860,34 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
               </div>
             );
           })}
-
-        {/* Hướng dẫn khi bảng còn trống */}
-        {board.strokes.length === 0 && (!board.mathItems || board.mathItems.length === 0) && (
-          <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center gap-1.5">
-            <span
-              className={`text-xs sm:text-sm font-bold opacity-40 select-none ${
-                board.theme === 'white' ? 'text-slate-600' : 'text-slate-200'
-              }`}
-            >
-              ✍️ Đặt bút viết tay lời giải, vẽ hình học $Oxy/Oxyz$ hoặc chèn công thức Toán KaTeX
-            </span>
-            <span className="text-[11px] opacity-35 select-none text-slate-500">
-              (Nét vẽ mực được làm mượt Gaussian 5 điểm &amp; Bézier Spline tự nhiên như bút thật)
-            </span>
-          </div>
-        )}
       </div>
 
-      {/* VÙNG GÕ VĂN BẢN (NẾU BẬT) */}
-      {board.showTextEditor && (
-        <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-1">
-          <div className="flex items-center justify-between text-[11px] text-indigo-900 font-bold">
-            <span>📝 Ghi chú bài giảng / tóm tắt:</span>
-            <span className="text-slate-500 text-[10px]">Tự động lưu cùng bảng</span>
-          </div>
-          <textarea
-            value={board.textNote}
-            onChange={(e) => onUpdate({ ...board, textNote: e.target.value })}
-            placeholder="Thầy/cô có thể gõ thêm tóm tắt hoặc dán nội dung văn bản tại đây..."
-            rows={3}
-            className="w-full bg-white text-slate-800 p-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-indigo-500 transition-colors leading-relaxed"
-          />
-        </div>
-      )}
-
-      {/* THANH TAY CẦM KÉO GIÃN KHOẢNG TRỐNG CHUẨN NOTERENDERER */}
+      {/* VIỀN CO GIÃN KHI RÊ CHUỘT GẦN VIỀN DƯỚI (NOTERENDERER HOVER RESIZE BORDER) */}
       <div
         onPointerDown={handleStartResizeDrag}
-        className={`w-full py-1.5 px-3 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border-t-2 border-dashed border-indigo-400 flex items-center justify-between cursor-ns-resize select-none transition-all hover:bg-indigo-100 ${
-          isResizing ? 'bg-indigo-200 ring-2 ring-indigo-500' : ''
-        }`}
-        title="Kéo xuống để mở rộng khoảng trống • Kéo lên để thu hẹp (như NoteRenderer)"
+        className="w-full h-5 -mt-2.5 relative z-30 cursor-ns-resize group/resizer flex items-center justify-center select-none"
+        title="Đưa chuột vào đây và kéo xuống để mở rộng • kéo lên để thu hẹp (NoteRenderer)"
       >
-        <div className="flex items-center gap-2 text-indigo-700 font-black text-[11px]">
-          <GripHorizontal className="w-4 h-4 text-indigo-500" />
-          <span>↕️ KÉO XUỐNG ĐỂ MỞ RỘNG KHOẢNG TRỐNG • KÉO LÊN ĐỂ THU HẸP</span>
-        </div>
-
-        <div className="flex items-center gap-2 text-[10px] text-slate-500">
-          <span className="bg-white px-2 py-0.5 rounded-full border border-indigo-200 font-mono font-bold text-indigo-800">
-            {board.height}px
-          </span>
-          <span className="hidden sm:inline italic text-slate-400">
-            (Nội dung tiếp theo sẽ xuất hiện bên dưới khoảng trống này)
-          </span>
+        {/* Đường viền ngang: bình thường vô hình, chỉ hiện khi đưa chuột vào gần viền dưới hoặc đang kéo */}
+        <div
+          className={`w-full transition-all duration-150 flex items-center justify-center ${
+            isResizing
+              ? 'h-1 bg-indigo-600 shadow-md'
+              : 'h-[2px] bg-transparent group-hover/resizer:bg-indigo-400 group-hover/resizer:h-1'
+          }`}
+        >
+          {/* Nút tay cầm nhỏ ở chính giữa xuất hiện khi hover gần viền dưới hoặc đang kéo */}
+          <div
+            className={`transition-all duration-150 -translate-y-1/2 flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-indigo-600 text-white text-[11px] font-bold shadow-lg border border-white ${
+              isResizing ? 'opacity-100 scale-105' : 'opacity-0 group-hover/resizer:opacity-100'
+            }`}
+          >
+            <GripHorizontal className="w-3.5 h-3.5 text-white" />
+            <span>Kéo co giãn</span>
+            <span className="text-[10px] bg-indigo-800/90 px-1.5 py-0.2 rounded font-mono font-semibold">
+              {board.height}px
+            </span>
+          </div>
         </div>
       </div>
     </div>
