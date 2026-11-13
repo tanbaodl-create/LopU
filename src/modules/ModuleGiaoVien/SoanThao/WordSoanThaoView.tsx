@@ -8160,66 +8160,41 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   filter: drop-shadow(0 0 4px rgba(79, 70, 229, 0.8)) !important;
                 }
 
-                /* Kiểu dáng hiển thị Thẻ mốc Slide & Điểm dừng Hiệu ứng trong khung soạn thảo Word */
+                /* Kiểu dáng hiển thị Thẻ mốc Slide & Điểm dừng Hiệu ứng trong khung soạn thảo Word:
+                   Không hiện chữ/nhãn vào bài viết gây khó đọc (đã có trên Thanh mốc PPT lề trái).
+                   Chỉ hiển thị đường kẻ ngang nét đứt thưa nét, mờ nhẹ tinh tế phân tách nội dung. */
                 .slide-break-point {
                   position: relative;
-                  border-top: 2px dashed #9333ea !important;
-                  padding-top: 10px !important;
-                  margin-top: 16px !important;
-                  background-color: rgba(243, 232, 255, 0.25);
-                  border-radius: 6px;
+                  border-top: none !important;
+                  background-image: repeating-linear-gradient(to right, rgba(147, 51, 234, 0.35) 0px, rgba(147, 51, 234, 0.35) 6px, transparent 6px, transparent 16px) !important;
+                  background-repeat: repeat-x !important;
+                  background-position: top left !important;
+                  background-size: 100% 1px !important;
+                  padding-top: 4px !important;
+                  margin-top: 6px !important;
+                  background-color: transparent !important;
+                  border-radius: 0 !important;
                 }
                 .slide-break-point::before {
-                  content: "🎬 [MỐC SLIDE MỚI]";
-                  display: inline-block;
-                  font-size: 10px;
-                  font-weight: 800;
-                  color: #6b21a8;
-                  background-color: #f3e8ff;
-                  border: 1px solid #d8b4fe;
-                  padding: 1px 7px;
-                  border-radius: 9999px;
-                  margin-bottom: 6px;
-                  letter-spacing: 0.05em;
-                  user-select: none;
+                  content: none !important;
+                  display: none !important;
                 }
 
                 .effect-break-point {
                   position: relative;
-                  border-top: 2px dashed #d97706 !important;
-                  padding-top: 8px !important;
-                  margin-top: 12px !important;
-                  background-color: rgba(254, 243, 199, 0.25);
-                  border-radius: 6px;
+                  border-top: none !important;
+                  background-image: repeating-linear-gradient(to right, rgba(217, 119, 6, 0.35) 0px, rgba(217, 119, 6, 0.35) 6px, transparent 6px, transparent 16px) !important;
+                  background-repeat: repeat-x !important;
+                  background-position: top left !important;
+                  background-size: 100% 1px !important;
+                  padding-top: 4px !important;
+                  margin-top: 6px !important;
+                  background-color: transparent !important;
+                  border-radius: 0 !important;
                 }
                 .effect-break-point::before {
-                  content: "⚡ [MỐC HIỆU ỨNG: HIỆN DẦN]";
-                  display: inline-block;
-                  font-size: 10px;
-                  font-weight: 800;
-                  color: #92400e;
-                  background-color: #fef3c7;
-                  border: 1px solid #fde68a;
-                  padding: 1px 7px;
-                  border-radius: 9999px;
-                  margin-bottom: 6px;
-                  letter-spacing: 0.05em;
-                  user-select: none;
-                }
-                .effect-break-point[data-effect-type="slide-up"]::before {
-                  content: "⬆️ [MỐC HIỆU ỨNG: TRƯỢT LÊN]";
-                }
-                .effect-break-point[data-effect-type="slide-left"]::before {
-                  content: "➡️ [MỐC HIỆU ỨNG: TRƯỢT VÀO]";
-                }
-                .effect-break-point[data-effect-type="zoom"]::before {
-                  content: "🔍 [MỐC HIỆU ỨNG: PHÓNG TO]";
-                }
-                .effect-break-point[data-effect-type="highlight"]::before {
-                  content: "💡 [MỐC HIỆU ỨNG: NỔI BẬT]";
-                }
-                .effect-break-point[data-effect-type="fade"]::before {
-                  content: "💫 [MỐC HIỆU ỨNG: HIỆN DẦN]";
+                  content: none !important;
+                  display: none !important;
                 }
               `}</style>
               {/* Khung bao tài liệu kèm Thanh Mốc PPT dọc bên lề trái */}
