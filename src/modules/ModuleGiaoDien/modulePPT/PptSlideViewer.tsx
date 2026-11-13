@@ -21,6 +21,13 @@ interface PptSlideViewerProps {
   onAddWhiteboardAtStep?: (stepIdx: number, initialHeight?: number) => void;
   isInsertSpaceMode?: boolean;
   onExitInsertSpaceMode?: () => void;
+  activeWhiteboardId?: string | null;
+  onSelectWhiteboard?: (id: string) => void;
+  onOpenTableModal?: () => void;
+  onOpenGraphModal?: () => void;
+  onOpenBbtModal?: () => void;
+  onOpenMathModal?: () => void;
+  onOpenImagePicker?: () => void;
   tienTrinhChuyenDe?: string;
   docTitle?: string;
   onExitPpt: () => void;
@@ -41,6 +48,13 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   onAddWhiteboardAtStep,
   isInsertSpaceMode = false,
   onExitInsertSpaceMode,
+  activeWhiteboardId,
+  onSelectWhiteboard,
+  onOpenTableModal,
+  onOpenGraphModal,
+  onOpenBbtModal,
+  onOpenMathModal,
+  onOpenImagePicker,
   tienTrinhChuyenDe = 'Kiến thức',
   docTitle = 'Tài liệu Chuyên đề',
   onExitPpt,
@@ -509,6 +523,13 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                       board={b}
                       onUpdate={handleUpdateBoard}
                       onDelete={handleDeleteBoard}
+                      isActive={activeWhiteboardId === b.id}
+                      onSelect={onSelectWhiteboard}
+                      onOpenTableModal={onOpenTableModal}
+                      onOpenGraphModal={onOpenGraphModal}
+                      onOpenBbtModal={onOpenBbtModal}
+                      onOpenMathModal={onOpenMathModal}
+                      onOpenImagePicker={onOpenImagePicker}
                     />
                   ))}
                 </React.Fragment>

@@ -14,11 +14,18 @@ import {
   Maximize2,
   Check,
   X,
+  Table,
+  Image as ImageIcon,
+  TrendingUp,
+  BarChart3,
+  MousePointer,
+  Plus,
 } from 'lucide-react';
 
 export type BoardTheme = 'white' | 'green' | 'black';
 
 export type BoardTool =
+  | 'select'
   | 'pen'
   | 'eraser'
   | 'line'
@@ -49,6 +56,14 @@ export interface BoardMathItem {
   y: number;
 }
 
+export interface BoardHtmlItem {
+  id: string;
+  type: 'table' | 'image' | 'math' | 'graph' | 'bbt' | 'html';
+  html: string;
+  title?: string;
+  createdAt?: number;
+}
+
 export interface PptWhiteboardData {
   id: string;
   slideIndex: number;
@@ -60,12 +75,20 @@ export interface PptWhiteboardData {
   showMathEditor?: boolean;
   strokes: BoardStroke[];
   mathItems?: BoardMathItem[];
+  htmlItems?: BoardHtmlItem[];
 }
 
 interface PptInteractiveBoardProps {
   board: PptWhiteboardData;
   onUpdate: (updated: PptWhiteboardData) => void;
   onDelete: (id: string) => void;
+  isActive?: boolean;
+  onSelect?: (id: string) => void;
+  onOpenTableModal?: () => void;
+  onOpenGraphModal?: () => void;
+  onOpenBbtModal?: () => void;
+  onOpenMathModal?: () => void;
+  onOpenImagePicker?: () => void;
 }
 
 /**
@@ -200,9 +223,17 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   board,
   onUpdate,
   onDelete,
+  isActive = false,
+  onSelect,
+  onOpenTableModal,
+  onOpenGraphModal,
+  onOpenBbtModal,
+  onOpenMathModal,
+  onOpenImagePicker,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const localImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [activeTool, setActiveTool] = useState<BoardTool>('pen');
   const [strokeWidth, setStrokeWidth] = useState<number>(3.5);
@@ -222,6 +253,186 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   const [showShapeMenu, setShowShapeMenu] = useState<boolean>(false);
   const [latexInput, setLatexInput] = useState<string>('y = \\frac{1}{2}x^2 - 3x + 4');
   const [renderedLatexPreview, setRenderedLatexPreview] = useState<string>('');
+
+  // Xóa một khối nội dung đã chèn trên bảng
+  const handleDeleteHtmlItem = (itemId: string) => {
+    const updatedItems = (board.htmlItems || []).filter((it) => it.id !== itemId);
+    onUpdate({
+      ...board,
+      htmlItems: updatedItems,
+    });
+  };
+
+  // Chèn nhanh bảng số liệu vào khoảng trống
+  const handleQuickInsertTable = (rows: number = 3, cols: number = 3) => {
+    let headers = '';
+    for (let c = 1; c <= cols; c++) {
+      headers += `<th style="border: 1px solid #cbd5e1; padding: 6px 12px; font-weight: bold; background: #f8fafc; text-align: center;">Cột ${c}</th>`;
+    }
+    let bodyRows = '';
+    for (let r = 1; r <= rows; r++) {
+      let cells = '';
+      for (let c = 1; c <= cols; c++) {
+        cells += `<td style="border: 1px solid #cbd5e1; padding: 6px 12px; text-align: center;" contenteditable="true">...</td>`;
+      }
+      bodyRows += `<tr>${cells}</tr>`;
+    }
+    const tableHtml = `
+      <div class="word-table-wrapper my-1 overflow-x-auto">
+        <table style="width: 100%; border-collapse: collapse; border: 1.5px solid #94a3b8; font-size: 13px; text-align: center; margin: 0 auto; background: white;">
+          <thead>
+            <tr>${headers}</tr>
+          </thead>
+          <tbody>
+            ${bodyRows}
+          </tbody>
+        </table>
+      </div>
+    `;
+    const newItem: BoardHtmlItem = {
+      id: `table-${Date.now()}`,
+      type: 'table',
+      title: `Bảng ${rows}x${cols}`,
+      html: tableHtml,
+      createdAt: Date.now(),
+    };
+    const newItems = [...(board.htmlItems || []), newItem];
+    const newHeight = Math.max(board.height, 320 + newItems.length * 120);
+    onUpdate({
+      ...board,
+      height: newHeight,
+      htmlItems: newItems,
+    });
+  };
+
+  // Xử lý chọn ảnh máy tính nhanh
+  const handleLocalImageSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (loadEvt) => {
+      const src = loadEvt.target?.result as string;
+      const imgHtml = `
+        <div style="text-align: center; margin: 8px 0;">
+          <img src="${src}" alt="${file.name}" style="max-width: 100%; max-height: 480px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin: 0 auto; display: inline-block;" />
+        </div>
+      `;
+      const newItem: BoardHtmlItem = {
+        id: `img-${Date.now()}`,
+        type: 'image',
+        title: file.name,
+        html: imgHtml,
+        createdAt: Date.now(),
+      };
+      const newItems = [...(board.htmlItems || []), newItem];
+      const newHeight = Math.max(board.height, 360 + newItems.length * 150);
+      onUpdate({
+        ...board,
+        height: newHeight,
+        htmlItems: newItems,
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // Chèn nhanh đồ thị trực quan (SVG Oxy)
+  const handleQuickInsertGraph = (type: 'parabola' | 'cubic' = 'parabola') => {
+    const isParabola = type === 'parabola';
+    const formulaStr = isParabola ? 'y = x^2 - 2x' : 'y = x^3 - 3x';
+    const pathD = isParabola
+      ? 'M 20 40 Q 150 260 280 40'
+      : 'M 30 240 C 90 20, 120 20, 150 140 C 180 260, 210 260, 270 40';
+    const svgHtml = `
+      <div class="word-graph-wrapper my-1 flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200">
+        <div class="font-bold text-xs text-indigo-700 mb-1 font-mono">${formulaStr}</div>
+        <svg viewBox="0 0 300 280" class="w-full max-w-[320px] h-auto bg-slate-50/50 rounded-lg border border-slate-100">
+          <line x1="20" y1="140" x2="280" y2="140" stroke="#64748b" stroke-width="1.5" />
+          <line x1="150" y1="260" x2="150" y2="20" stroke="#64748b" stroke-width="1.5" />
+          <text x="275" y="132" font-size="11" font-weight="bold" fill="#334155">x</text>
+          <text x="156" y="28" font-size="11" font-weight="bold" fill="#334155">y</text>
+          <text x="138" y="154" font-size="11" font-weight="bold" fill="#334155">O</text>
+          <path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" />
+        </svg>
+      </div>
+    `;
+    const newItem: BoardHtmlItem = {
+      id: `graph-${Date.now()}`,
+      type: 'graph',
+      title: `Đồ thị ${formulaStr}`,
+      html: svgHtml,
+      createdAt: Date.now(),
+    };
+    const newItems = [...(board.htmlItems || []), newItem];
+    const newHeight = Math.max(board.height, 380 + newItems.length * 150);
+    onUpdate({
+      ...board,
+      height: newHeight,
+      htmlItems: newItems,
+    });
+  };
+
+  // Chèn nhanh Bảng biến thiên trực quan
+  const handleQuickInsertBbt = () => {
+    let katexMinusInf = '-\\infty';
+    let katexPlusInf = '+\\infty';
+    try {
+      katexMinusInf = katex.renderToString('-\\infty', { throwOnError: false });
+      katexPlusInf = katex.renderToString('+\\infty', { throwOnError: false });
+    } catch {}
+    const bbtHtml = `
+      <div class="word-bbt-wrapper my-1 overflow-x-auto p-3 bg-white rounded-xl border border-slate-200">
+        <div class="font-bold text-xs text-amber-700 mb-1.5 font-mono text-center">Bảng biến thiên y = x^3 - 3x</div>
+        <table style="border-collapse: collapse; border: 1.5px solid #1e293b; font-family: serif; font-size: 13px; margin: 0 auto; width: 100%; min-width: 320px;">
+          <thead>
+            <tr style="background: #f8fafc;">
+              <th style="padding: 6px 12px; border-right: 1.5px solid #1e293b; border-bottom: 1.5px solid #1e293b; font-style: italic; width: 45px; text-align: center;">x</th>
+              <th style="padding: 6px 12px; border-bottom: 1.5px solid #1e293b; text-align: center;">${katexMinusInf}</th>
+              <th style="padding: 6px 12px; border-bottom: 1.5px solid #1e293b; text-align: center;">-1</th>
+              <th style="padding: 6px 12px; border-bottom: 1.5px solid #1e293b; text-align: center;">1</th>
+              <th style="padding: 6px 12px; border-bottom: 1.5px solid #1e293b; text-align: center;">${katexPlusInf}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding: 6px 12px; border-right: 1.5px solid #1e293b; border-bottom: 1.5px solid #1e293b; font-style: italic; text-align: center; font-weight: bold;">y'</td>
+              <td style="padding: 6px 8px; text-align: center; border-bottom: 1.5px solid #1e293b; font-weight: bold;">+</td>
+              <td style="padding: 6px 8px; text-align: center; border-bottom: 1.5px solid #1e293b; font-weight: bold;">0</td>
+              <td style="padding: 6px 8px; text-align: center; border-bottom: 1.5px solid #1e293b; font-weight: bold;">-</td>
+              <td style="padding: 6px 8px; text-align: center; border-bottom: 1.5px solid #1e293b; font-weight: bold;">+</td>
+            </tr>
+            <tr>
+              <td style="padding: 6px 12px; border-right: 1.5px solid #1e293b; font-style: italic; text-align: center; font-weight: bold;">y</td>
+              <td colspan="4" style="padding: 8px 12px; text-align: center;">
+                <svg viewBox="0 0 320 80" class="w-full max-w-[340px] h-16 mx-auto">
+                  <path d="M 20 65 L 100 18 L 220 65 L 300 18" fill="none" stroke="#0f172a" stroke-width="1.8" />
+                  <polygon points="100,18 92,23 96,28" fill="#0f172a" />
+                  <polygon points="220,65 212,60 216,55" fill="#0f172a" />
+                  <polygon points="300,18 292,23 296,28" fill="#0f172a" />
+                  <text x="100" y="14" font-size="11" font-weight="bold" text-anchor="middle" fill="#0f172a">2</text>
+                  <text x="220" y="78" font-size="11" font-weight="bold" text-anchor="middle" fill="#0f172a">-2</text>
+                </svg>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+    const newItem: BoardHtmlItem = {
+      id: `bbt-${Date.now()}`,
+      type: 'bbt',
+      title: 'Bảng biến thiên hàm bậc 3',
+      html: bbtHtml,
+      createdAt: Date.now(),
+    };
+    const newItems = [...(board.htmlItems || []), newItem];
+    const newHeight = Math.max(board.height, 380 + newItems.length * 150);
+    onUpdate({
+      ...board,
+      height: newHeight,
+      htmlItems: newItems,
+    });
+  };
 
   // Bảng màu cho Bảng trắng (bút dạ NoteRenderer sẫm màu)
   const lightThemeColors = [
@@ -278,26 +489,18 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     const w = canvas.width;
     const h = canvas.height;
 
+    // Canvas hoàn toàn trong suốt để các khối HTML (Bảng, Đồ thị, BBT, Hình ảnh) hiển thị rõ nét bên dưới
     ctx.clearRect(0, 0, w, h);
-    if (board.theme === 'green') {
-      ctx.fillStyle = '#0f382c';
-    } else if (board.theme === 'black') {
-      ctx.fillStyle = '#18181b';
-    } else {
-      ctx.fillStyle = '#ffffff';
-    }
-    ctx.fillRect(0, 0, w, h);
 
     // Kẻ lưới ô ly mờ chuẩn NoteRenderer / vở ô ly toán học
     const gridSize = 28;
     ctx.lineWidth = 1;
-    if (board.theme === 'green') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
-    } else if (board.theme === 'black') {
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
-    } else {
-      ctx.strokeStyle = 'rgba(226, 232, 240, 0.85)';
-    }
+    ctx.strokeStyle =
+      board.theme === 'green'
+        ? 'rgba(255, 255, 255, 0.08)'
+        : board.theme === 'black'
+        ? 'rgba(255, 255, 255, 0.07)'
+        : 'rgba(226, 232, 240, 0.7)';
 
     ctx.beginPath();
     for (let x = gridSize; x < w; x += gridSize) {
@@ -319,9 +522,9 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       ctx.lineWidth = stroke.width;
 
       if (stroke.isEraser) {
-        ctx.strokeStyle =
-          board.theme === 'green' ? '#0f382c' : board.theme === 'black' ? '#18181b' : '#ffffff';
+        ctx.globalCompositeOperation = 'destination-out';
       } else {
+        ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = stroke.color;
       }
 
@@ -365,7 +568,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         // Nét vẽ tự do được làm mượt bằng Catmull-Rom Cubic Bézier
         if (stroke.points.length === 1) {
           ctx.arc(stroke.points[0].x, stroke.points[0].y, stroke.width / 2, 0, Math.PI * 2);
-          ctx.fillStyle = ctx.strokeStyle;
+          ctx.fillStyle = stroke.isEraser ? '#000000' : stroke.color;
           ctx.fill();
         } else {
           renderCatmullRomBezierPath(ctx, stroke.points);
@@ -376,7 +579,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     });
   }, [board.theme, board.strokes]);
 
-  // Đồng bộ kích thước canvas với chiều cao khoảng trống
+  // Đồng bộ kích thước canvas với chiều cao khoảng trống và các khối nội dung chèn vào
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -384,14 +587,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
 
     const rect = container.getBoundingClientRect();
     const targetWidth = Math.max(300, Math.floor(rect.width));
-    const targetHeight = board.height || 280;
+    const targetHeight = Math.max(board.height || 280, container.offsetHeight);
 
     if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
       canvas.width = targetWidth;
       canvas.height = targetHeight;
       redraw();
     }
-  }, [board.height, redraw]);
+  }, [board.height, board.htmlItems, redraw]);
 
   useEffect(() => {
     redraw();
@@ -476,15 +679,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.lineWidth = activeTool === 'eraser' ? strokeWidth * 3.5 : strokeWidth;
-    ctx.strokeStyle =
-      activeTool === 'eraser'
-        ? board.theme === 'green'
-          ? '#0f382c'
-          : board.theme === 'black'
-          ? '#18181b'
-          : '#ffffff'
-        : selectedColor;
+    if (activeTool === 'eraser') {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineWidth = strokeWidth * 3.5;
+    } else {
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = selectedColor;
+      ctx.lineWidth = strokeWidth;
+    }
 
     ctx.beginPath();
     const prevPt = pts[pts.length - 2];
@@ -706,11 +908,40 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   return (
     <div
       ref={containerRef}
-      className="group relative my-1 bg-transparent select-none transition-all no-slide-advance"
-      onClick={(e) => e.stopPropagation()}
+      className={`group relative my-2 bg-transparent select-none transition-all no-slide-advance rounded-2xl ${
+        isActive ? 'ring-2 ring-indigo-500 shadow-md' : ''
+      }`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect?.(board.id);
+      }}
     >
+      {/* ẨN INPUT CHỌN ẢNH TỪ MÁY TÍNH */}
+      <input
+        type="file"
+        ref={localImageInputRef}
+        onChange={handleLocalImageSelected}
+        accept="image/*"
+        className="hidden"
+      />
+
       {/* BẢNG CÔNG CỤ NỔI NHẸ NHÀNG KHI RÊ CHUỘT VÀO KHOẢNG TRỐNG (HOVER MINI-TOOLBAR) */}
-      <div className="absolute top-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-xl shadow-md border border-slate-200 select-none">
+      <div className="absolute top-2 right-2 z-35 opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-xl shadow-md border border-slate-200 select-none">
+        {/* Nút Chuột / Tương tác */}
+        <button
+          type="button"
+          onClick={() => setActiveTool('select')}
+          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+            activeTool === 'select'
+              ? 'bg-slate-800 text-white shadow-xs'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+          title="Chuột tương tác / Nhập liệu vào bảng"
+        >
+          <MousePointer className="w-3.5 h-3.5" />
+          <span className="text-[11px] hidden sm:inline">Chuột</span>
+        </button>
+
         {/* Nút Bút */}
         <button
           type="button"
@@ -768,6 +999,99 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
 
         <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
 
+        {/* CÁC NÚT CHÈN LÊN VÙNG KHOẢNG TRỐNG */}
+        {/* 1. Chèn Bảng */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(board.id);
+            if (onOpenTableModal) {
+              onOpenTableModal();
+            } else {
+              handleQuickInsertTable(3, 3);
+            }
+          }}
+          className="p-1.5 rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-indigo-200 shadow-2xs"
+          title="Chèn bảng vào khoảng trống này"
+        >
+          <Table className="w-3.5 h-3.5 text-indigo-600" />
+          <span className="text-[11px]">Bảng</span>
+        </button>
+
+        {/* 2. Chèn Hình ảnh */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(board.id);
+            if (onOpenImagePicker) {
+              onOpenImagePicker();
+            } else {
+              localImageInputRef.current?.click();
+            }
+          }}
+          className="p-1.5 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs"
+          title="Chèn hình ảnh từ máy tính vào khoảng trống này"
+        >
+          <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
+          <span className="text-[11px]">Ảnh</span>
+        </button>
+
+        {/* 3. Chèn Công thức */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(board.id);
+            if (onOpenMathModal) {
+              onOpenMathModal();
+            } else {
+              setShowMathPanel(true);
+            }
+          }}
+          className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-purple-200 shadow-2xs"
+          title="Chèn công thức toán (KaTeX/LaTeX) vào khoảng trống này"
+        >
+          <Sigma className="w-3.5 h-3.5 text-purple-600" />
+          <span className="text-[11px]">Công thức</span>
+        </button>
+
+        {/* 4. Chèn Đồ thị */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(board.id);
+            if (onOpenGraphModal) {
+              onOpenGraphModal();
+            } else {
+              handleQuickInsertGraph('parabola');
+            }
+          }}
+          className="p-1.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-blue-200 shadow-2xs"
+          title="Chèn đồ thị hàm số vào khoảng trống này"
+        >
+          <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+          <span className="text-[11px]">Đồ thị</span>
+        </button>
+
+        {/* 5. Chèn Bảng biến thiên */}
+        <button
+          type="button"
+          onClick={() => {
+            onSelect?.(board.id);
+            if (onOpenBbtModal) {
+              onOpenBbtModal();
+            } else {
+              handleQuickInsertBbt();
+            }
+          }}
+          className="p-1.5 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-amber-200 shadow-2xs"
+          title="Chèn bảng biến thiên vào khoảng trống này"
+        >
+          <BarChart3 className="w-3.5 h-3.5 text-amber-600" />
+          <span className="text-[11px]">BBT</span>
+        </button>
+
+        <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
+
         {/* Hoàn tác */}
         <button
           type="button"
@@ -795,7 +1119,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           type="button"
           onClick={handleClear}
           className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
-          title="Xóa toàn bộ nét vẽ trong khoảng trống này"
+          title="Xóa toàn bộ nét vẽ và nội dung trong khoảng trống này"
         >
           <Trash2 className="w-3.5 h-3.5" />
         </button>
@@ -806,7 +1130,10 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         <button
           type="button"
           onClick={() => {
-            if (board.strokes.length === 0 || window.confirm('Xóa bỏ khoảng trống này?')) {
+            if (
+              (board.strokes.length === 0 && (!board.htmlItems || board.htmlItems.length === 0)) ||
+              window.confirm('Xóa bỏ khoảng trống này?')
+            ) {
               onDelete(board.id);
             }
           }}
@@ -818,18 +1145,90 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </button>
       </div>
 
-      {/* VÙNG VẼ CHÍNH CỦA KHOẢNG TRỐNG (CANVAS TRẮNG ĐỒNG BỘ VỚI SLIDE, KHÔNG CÓ VIỀN HÌNH CHỮ NHẬT) */}
+      {/* VÙNG CHỨA NỘI DUNG VÀ CANVAS CỦA KHOẢNG TRỐNG */}
       <div
-        className="relative w-full cursor-crosshair overflow-hidden touch-none"
-        style={{ height: `${board.height || 280}px` }}
+        className={`relative w-full overflow-hidden transition-all rounded-xl border border-slate-200/90 shadow-2xs ${
+          activeTool === 'pen' || activeTool === 'eraser' ? 'cursor-crosshair' : 'cursor-default'
+        }`}
+        style={{
+          minHeight: `${board.height || 280}px`,
+          backgroundColor:
+            board.theme === 'green' ? '#0f382c' : board.theme === 'black' ? '#18181b' : '#ffffff',
+          backgroundImage:
+            board.theme === 'green'
+              ? 'radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)'
+              : board.theme === 'black'
+              ? 'radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)'
+              : 'radial-gradient(circle, #cbd5e1 0.75px, transparent 0.75px)',
+          backgroundSize: '24px 24px',
+        }}
       >
+        {/* LỚP 1: CÁC KHỐI NỘI DUNG CHÈN VÀO (BẢNG, HÌNH ẢNH, CÔNG THỨC, ĐỒ THỊ, BẢNG BIẾN THIÊN) */}
+        {board.htmlItems && board.htmlItems.length > 0 && (
+          <div className="relative z-10 w-full p-3.5 flex flex-col gap-3 pointer-events-auto">
+            {board.htmlItems.map((item) => (
+              <div
+                key={item.id}
+                className="relative group/item bg-white/95 rounded-xl border border-slate-200/90 shadow-xs p-3 transition-all"
+              >
+                {/* Thanh điều khiển nhỏ của từng khối */}
+                <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100 text-xs select-none">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px]">
+                    {item.type === 'table' && <Table className="w-3.5 h-3.5 text-indigo-600" />}
+                    {item.type === 'image' && <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />}
+                    {item.type === 'math' && <Sigma className="w-3.5 h-3.5 text-purple-600" />}
+                    {item.type === 'graph' && <TrendingUp className="w-3.5 h-3.5 text-blue-600" />}
+                    {item.type === 'bbt' && <BarChart3 className="w-3.5 h-3.5 text-amber-600" />}
+                    <span>
+                      {item.title ||
+                        (item.type === 'table'
+                          ? 'Bảng số liệu'
+                          : item.type === 'image'
+                          ? 'Hình ảnh'
+                          : item.type === 'graph'
+                          ? 'Đồ thị'
+                          : item.type === 'bbt'
+                          ? 'Bảng biến thiên'
+                          : 'Công thức toán')}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteHtmlItem(item.id);
+                      }}
+                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      title="Gỡ khối này khỏi khoảng trống"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Render nội dung HTML */}
+                <div
+                  className="w-full overflow-x-auto select-text text-slate-900"
+                  dangerouslySetInnerHTML={{ __html: item.html }}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* LỚP 2: CANVAS VẼ TAY MỰC KỸ THUẬT SỐ NẰM TRÊN CÙNG ĐỂ VIẾT LÊN BẢNG / GHI CHÚ */}
         <canvas
           ref={canvasRef}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          className="w-full h-full block"
+          className={`absolute inset-0 w-full h-full block z-20 ${
+            activeTool === 'pen' || activeTool === 'eraser'
+              ? 'pointer-events-auto cursor-crosshair'
+              : 'pointer-events-none'
+          }`}
           style={{ touchAction: 'none' }}
         />
 
@@ -845,7 +1244,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
             return (
               <div
                 key={item.id}
-                className="absolute z-20 group/math p-2 rounded-xl bg-white/95 border border-indigo-300 shadow-md backdrop-blur-xs flex items-center gap-1.5"
+                className="absolute z-25 group/math p-2 rounded-xl bg-white/95 border border-indigo-300 shadow-md backdrop-blur-xs flex items-center gap-1.5"
                 style={{ left: `${item.x}px`, top: `${item.y}px` }}
               >
                 <div dangerouslySetInnerHTML={{ __html: mathHtml }} />

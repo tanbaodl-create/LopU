@@ -108,9 +108,10 @@ import {
   PptEffectType,
   getPptEffectDef,
   PptWhiteboardData,
+  BoardHtmlItem,
 } from '../../ModuleGiaoDien/modulePPT';
 
-export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType, PptWhiteboardData };
+export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType, PptWhiteboardData, BoardHtmlItem };
 
 export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -398,11 +399,13 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   // Danh sách khoảng trống viết bảng tương tác chèn vào các bước slide PPT (NoteRenderer style)
   const [pptWhiteboards, setPptWhiteboards] = useState<PptWhiteboardData[]>([]);
+  const [activePptWhiteboardId, setActivePptWhiteboardId] = useState<string | null>(null);
   const [isInsertSpaceMode, setIsInsertSpaceMode] = useState<boolean>(false);
 
   const handleAddPptWhiteboardAtStep = (stepIdx: number, initialHeight: number = 280) => {
+    const newBoardId = `space-${activePptSlideIndex}-${stepIdx}-${Date.now()}`;
     const newBoard: PptWhiteboardData = {
-      id: `space-${activePptSlideIndex}-${stepIdx}-${Date.now()}`,
+      id: newBoardId,
       slideIndex: activePptSlideIndex,
       afterStepIndex: stepIdx,
       theme: 'white',
@@ -410,8 +413,10 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
       textNote: '',
       showTextEditor: false,
       strokes: [],
+      htmlItems: [],
     };
     setPptWhiteboards((prev) => [...prev, newBoard]);
+    setActivePptWhiteboardId(newBoardId);
   };
 
   const handleUpdatePptWhiteboard = (updated: PptWhiteboardData) => {
@@ -420,6 +425,9 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   const handleDeletePptWhiteboard = (id: string) => {
     setPptWhiteboards((prev) => prev.filter((b) => b.id !== id));
+    if (activePptWhiteboardId === id) {
+      setActivePptWhiteboardId(null);
+    }
   };
 
   // Modal Chèn Bảng tùy chỉnh số dòng, số cột, có tiêu đề
@@ -459,6 +467,94 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         title: 'Nội dung chèn từ Menu Word'
       }
     }));
+
+    // KHI ĐANG Ở CHẾ ĐỘ XEM PPT: Chèn Bảng, Hình ảnh, Công thức, Đồ thị, Bảng biến thiên trực tiếp lên khoảng trống bài giảng
+    if (wordViewMode === 'ppt') {
+      let targetBoard = pptWhiteboards.find(
+        (b) => b.id === activePptWhiteboardId && b.slideIndex === activePptSlideIndex
+      );
+      if (!targetBoard) {
+        const slideBoards = pptWhiteboards.filter((b) => b.slideIndex === activePptSlideIndex);
+        if (slideBoards.length > 0) {
+          targetBoard = slideBoards[slideBoards.length - 1];
+        }
+      }
+
+      // Tự động phân loại nội dung chèn
+      let itemType: 'table' | 'image' | 'math' | 'graph' | 'bbt' | 'html' = 'html';
+      let itemTitle = 'Khối nội dung';
+      if (html.includes('word-bbt-wrapper') || html.includes('bbt-table') || html.includes('tikz-tab')) {
+        itemType = 'bbt';
+        itemTitle = 'Bảng biến thiên';
+      } else if (html.includes('word-graph-wrapper') || html.includes('<svg') || html.includes('tikz')) {
+        itemType = 'graph';
+        itemTitle = 'Đồ thị';
+      } else if (html.includes('<table')) {
+        itemType = 'table';
+        itemTitle = 'Bảng số liệu';
+      } else if (html.includes('<img')) {
+        itemType = 'image';
+        itemTitle = 'Hình ảnh';
+      } else if (html.includes('katex') || html.includes('math')) {
+        itemType = 'math';
+        itemTitle = 'Công thức toán';
+      }
+
+      const newItem: BoardHtmlItem = {
+        id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+        type: itemType,
+        title: itemTitle,
+        html: html,
+        createdAt: Date.now(),
+      };
+
+      if (targetBoard) {
+        const targetId = targetBoard.id;
+        setPptWhiteboards((prev) =>
+          prev.map((b) => {
+            if (b.id === targetId) {
+              const existing = b.htmlItems || [];
+              const newHeight = Math.max(b.height, 360 + existing.length * 150);
+              return {
+                ...b,
+                height: newHeight,
+                htmlItems: [...existing, newItem],
+              };
+            }
+            return b;
+          })
+        );
+        setActivePptWhiteboardId(targetId);
+        setNotification({
+          text: `Đã chèn ${itemTitle.toLowerCase()} vào khoảng trống trên slide PPT!`,
+          type: 'success',
+        });
+      } else {
+        // Chưa có khoảng trống trên slide hiện tại: Tự động tạo khoảng trống mới tại bước hiện tại và chèn nội dung vào
+        const newBoardId = `space-${activePptSlideIndex}-${activePptStepIndex}-${Date.now()}`;
+        const newBoard: PptWhiteboardData = {
+          id: newBoardId,
+          slideIndex: activePptSlideIndex,
+          afterStepIndex: activePptStepIndex,
+          theme: 'white',
+          height: 380,
+          textNote: '',
+          showTextEditor: false,
+          strokes: [],
+          htmlItems: [newItem],
+        };
+        setPptWhiteboards((prev) => [...prev, newBoard]);
+        setActivePptWhiteboardId(newBoardId);
+        setNotification({
+          text: `Đã tạo khoảng trống và chèn ${itemTitle.toLowerCase()} lên slide PPT!`,
+          type: 'success',
+        });
+      }
+
+      setTimeout(() => setNotification(null), 3000);
+      isInsertingHtmlRef.current = false;
+      return;
+    }
 
     if (!editorRef.current) {
       isInsertingHtmlRef.current = false;
@@ -7197,6 +7293,24 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 onAddWhiteboardAtStep={handleAddPptWhiteboardAtStep}
                 isInsertSpaceMode={isInsertSpaceMode}
                 onExitInsertSpaceMode={() => setIsInsertSpaceMode(false)}
+                activeWhiteboardId={activePptWhiteboardId}
+                onSelectWhiteboard={setActivePptWhiteboardId}
+                onOpenTableModal={() => {
+                  saveCurrentSelection();
+                  setShowTableModal(true);
+                }}
+                onOpenImagePicker={() => {
+                  imageInputRef.current?.click();
+                }}
+                onOpenMathModal={() => {
+                  setShowMathTypeModal(true);
+                }}
+                onOpenGraphModal={() => {
+                  setShowWordGraphModal(true);
+                }}
+                onOpenBbtModal={() => {
+                  setShowWordBBTModal(true);
+                }}
                 tienTrinhChuyenDe={tienTrinhChuyenDe}
                 docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
                 isTeacher={isTeacherOrHigher(currentRole)}
