@@ -74,6 +74,7 @@ import {
   X,
   MousePointer,
   Pen,
+  Pencil,
   Paintbrush,
   Eraser,
   Palette,
@@ -117,6 +118,7 @@ import {
   BoardHtmlItem,
   BoardTool,
   PenType,
+  NoteRendererSpaceIcon,
 } from '../../ModuleGiaoDien/modulePPT';
 
 export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType, PptWhiteboardData, BoardHtmlItem, BoardTool, PenType };
@@ -410,119 +412,162 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [activePptWhiteboardId, setActivePptWhiteboardId] = useState<string | null>(null);
   const [isInsertSpaceMode, setIsInsertSpaceMode] = useState<boolean>(false);
 
-  // Cấu hình độc lập (nét vẽ, màu sắc) cho từng ngòi bút: Bút bi, Bút lông, Highlight, Laser
+  // Cấu hình độc lập (loại bút, màu sắc, nét vẽ) cho 5 ngòi bút tùy chỉnh (Bút 1 -> Bút 5)
   const [pptActiveTool, setPptActiveTool] = useState<BoardTool>('pen');
-  const [pptPenType, setPptPenType] = useState<PenType>('ballpoint');
 
-  interface PptPenSetting {
+  interface PptPenSlot {
+    id: number;
+    name: string;
+    penType: PenType;
     color: string;
     strokeWidth: number;
   }
 
-  const [pptPenSettings, setPptPenSettings] = useState<Record<PenType, PptPenSetting>>(() => {
+  const DEFAULT_PPT_5_PENS: PptPenSlot[] = [
+    { id: 0, name: 'Bút 1', penType: 'ballpoint', color: '#1d4ed8', strokeWidth: 2.2 },
+    { id: 1, name: 'Bút 2', penType: 'brush', color: '#7c3aed', strokeWidth: 6.0 },
+    { id: 2, name: 'Bút 3', penType: 'highlighter', color: '#facc15', strokeWidth: 20.0 },
+    { id: 3, name: 'Bút 4', penType: 'pencil', color: '#475569', strokeWidth: 1.5 },
+    { id: 4, name: 'Bút 5', penType: 'laser', color: '#ef4444', strokeWidth: 5.0 },
+  ];
+
+  const [pptPenSlots, setPptPenSlots] = useState<PptPenSlot[]>(() => {
     try {
-      const saved = localStorage.getItem('lopu_ppt_pen_settings');
+      const saved = localStorage.getItem('lopu_ppt_5_pen_slots');
       if (saved) {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === 5) {
+          return parsed;
+        }
       }
     } catch {
       // fallback
     }
-    return {
-      ballpoint: { color: '#1d4ed8', strokeWidth: 2.2 },
-      brush: { color: '#7c3aed', strokeWidth: 6.0 },
-      highlighter: { color: '#facc15', strokeWidth: 20.0 },
-      laser: { color: '#ef4444', strokeWidth: 5.0 },
-      pencil: { color: '#475569', strokeWidth: 1.4 },
-    };
+    return DEFAULT_PPT_5_PENS;
   });
 
-  // Tự động lưu cấu hình ngòi bút của giáo viên vào localStorage
+  const [activePenSlotIndex, setActivePenSlotIndex] = useState<number>(0);
+  const [pptPenPopupSlotIndex, setPptPenPopupSlotIndex] = useState<number | null>(null);
+
+  // Tự động lưu cấu hình 5 ngòi bút của giáo viên vào localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('lopu_ppt_pen_settings', JSON.stringify(pptPenSettings));
+      localStorage.setItem('lopu_ppt_5_pen_slots', JSON.stringify(pptPenSlots));
     } catch {
       // ignore
     }
-  }, [pptPenSettings]);
+  }, [pptPenSlots]);
 
-  // Bảng chọn cài đặt bút (hiện khi bấm giữ ~1s hoặc nhấp lại vào bút đang kích hoạt)
-  const [pptPenPopupOpen, setPptPenPopupOpen] = useState<PenType | null>(null);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isLongPressRef = useRef<boolean>(false);
 
-  const startPenLongPress = (pen: PenType) => {
+  const startPenSlotLongPress = (idx: number) => {
     isLongPressRef.current = false;
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
     }
     longPressTimerRef.current = setTimeout(() => {
       isLongPressRef.current = true;
-      handlePptSelectPen(pen);
-      setPptPenPopupOpen(pen);
-    }, 700);
+      handleSelectPenSlot(idx);
+      setPptPenPopupSlotIndex(idx);
+    }, 600);
   };
 
-  const cancelPenLongPress = () => {
+  const cancelPenSlotLongPress = () => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
   };
 
-  const handlePenClick = (pen: PenType) => {
+  const handlePenSlotClick = (idx: number) => {
     if (isLongPressRef.current) {
       isLongPressRef.current = false;
       return;
     }
-    // Nếu bấm vào bút đang kích hoạt sẵn -> mở/đóng bảng cài đặt
-    if (pptActiveTool === 'pen' && pptPenType === pen) {
-      setPptPenPopupOpen((prev) => (prev === pen ? null : pen));
+    if (pptActiveTool === 'pen' && activePenSlotIndex === idx) {
+      setPptPenPopupSlotIndex((prev) => (prev === idx ? null : idx));
     } else {
-      handlePptSelectPen(pen);
+      handleSelectPenSlot(idx);
     }
   };
 
-  // Chọn 1 ngòi bút: tự động chuyển sang ngòi đó với màu & nét vẽ độc lập của nó
-  const handlePptSelectPen = (pen: PenType) => {
+  const handleSelectPenSlot = (idx: number) => {
     setPptActiveTool('pen');
-    setPptPenType(pen);
+    setActivePenSlotIndex(idx);
   };
 
-  // Cập nhật màu cho ngòi bút đang chọn (giữ độc lập, không ảnh hưởng ngòi bút khác)
-  const handlePptChangeColor = (newColor: string, targetPen?: PenType) => {
-    const pen = targetPen || pptPenPopupOpen || pptPenType;
-    setPptPenSettings((prev) => ({
-      ...prev,
-      [pen]: {
-        ...prev[pen],
-        color: newColor,
-      },
-    }));
+  const handleSlotChangePenType = (slotIdx: number, newType: PenType) => {
+    setPptPenSlots((prev) =>
+      prev.map((slot, i) => {
+        if (i !== slotIdx) return slot;
+        let newWidth = slot.strokeWidth;
+        if (newType === 'highlighter' && newWidth < 10) newWidth = 20;
+        else if (newType === 'brush' && (newWidth < 3 || newWidth > 14)) newWidth = 6.0;
+        else if (newType === 'ballpoint' && newWidth > 5) newWidth = 2.2;
+        else if (newType === 'pencil' && newWidth > 4) newWidth = 1.5;
+        else if (newType === 'laser' && (newWidth < 2 || newWidth > 8)) newWidth = 5.0;
+
+        return {
+          ...slot,
+          penType: newType,
+          strokeWidth: newWidth,
+        };
+      })
+    );
+  };
+
+  const handleSlotChangeColor = (slotIdx: number, newColor: string) => {
+    setPptPenSlots((prev) =>
+      prev.map((slot, i) => (i === slotIdx ? { ...slot, color: newColor } : slot))
+    );
     setPptActiveTool('pen');
-    setPptPenType(pen);
   };
 
-  // Cập nhật nét vẽ cho ngòi bút đang chọn (giữ độc lập, không ảnh hưởng ngòi bút khác)
-  const handlePptChangeStrokeWidth = (newWidth: number, targetPen?: PenType) => {
-    const pen = targetPen || pptPenPopupOpen || pptPenType;
-    setPptPenSettings((prev) => ({
-      ...prev,
-      [pen]: {
-        ...prev[pen],
-        strokeWidth: newWidth,
-      },
-    }));
+  const handleSlotChangeStrokeWidth = (slotIdx: number, newWidth: number) => {
+    setPptPenSlots((prev) =>
+      prev.map((slot, i) => (i === slotIdx ? { ...slot, strokeWidth: newWidth } : slot))
+    );
   };
 
-  // Màu và nét vẽ hiện tại của ngòi bút đang hoạt động
-  const currentPptColor = pptPenSettings[pptPenType]?.color || '#1d4ed8';
-  const currentPptStrokeWidth = pptPenSettings[pptPenType]?.strokeWidth || 2.2;
+  // Các giá trị hiện tại của ngòi bút đang kích hoạt
+  const currentActiveSlot = pptPenSlots[activePenSlotIndex] || pptPenSlots[0];
+  const pptPenType = currentActiveSlot.penType;
+  const currentPptColor = currentActiveSlot.color;
+  const currentPptStrokeWidth = currentActiveSlot.strokeWidth;
 
-  // Bảng màu mẫu tương thích theo từng ngòi bút (Bút bi, Bút lông, Highlight, Laser)
-  const getPptPenSampleColors = (targetPen?: PenType) => {
-    const pen = targetPen || pptPenPopupOpen || pptPenType;
-    if (pen === 'highlighter') {
+  // Tương thích ngược với các hàm gọi PptSlideViewer props
+  const handlePptChangeColor = (newColor: string) => {
+    handleSlotChangeColor(activePenSlotIndex, newColor);
+  };
+
+  const handlePptChangeStrokeWidth = (newWidth: number) => {
+    handleSlotChangeStrokeWidth(activePenSlotIndex, newWidth);
+  };
+
+  const setPptPenType = (newType: PenType) => {
+    handleSlotChangePenType(activePenSlotIndex, newType);
+  };
+
+  const getPenTypeMeta = (type: PenType) => {
+    switch (type) {
+      case 'brush':
+        return { label: 'Bút lông', icon: Paintbrush };
+      case 'highlighter':
+        return { label: 'Highlight', icon: Highlighter };
+      case 'pencil':
+        return { label: 'Bút chì', icon: Pencil };
+      case 'laser':
+        return { label: 'Laser', icon: Sparkles };
+      case 'ballpoint':
+      default:
+        return { label: 'Bút bi', icon: Pen };
+    }
+  };
+
+  // Bảng màu mẫu tương thích theo từng loại bút (Bút bi, Bút lông, Highlight, Bút chì, Laser)
+  const getPptPenSampleColors = (penType: PenType) => {
+    if (penType === 'highlighter') {
       return [
         { label: 'Vàng dạ quang', color: '#facc15' },
         { label: 'Xanh lá neon', color: '#4ade80' },
@@ -532,7 +577,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         { label: 'Tím neon', color: '#c084fc' },
       ];
     }
-    if (pen === 'brush') {
+    if (penType === 'brush') {
       return [
         { label: 'Tím', color: '#7c3aed' },
         { label: 'Xanh lá', color: '#16a34a' },
@@ -542,7 +587,17 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         { label: 'Đỏ', color: '#dc2626' },
       ];
     }
-    if (pen === 'laser') {
+    if (penType === 'pencil') {
+      return [
+        { label: 'Chì đậm', color: '#475569' },
+        { label: 'Chì xám', color: '#64748b' },
+        { label: 'Đen', color: '#1e293b' },
+        { label: 'Xanh chì', color: '#3b82f6' },
+        { label: 'Đỏ chì', color: '#ef4444' },
+        { label: 'Nâu gỗ', color: '#78350f' },
+      ];
+    }
+    if (penType === 'laser') {
       return [
         { label: 'Đỏ rực', color: '#ef4444' },
         { label: 'Cam neon', color: '#f97316' },
@@ -563,24 +618,30 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
     ];
   };
 
-  // Các nấc nét vẽ nhanh tích hợp cho từng ngòi bút
-  const getPptPenStrokePresets = (targetPen?: PenType) => {
-    const pen = targetPen || pptPenPopupOpen || pptPenType;
-    if (pen === 'highlighter') {
+  // Các nấc nét vẽ nhanh tích hợp cho từng loại bút
+  const getPptPenStrokePresets = (penType: PenType) => {
+    if (penType === 'highlighter') {
       return [
         { label: 'Mảnh', size: 14, dot: 'w-1.5 h-1.5' },
         { label: 'Vừa', size: 20, dot: 'w-2.5 h-2.5' },
         { label: 'Đậm', size: 28, dot: 'w-3.5 h-3.5' },
       ];
     }
-    if (pen === 'brush') {
+    if (penType === 'brush') {
       return [
         { label: 'Mảnh', size: 4, dot: 'w-1 h-1' },
         { label: 'Vừa', size: 6.5, dot: 'w-2 h-2' },
         { label: 'Đậm', size: 10, dot: 'w-3 h-3' },
       ];
     }
-    if (pen === 'laser') {
+    if (penType === 'pencil') {
+      return [
+        { label: 'Mảnh', size: 1.0, dot: 'w-1 h-1' },
+        { label: 'Vừa', size: 1.5, dot: 'w-1.5 h-1.5' },
+        { label: 'Đậm', size: 2.5, dot: 'w-2 h-2' },
+      ];
+    }
+    if (penType === 'laser') {
       return [
         { label: 'Mảnh', size: 3.5, dot: 'w-1 h-1' },
         { label: 'Vừa', size: 5.5, dot: 'w-2 h-2' },
@@ -6951,116 +7012,64 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           <span className="text-[11px] hidden sm:inline">Chuột</span>
                         </button>
 
-                        {/* CỤM CÁC NGÒI BÚT ĐỘC LẬP: Bút bi, Bút lông, Highlight, Laser (Bấm chọn / Giữ ~1s hiện Bảng chọn Cài đặt) */}
+                        {/* CỤM 5 NGÒI BÚT TÙY CHỈNH: Bút 1 -> Bút 5 (Bấm chọn / Giữ ~0.6s hoặc nhấp lại để mở Bảng Cài đặt) */}
                         <div className="relative flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg border border-slate-200">
-                          {/* 1. Bút bi */}
-                          <button
-                            type="button"
-                            onPointerDown={() => startPenLongPress('ballpoint')}
-                            onPointerUp={cancelPenLongPress}
-                            onPointerLeave={cancelPenLongPress}
-                            onClick={() => handlePenClick('ballpoint')}
-                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative ${
-                              pptActiveTool === 'pen' && pptPenType === 'ballpoint'
-                                ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
-                                : 'text-slate-700 hover:bg-slate-200/80'
-                            }`}
-                            title={`Bút bi: Nhấp để chọn (${pptPenSettings.ballpoint.strokeWidth}px). Nhấp lại hoặc giữ 1s để mở bảng cài đặt nét & màu.`}
-                          >
-                            <div className="flex items-center gap-1">
-                              <Pen className="w-3.5 h-3.5" />
-                              <span className="text-[11px] hidden sm:inline">Bút bi</span>
-                            </div>
-                            {/* Vạch màu độc lập của Bút bi */}
-                            <span
-                              className="h-1 w-full rounded-full transition-colors"
-                              style={{ backgroundColor: pptPenSettings.ballpoint.color }}
-                            />
-                          </button>
+                          {pptPenSlots.map((slot, idx) => {
+                            const isPenActive = pptActiveTool === 'pen' && activePenSlotIndex === idx;
+                            const typeMeta = getPenTypeMeta(slot.penType);
+                            const SlotIcon = typeMeta.icon;
 
-                          {/* 2. Bút lông */}
-                          <button
-                            type="button"
-                            onPointerDown={() => startPenLongPress('brush')}
-                            onPointerUp={cancelPenLongPress}
-                            onPointerLeave={cancelPenLongPress}
-                            onClick={() => handlePenClick('brush')}
-                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative ${
-                              pptActiveTool === 'pen' && pptPenType === 'brush'
-                                ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
-                                : 'text-slate-700 hover:bg-slate-200/80'
-                            }`}
-                            title={`Bút lông: Nhấp để chọn (${pptPenSettings.brush.strokeWidth}px). Nhấp lại hoặc giữ 1s để mở bảng cài đặt nét & màu.`}
-                          >
-                            <div className="flex items-center gap-1">
-                              <Paintbrush className="w-3.5 h-3.5" />
-                              <span className="text-[11px] hidden sm:inline">Bút lông</span>
-                            </div>
-                            {/* Vạch màu độc lập của Bút lông */}
-                            <span
-                              className="h-1 w-full rounded-full transition-colors"
-                              style={{ backgroundColor: pptPenSettings.brush.color }}
-                            />
-                          </button>
+                            return (
+                              <button
+                                key={slot.id ?? idx}
+                                type="button"
+                                onPointerDown={() => startPenSlotLongPress(idx)}
+                                onPointerUp={cancelPenSlotLongPress}
+                                onPointerLeave={cancelPenSlotLongPress}
+                                onClick={() => handlePenSlotClick(idx)}
+                                className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative ${
+                                  isPenActive
+                                    ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
+                                    : 'text-slate-700 hover:bg-slate-200/80'
+                                }`}
+                                title={`${slot.name} (${typeMeta.label} - ${slot.strokeWidth}px). Nhấp để chọn. Nhấp lại hoặc giữ để mở bảng cài đặt loại bút, nét vẽ & màu.`}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <SlotIcon
+                                    className={`w-3.5 h-3.5 ${slot.penType === 'laser' ? 'text-rose-500' : ''}`}
+                                  />
+                                  <span className="text-[11px] hidden sm:inline">{slot.name}</span>
+                                  {isPenActive && (
+                                    <span
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setPptPenPopupSlotIndex((prev) => (prev === idx ? null : idx));
+                                      }}
+                                      className="text-[9px] text-slate-400 hover:text-indigo-600 transition-colors ml-0.5"
+                                      title="Cài đặt ngòi bút này"
+                                    >
+                                      ▾
+                                    </span>
+                                  )}
+                                </div>
+                                {/* Vạch màu độc lập của ngòi bút */}
+                                <span
+                                  className="h-1 w-full rounded-full transition-colors"
+                                  style={{ backgroundColor: slot.color }}
+                                />
+                              </button>
+                            );
+                          })}
 
-                          {/* 3. Highlight */}
-                          <button
-                            type="button"
-                            onPointerDown={() => startPenLongPress('highlighter')}
-                            onPointerUp={cancelPenLongPress}
-                            onPointerLeave={cancelPenLongPress}
-                            onClick={() => handlePenClick('highlighter')}
-                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative ${
-                              pptActiveTool === 'pen' && pptPenType === 'highlighter'
-                                ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
-                                : 'text-slate-700 hover:bg-slate-200/80'
-                            }`}
-                            title={`Highlight: Nhấp để chọn (${pptPenSettings.highlighter.strokeWidth}px). Nhấp lại hoặc giữ 1s để mở bảng cài đặt nét & màu.`}
-                          >
-                            <div className="flex items-center gap-1">
-                              <Highlighter className="w-3.5 h-3.5" />
-                              <span className="text-[11px] hidden sm:inline">Highlight</span>
-                            </div>
-                            {/* Vạch màu độc lập của Highlight */}
-                            <span
-                              className="h-1 w-full rounded-full transition-colors"
-                              style={{ backgroundColor: pptPenSettings.highlighter.color }}
-                            />
-                          </button>
-
-                          {/* 4. Laser */}
-                          <button
-                            type="button"
-                            onPointerDown={() => startPenLongPress('laser')}
-                            onPointerUp={cancelPenLongPress}
-                            onPointerLeave={cancelPenLongPress}
-                            onClick={() => handlePenClick('laser')}
-                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative ${
-                              pptActiveTool === 'pen' && pptPenType === 'laser'
-                                ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
-                                : 'text-slate-700 hover:bg-slate-200/80'
-                            }`}
-                            title="Bút laser: Nhấp để chọn. Nhấp lại hoặc giữ 1s để mở bảng cài đặt nét & màu."
-                          >
-                            <div className="flex items-center gap-1">
-                              <Sparkles className="w-3.5 h-3.5 text-rose-500" />
-                              <span className="text-[11px] hidden sm:inline">Laser</span>
-                            </div>
-                            <span
-                              className="h-1 w-full rounded-full transition-colors"
-                              style={{ backgroundColor: pptPenSettings.laser.color }}
-                            />
-                          </button>
-
-                          {/* BẢNG CHỌN CÀI ĐẶT BÚT (HIỆN KHI BẤM GIỮ ~1S HOẶC NHẤP CHỌN CÀI ĐẶT) */}
-                          {pptPenPopupOpen && (
+                          {/* BẢNG CHỌN CÀI ĐẶT BÚT (HIỆN KHI BẤM GIỮ ~0.6S HOẶC NHẤP CHỌN CÀI ĐẶT CỦA NGÒI BÚT) */}
+                          {pptPenPopupSlotIndex !== null && pptPenSlots[pptPenPopupSlotIndex] && (
                             <>
                               <div
                                 className="fixed inset-0 z-40 bg-black/10 backdrop-blur-[0.5px]"
-                                onClick={() => setPptPenPopupOpen(null)}
+                                onClick={() => setPptPenPopupSlotIndex(null)}
                               />
                               <div
-                                className="absolute top-full left-0 mt-2 z-50 w-80 bg-white rounded-2xl border border-slate-200 shadow-2xl p-3.5 space-y-3.5 select-none animate-fadeIn"
+                                className="absolute top-full left-0 mt-2 z-50 w-84 bg-white rounded-2xl border border-slate-200 shadow-2xl p-3.5 space-y-3.5 select-none animate-fadeIn"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {/* Tiêu đề popup */}
@@ -7068,16 +7077,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
                                     <Palette className="w-4 h-4 text-indigo-600" />
                                     <span>
-                                      Cài đặt {
-                                        pptPenPopupOpen === 'brush' ? 'Bút lông' :
-                                        pptPenPopupOpen === 'highlighter' ? 'Highlight' :
-                                        pptPenPopupOpen === 'laser' ? 'Laser' : 'Bút bi'
-                                      }
+                                      Cài đặt {pptPenSlots[pptPenPopupSlotIndex].name} ({getPenTypeMeta(pptPenSlots[pptPenPopupSlotIndex].penType).label})
                                     </span>
                                   </div>
                                   <button
                                     type="button"
-                                    onClick={() => setPptPenPopupOpen(null)}
+                                    onClick={() => setPptPenPopupSlotIndex(null)}
                                     className="p-1 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
                                     title="Đóng bảng cài đặt"
                                   >
@@ -7085,41 +7090,35 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   </button>
                                 </div>
 
-                                {/* 1. CHỌN LOẠI BÚT */}
+                                {/* 1. CHỌN LOẠI BÚT (5 LOẠI: Bút bi, Bút lông, Highlight, Bút chì, Laser) */}
                                 <div>
                                   <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center justify-between">
                                     <span>1. Chọn loại bút:</span>
                                   </div>
-                                  <div className="grid grid-cols-4 gap-1 p-0.5 bg-slate-100 rounded-xl border border-slate-200/80">
+                                  <div className="grid grid-cols-5 gap-1 p-0.5 bg-slate-100 rounded-xl border border-slate-200/80">
                                     {[
                                       { type: 'ballpoint', label: 'Bút bi', icon: Pen },
                                       { type: 'brush', label: 'Bút lông', icon: Paintbrush },
                                       { type: 'highlighter', label: 'Highlight', icon: Highlighter },
+                                      { type: 'pencil', label: 'Bút chì', icon: Pencil },
                                       { type: 'laser', label: 'Laser', icon: Sparkles },
                                     ].map((p) => {
                                       const Icon = p.icon;
-                                      const isActive = pptPenPopupOpen === p.type;
-                                      const penSetting = pptPenSettings[p.type as PenType];
+                                      const isCurrentType = pptPenSlots[pptPenPopupSlotIndex].penType === p.type;
                                       return (
                                         <button
                                           key={p.type}
                                           type="button"
-                                          onClick={() => {
-                                            handlePptSelectPen(p.type as PenType);
-                                            setPptPenPopupOpen(p.type as PenType);
-                                          }}
-                                          className={`flex flex-col items-center justify-center py-1.5 px-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
-                                            isActive
+                                          onClick={() => handleSlotChangePenType(pptPenPopupSlotIndex, p.type as PenType)}
+                                          className={`flex flex-col items-center justify-center py-1.5 px-0.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                                            isCurrentType
                                               ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-300'
                                               : 'text-slate-600 hover:bg-slate-200/70'
                                           }`}
+                                          title={p.label}
                                         >
                                           <Icon className="w-3.5 h-3.5 mb-0.5" />
-                                          <span>{p.label}</span>
-                                          <span
-                                            className="h-1 w-4 rounded-full mt-1"
-                                            style={{ backgroundColor: penSetting.color }}
-                                          />
+                                          <span className="truncate max-w-full text-[9.5px]">{p.label}</span>
                                         </button>
                                       );
                                     })}
@@ -7131,19 +7130,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1.5">
                                     <span>2. Độ đậm nhạt (Nét vẽ):</span>
                                     <span className="text-indigo-600 text-[10px] font-bold">
-                                      {pptPenSettings[pptPenPopupOpen]?.strokeWidth || currentPptStrokeWidth}px
+                                      {pptPenSlots[pptPenPopupSlotIndex].strokeWidth}px
                                     </span>
                                   </div>
 
                                   {/* 3 Nấc nét nhanh */}
                                   <div className="grid grid-cols-3 gap-1 mb-2">
-                                    {getPptPenStrokePresets(pptPenPopupOpen).map((sz) => (
+                                    {getPptPenStrokePresets(pptPenSlots[pptPenPopupSlotIndex].penType).map((sz) => (
                                       <button
                                         key={sz.label}
                                         type="button"
-                                        onClick={() => handlePptChangeStrokeWidth(sz.size, pptPenPopupOpen)}
+                                        onClick={() => handleSlotChangeStrokeWidth(pptPenPopupSlotIndex, sz.size)}
                                         className={`py-1 px-1.5 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                                          (pptPenSettings[pptPenPopupOpen]?.strokeWidth || currentPptStrokeWidth) === sz.size
+                                          pptPenSlots[pptPenPopupSlotIndex].strokeWidth === sz.size
                                             ? 'bg-indigo-50 border-indigo-400 text-indigo-700 ring-1 ring-indigo-300 shadow-2xs'
                                             : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
                                         }`}
@@ -7153,7 +7152,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                           style={{
                                             width: `${Math.min(10, Math.max(3, sz.size / 2.5))}px`,
                                             height: `${Math.min(10, Math.max(3, sz.size / 2.5))}px`,
-                                            backgroundColor: pptPenSettings[pptPenPopupOpen]?.color || currentPptColor,
+                                            backgroundColor: pptPenSlots[pptPenPopupSlotIndex].color,
                                           }}
                                         />
                                         <span>{sz.label}</span>
@@ -7167,18 +7166,23 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                     <input
                                       type="range"
                                       min={
-                                        pptPenPopupOpen === 'highlighter' ? 8 :
-                                        pptPenPopupOpen === 'brush' ? 2 :
-                                        pptPenPopupOpen === 'laser' ? 2 : 1
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 8 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'brush' ? 2 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 0.8 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'laser' ? 2 : 1
                                       }
                                       max={
-                                        pptPenPopupOpen === 'highlighter' ? 36 :
-                                        pptPenPopupOpen === 'brush' ? 14 :
-                                        pptPenPopupOpen === 'laser' ? 10 : 6
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 36 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'brush' ? 14 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 4 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'laser' ? 10 : 6
                                       }
-                                      step={pptPenPopupOpen === 'highlighter' ? 2 : 0.5}
-                                      value={pptPenSettings[pptPenPopupOpen]?.strokeWidth || currentPptStrokeWidth}
-                                      onChange={(e) => handlePptChangeStrokeWidth(parseFloat(e.target.value), pptPenPopupOpen)}
+                                      step={
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 2 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 0.2 : 0.5
+                                      }
+                                      value={pptPenSlots[pptPenPopupSlotIndex].strokeWidth}
+                                      onChange={(e) => handleSlotChangeStrokeWidth(pptPenPopupSlotIndex, parseFloat(e.target.value))}
                                       className="w-full accent-indigo-600 h-1.5 bg-slate-200 rounded-lg cursor-pointer"
                                     />
                                     <span className="text-[10px] text-slate-400 font-semibold">Đậm</span>
@@ -7190,20 +7194,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-1.5">
                                     <span>3. Chọn màu từ mẫu hoặc tự chọn:</span>
                                     <span className="text-[10px] font-mono text-slate-400">
-                                      {(pptPenSettings[pptPenPopupOpen]?.color || currentPptColor).toUpperCase()}
+                                      {pptPenSlots[pptPenPopupSlotIndex].color.toUpperCase()}
                                     </span>
                                   </div>
 
                                   <div className="flex items-center flex-wrap gap-1.5">
-                                    {/* Các màu mẫu */}
-                                    {getPptPenSampleColors(pptPenPopupOpen).map((c) => {
-                                      const activeColor = pptPenSettings[pptPenPopupOpen]?.color || currentPptColor;
+                                    {getPptPenSampleColors(pptPenSlots[pptPenPopupSlotIndex].penType).map((c) => {
+                                      const activeColor = pptPenSlots[pptPenPopupSlotIndex].color;
                                       const isMatch = activeColor.toLowerCase() === c.color.toLowerCase();
                                       return (
                                         <button
                                           key={c.color}
                                           type="button"
-                                          onClick={() => handlePptChangeColor(c.color, pptPenPopupOpen)}
+                                          onClick={() => handleSlotChangeColor(pptPenPopupSlotIndex, c.color)}
                                           className={`w-6 h-6 rounded-full border transition-all cursor-pointer flex items-center justify-center ${
                                             isMatch
                                               ? 'scale-110 border-slate-900 ring-2 ring-indigo-400 shadow-xs'
@@ -7226,17 +7229,17 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                       <input
                                         type="color"
                                         value={
-                                          (pptPenSettings[pptPenPopupOpen]?.color || currentPptColor).startsWith('#') &&
-                                          (pptPenSettings[pptPenPopupOpen]?.color || currentPptColor).length === 7
-                                            ? pptPenSettings[pptPenPopupOpen]?.color || currentPptColor
+                                          pptPenSlots[pptPenPopupSlotIndex].color.startsWith('#') &&
+                                          pptPenSlots[pptPenPopupSlotIndex].color.length === 7
+                                            ? pptPenSlots[pptPenPopupSlotIndex].color
                                             : '#1d4ed8'
                                         }
-                                        onChange={(e) => handlePptChangeColor(e.target.value, pptPenPopupOpen)}
+                                        onChange={(e) => handleSlotChangeColor(pptPenPopupSlotIndex, e.target.value)}
                                         className="sr-only"
                                       />
                                       <span
                                         className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-white shadow-xs"
-                                        style={{ backgroundColor: pptPenSettings[pptPenPopupOpen]?.color || currentPptColor }}
+                                        style={{ backgroundColor: pptPenSlots[pptPenPopupSlotIndex].color }}
                                       />
                                     </label>
                                   </div>
@@ -7248,11 +7251,11 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   <div className="flex-1 max-w-[150px] h-6 flex items-center justify-center bg-slate-50 rounded-lg px-2 border border-slate-200/60 overflow-hidden">
                                     <div
                                       style={{
-                                        height: `${Math.min(18, Math.max(2, pptPenSettings[pptPenPopupOpen]?.strokeWidth || currentPptStrokeWidth))}px`,
-                                        backgroundColor: pptPenSettings[pptPenPopupOpen]?.color || currentPptColor,
-                                        opacity: pptPenPopupOpen === 'highlighter' ? 0.45 : 1,
-                                        borderRadius: pptPenPopupOpen === 'highlighter' ? '2px' : '9999px',
-                                        boxShadow: pptPenPopupOpen === 'laser' ? `0 0 8px ${pptPenSettings[pptPenPopupOpen]?.color || currentPptColor}` : 'none',
+                                        height: `${Math.min(18, Math.max(2, pptPenSlots[pptPenPopupSlotIndex].strokeWidth))}px`,
+                                        backgroundColor: pptPenSlots[pptPenPopupSlotIndex].color,
+                                        opacity: pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 0.45 : pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 0.65 : 1,
+                                        borderRadius: pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? '2px' : '9999px',
+                                        boxShadow: pptPenSlots[pptPenPopupSlotIndex].penType === 'laser' ? `0 0 8px ${pptPenSlots[pptPenPopupSlotIndex].color}` : 'none',
                                       }}
                                       className="w-full"
                                     />
@@ -7724,7 +7727,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
             </div>
 
-            {/* NÚT CHÈN KHOẢNG TRỐNG (MŨI TÊN LÊN XUỐNG ↕) NGAY SAU NÚT VIEW: XEM PPT */}
+            {/* NÚT CHÈN KHOẢNG TRỐNG (BIỂU TƯỢNG HÌNH ▭↓▭) NGAY SAU NÚT VIEW: XEM PPT */}
             {wordViewMode === 'ppt' && (
               <button
                 type="button"
@@ -7736,11 +7739,11 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 }`}
                 title={
                   isInsertSpaceMode
-                    ? 'Đang bật thước chèn khoảng trống: Đưa chuột vào trang sẽ có thanh ngang, nhấp và kéo xuống để mở khoảng trống (nhấp lại nút này để tắt)'
-                    : 'Chèn khoảng trống (Mũi tên lên xuống ↕): Nhấp để bật thanh ngang, sau đó nhấp giữ và kéo xuống trên trang để mở khoảng trống viết bài'
+                    ? 'Đang bật thước chèn khoảng trống: Đưa chuột vào trang slide, nhấp giữ và kéo xuống để mở khoảng trống (nhấp lại nút này để tắt)'
+                    : 'Chèn khoảng trống: Nhấp để bật thước kẻ ngang, sau đó nhấp chuột giữ và kéo xuống trên trang để mở khoảng trống viết bài'
                 }
               >
-                <ArrowUpDown className="w-4 h-4" />
+                <NoteRendererSpaceIcon className="w-4 h-4 text-white" />
                 {isInsertSpaceMode && (
                   <span className="text-[10px] bg-amber-700/90 text-white px-1 py-0.2 rounded-full font-bold">
                     ✕

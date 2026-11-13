@@ -608,9 +608,9 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       ? 'M 20 40 Q 150 260 280 40'
       : 'M 30 240 C 90 20, 120 20, 150 140 C 180 260, 210 260, 270 40';
     const svgHtml = `
-      <div class="word-graph-wrapper my-1 flex flex-col items-center justify-center p-3 bg-white rounded-xl border border-slate-200">
+      <div class="word-graph-wrapper my-1 flex flex-col items-center justify-center p-1 bg-transparent">
         <div class="font-bold text-xs text-indigo-700 mb-1 font-mono">${formulaStr}</div>
-        <svg viewBox="0 0 300 280" class="w-full max-w-[320px] h-auto bg-slate-50/50 rounded-lg border border-slate-100">
+        <svg viewBox="0 0 300 280" class="w-full max-w-[320px] h-auto bg-transparent">
           <line x1="20" y1="140" x2="280" y2="140" stroke="#64748b" stroke-width="1.5" />
           <line x1="150" y1="260" x2="150" y2="20" stroke="#64748b" stroke-width="1.5" />
           <text x="275" y="132" font-size="11" font-weight="bold" fill="#334155">x</text>
@@ -653,7 +653,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       katexPlusInf = katex.renderToString('+\\infty', { throwOnError: false });
     } catch {}
     const bbtHtml = `
-      <div class="word-bbt-wrapper my-1 overflow-x-auto p-3 bg-white rounded-xl border border-slate-200">
+      <div class="word-bbt-wrapper my-1 overflow-x-auto p-1 bg-transparent">
         <div class="font-bold text-xs text-amber-700 mb-1.5 font-mono text-center">Bảng biến thiên y = x^3 - 3x</div>
         <table style="border-collapse: collapse; border: 1.5px solid #1e293b; font-family: serif; font-size: 13px; margin: 0 auto; width: 100%; min-width: 320px;">
           <thead>
