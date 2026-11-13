@@ -403,12 +403,17 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [activePptWhiteboardId, setActivePptWhiteboardId] = useState<string | null>(null);
   const [isInsertSpaceMode, setIsInsertSpaceMode] = useState<boolean>(false);
 
-  const handleAddPptWhiteboardAtStep = (stepIdx: number, initialHeight: number = 280) => {
-    const newBoardId = `space-${activePptSlideIndex}-${stepIdx}-${Date.now()}`;
+  const handleAddPptWhiteboardAtStep = (
+    stepIdx: number,
+    initialHeight: number = 280,
+    afterBlockIdx?: number
+  ) => {
+    const newBoardId = `space-${activePptSlideIndex}-s${stepIdx}-b${afterBlockIdx !== undefined ? afterBlockIdx : 'end'}-${Date.now()}`;
     const newBoard: PptWhiteboardData = {
       id: newBoardId,
       slideIndex: activePptSlideIndex,
       afterStepIndex: stepIdx,
+      afterBlockIndex: afterBlockIdx,
       theme: 'white',
       height: initialHeight,
       textNote: '',

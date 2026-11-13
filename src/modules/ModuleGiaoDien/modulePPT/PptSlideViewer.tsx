@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PptSlideItem } from './types';
 import { getEffectLabel } from './PptMarkerRail';
+import { splitStepIntoBlocks } from './pptUtils';
 import {
   PptInteractiveBoard,
   PptWhiteboardData,
@@ -18,7 +19,11 @@ interface PptSlideViewerProps {
   whiteboards?: PptWhiteboardData[];
   onUpdateWhiteboard?: (updated: PptWhiteboardData) => void;
   onDeleteWhiteboard?: (id: string) => void;
-  onAddWhiteboardAtStep?: (stepIdx: number, initialHeight?: number) => void;
+  onAddWhiteboardAtStep?: (
+    stepIdx: number,
+    initialHeight?: number,
+    afterBlockIdx?: number
+  ) => void;
   isInsertSpaceMode?: boolean;
   onExitInsertSpaceMode?: () => void;
   activeWhiteboardId?: string | null;
@@ -70,6 +75,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     startY: number;
     currentY: number;
     targetStepIdx: number;
+    targetBlockIdx: number;
   } | null>(null);
 
   const activeStepIndex = controlledStepIndex !== undefined ? controlledStepIndex : internalStepIndex;
@@ -89,16 +95,21 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
 
   const whiteboards = controlledWhiteboards !== undefined ? controlledWhiteboards : internalWhiteboards;
 
-  // Thêm một khoảng trống viết bài mới sau bước chỉ định (mặc định NoteRenderer 280px)
-  const handleAddBoardAtStep = (stepIdx: number, initialHeight: number = 280) => {
+  // Thêm một khoảng trống viết bài mới tại vị trí chỉ định (sau khối/bước nào, mặc định 280px)
+  const handleAddBoardAtStep = (
+    stepIdx: number,
+    initialHeight: number = 280,
+    afterBlockIdx?: number
+  ) => {
     if (onAddWhiteboardAtStep) {
-      onAddWhiteboardAtStep(stepIdx, initialHeight);
+      onAddWhiteboardAtStep(stepIdx, initialHeight, afterBlockIdx);
       return;
     }
     const newBoard: PptWhiteboardData = {
-      id: `space-${activeSlideIndex}-${stepIdx}-${Date.now()}`,
+      id: `space-${activeSlideIndex}-s${stepIdx}-b${afterBlockIdx !== undefined ? afterBlockIdx : 'end'}-${Date.now()}`,
       slideIndex: activeSlideIndex,
       afterStepIndex: stepIdx,
+      afterBlockIndex: afterBlockIdx,
       theme: 'white',
       height: initialHeight,
       textNote: '',
@@ -145,21 +156,88 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     }
   };
 
-  // Xác định vị trí bước (step) tương ứng với tọa độ Y
-  const findTargetStepAtY = (clientY: number): number => {
-    if (!slideCardRef.current) return Math.max(0, visibleSteps.length - 1);
-    const stepElements = Array.from(
-      slideCardRef.current.querySelectorAll<HTMLElement>('[data-step-index]')
-    );
-    if (stepElements.length === 0) return Math.max(0, visibleSteps.length - 1);
+  // Xác định vị trí bước (step) và vị trí khối con (block: đoạn, câu...) tương ứng với tọa độ Y để chèn khoảng trống
+  const findTargetPositionAtY = (
+    clientY: number
+  ): { targetStepIdx: number; targetBlockIdx: number } => {
+    if (!slideCardRef.current) {
+      return { targetStepIdx: Math.max(0, visibleSteps.length - 1), targetBlockIdx: 0 };
+    }
 
-    for (let i = 0; i < stepElements.length; i++) {
-      const rect = stepElements[i].getBoundingClientRect();
-      if (clientY <= rect.bottom) {
-        return i;
+    const blockElements = Array.from(
+      slideCardRef.current.querySelectorAll<HTMLElement>('[data-slide-block-idx]')
+    );
+
+    if (blockElements.length === 0) {
+      return { targetStepIdx: Math.max(0, visibleSteps.length - 1), targetBlockIdx: 0 };
+    }
+
+    // 1. Nhấp phía trên khối đầu tiên của slide -> chèn ở đầu trang (trước khối 0)
+    const firstRect = blockElements[0].getBoundingClientRect();
+    if (clientY < firstRect.top + 8) {
+      const stepIdx = parseInt(blockElements[0].getAttribute('data-step-idx') || '0', 10);
+      return { targetStepIdx: stepIdx, targetBlockIdx: -1 };
+    }
+
+    // 2. Nhấp phía dưới khối cuối cùng của slide -> chèn ở cuối trang (sau khối cuối)
+    const lastRect = blockElements[blockElements.length - 1].getBoundingClientRect();
+    if (clientY >= lastRect.bottom - 8) {
+      const lastGlobalIdx = parseInt(
+        blockElements[blockElements.length - 1].getAttribute('data-slide-block-idx') || '0',
+        10
+      );
+      const stepIdx = parseInt(
+        blockElements[blockElements.length - 1].getAttribute('data-step-idx') || '0',
+        10
+      );
+      return { targetStepIdx: stepIdx, targetBlockIdx: lastGlobalIdx };
+    }
+
+    // 3. Duyệt qua từng khối trên slide để tìm đúng vị trí giữa 2 đoạn/câu
+    for (let i = 0; i < blockElements.length; i++) {
+      const rect = blockElements[i].getBoundingClientRect();
+      const globalIdx = parseInt(
+        blockElements[i].getAttribute('data-slide-block-idx') || `${i}`,
+        10
+      );
+      const stepIdx = parseInt(
+        blockElements[i].getAttribute('data-step-idx') || '0',
+        10
+      );
+
+      // Nếu con trỏ nằm trúng trong khối i
+      if (clientY >= rect.top && clientY <= rect.bottom) {
+        const midY = rect.top + rect.height / 2;
+        if (clientY <= midY) {
+          // Nửa trên của khối -> chèn trước khối này (sau khối i - 1)
+          return {
+            targetStepIdx: stepIdx,
+            targetBlockIdx: i === 0 ? -1 : globalIdx - 1,
+          };
+        } else {
+          // Nửa dưới của khối -> chèn sau khối này
+          return { targetStepIdx: stepIdx, targetBlockIdx: globalIdx };
+        }
+      }
+
+      // Nếu con trỏ nằm trong khoảng cách giữa khối i và khối i + 1
+      if (i < blockElements.length - 1) {
+        const nextRect = blockElements[i + 1].getBoundingClientRect();
+        if (clientY > rect.bottom && clientY < nextRect.top) {
+          return { targetStepIdx: stepIdx, targetBlockIdx: globalIdx };
+        }
       }
     }
-    return Math.max(0, visibleSteps.length - 1);
+
+    const lastGlobalIdx = parseInt(
+      blockElements[blockElements.length - 1].getAttribute('data-slide-block-idx') || '0',
+      10
+    );
+    const stepIdx = parseInt(
+      blockElements[blockElements.length - 1].getAttribute('data-step-idx') || '0',
+      10
+    );
+    return { targetStepIdx: stepIdx, targetBlockIdx: lastGlobalIdx };
   };
 
   // Nhấp chuột để bắt đầu, giữ chuột kéo đến vị trí kết thúc sẽ thả chuột ra (như NoteRenderer)
@@ -174,12 +252,13 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     e.stopPropagation();
 
     const startY = e.clientY;
-    const targetStepIdx = findTargetStepAtY(startY);
+    const { targetStepIdx, targetBlockIdx } = findTargetPositionAtY(startY);
 
     setDragSpaceState({
       startY,
       currentY: startY,
       targetStepIdx,
+      targetBlockIdx,
     });
 
     const onWindowPointerMove = (moveEvent: PointerEvent) => {
@@ -194,12 +273,8 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
       window.removeEventListener('pointercancel', onWindowPointerUp);
 
       const deltaY = upEvent.clientY - startY;
-      if (deltaY >= 40) {
-        handleAddBoardAtStep(targetStepIdx, Math.round(deltaY));
-      } else {
-        // Nhấp chuột mà không kéo thì mở khoảng trống chuẩn 280px
-        handleAddBoardAtStep(targetStepIdx, 280);
-      }
+      const initialHeight = Math.abs(deltaY) >= 40 ? Math.round(Math.abs(deltaY)) : 280;
+      handleAddBoardAtStep(targetStepIdx, initialHeight, targetBlockIdx);
 
       setDragSpaceState(null);
       setHoverY(null);
@@ -457,8 +532,29 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             </div>
           </div>
 
-          {/* Nội dung Slide hiển thị theo hiệu ứng chuyển động đã cấu hình khi biên soạn */}
+          {/* Nội dung Slide hiển thị theo từng khối con (đoạn/câu) cho phép chèn khoảng trống vào giữa bất cứ đâu */}
           <div className="prose prose-indigo max-w-none text-slate-800 text-base sm:text-lg leading-relaxed pt-2 space-y-3">
+            {/* Khoảng trống được chèn ở đầu trang (trước khối đầu tiên) */}
+            {whiteboards
+              .filter(
+                (b) => b.slideIndex === activeSlideIndex && b.afterBlockIndex === -1
+              )
+              .map((b) => (
+                <PptInteractiveBoard
+                  key={b.id}
+                  board={b}
+                  onUpdate={handleUpdateBoard}
+                  onDelete={handleDeleteBoard}
+                  isActive={activeWhiteboardId === b.id}
+                  onSelect={onSelectWhiteboard}
+                  onOpenTableModal={onOpenTableModal}
+                  onOpenGraphModal={onOpenGraphModal}
+                  onOpenBbtModal={onOpenBbtModal}
+                  onOpenMathModal={onOpenMathModal}
+                  onOpenImagePicker={onOpenImagePicker}
+                />
+              ))}
+
             {visibleSteps.map((stepHtml, sIdx) => {
               const stepItem = currentSlide?.stepItems?.[sIdx];
               const effectType = stepItem?.effectType || 'fade';
@@ -503,35 +599,97 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                 }
               }
 
-              // Các khối bảng viết tương tác được chèn sau bước sIdx này
-              const currentStepBoards = whiteboards.filter(
-                (b) => b.slideIndex === activeSlideIndex && b.afterStepIndex === sIdx
-              );
+              const blocks = splitStepIntoBlocks(stepHtml);
+
+              // Tính offset khối của các bước trước đó
+              let stepBlockOffset = 0;
+              for (let prevStep = 0; prevStep < sIdx; prevStep++) {
+                stepBlockOffset += splitStepIntoBlocks(visibleSteps[prevStep]).length;
+              }
+
+              // Nếu bước không có khối con nào tách biệt
+              if (blocks.length === 0) {
+                const currentStepBoards = whiteboards.filter(
+                  (b) =>
+                    b.slideIndex === activeSlideIndex &&
+                    (b.afterBlockIndex === stepBlockOffset ||
+                      (b.afterBlockIndex === undefined && b.afterStepIndex === sIdx))
+                );
+
+                return (
+                  <React.Fragment key={`${currentSlide?.id}-step-${sIdx}`}>
+                    <div
+                      data-step-index={sIdx}
+                      data-slide-block-idx={stepBlockOffset}
+                      data-step-idx={sIdx}
+                      className={animClass}
+                      dangerouslySetInnerHTML={{ __html: stepHtml }}
+                    />
+                    {currentStepBoards.map((b) => (
+                      <PptInteractiveBoard
+                        key={b.id}
+                        board={b}
+                        onUpdate={handleUpdateBoard}
+                        onDelete={handleDeleteBoard}
+                        isActive={activeWhiteboardId === b.id}
+                        onSelect={onSelectWhiteboard}
+                        onOpenTableModal={onOpenTableModal}
+                        onOpenGraphModal={onOpenGraphModal}
+                        onOpenBbtModal={onOpenBbtModal}
+                        onOpenMathModal={onOpenMathModal}
+                        onOpenImagePicker={onOpenImagePicker}
+                      />
+                    ))}
+                  </React.Fragment>
+                );
+              }
 
               return (
                 <React.Fragment key={`${currentSlide?.id}-step-${sIdx}`}>
-                  <div
-                    data-step-index={sIdx}
-                    className={animClass}
-                    dangerouslySetInnerHTML={{ __html: stepHtml }}
-                  />
+                  {blocks.map((blockHtml, bIdx) => {
+                    const globalBlockIdx = stepBlockOffset + bIdx;
+                    const isLastBlockOfStep = bIdx === blocks.length - 1;
 
-                  {/* KHỐI BẢNG VIẾT TƯƠNG TÁC XUẤT HIỆN TẠI ĐÂY */}
-                  {currentStepBoards.map((b) => (
-                    <PptInteractiveBoard
-                      key={b.id}
-                      board={b}
-                      onUpdate={handleUpdateBoard}
-                      onDelete={handleDeleteBoard}
-                      isActive={activeWhiteboardId === b.id}
-                      onSelect={onSelectWhiteboard}
-                      onOpenTableModal={onOpenTableModal}
-                      onOpenGraphModal={onOpenGraphModal}
-                      onOpenBbtModal={onOpenBbtModal}
-                      onOpenMathModal={onOpenMathModal}
-                      onOpenImagePicker={onOpenImagePicker}
-                    />
-                  ))}
+                    // Các bảng viết chèn sau khối này:
+                    // Khớp afterBlockIndex === globalBlockIdx,
+                    // hoặc nếu là khối cuối của bước và có whiteboard cũ chỉ có afterStepIndex === sIdx
+                    const boardsAfterThisBlock = whiteboards.filter(
+                      (b) =>
+                        b.slideIndex === activeSlideIndex &&
+                        (b.afterBlockIndex === globalBlockIdx ||
+                          (b.afterBlockIndex === undefined &&
+                            b.afterStepIndex === sIdx &&
+                            isLastBlockOfStep))
+                    );
+
+                    return (
+                      <React.Fragment key={`${currentSlide?.id}-step-${sIdx}-b-${bIdx}`}>
+                        <div
+                          data-slide-block-idx={globalBlockIdx}
+                          data-step-idx={sIdx}
+                          className={`${animClass} transition-all`}
+                          dangerouslySetInnerHTML={{ __html: blockHtml }}
+                        />
+
+                        {/* KHỐI BẢNG VIẾT TƯƠNG TÁC XUẤT HIỆN TẠI ĐÂY (NGAY GIỮA CÁC ĐOẠN / CÂU) */}
+                        {boardsAfterThisBlock.map((b) => (
+                          <PptInteractiveBoard
+                            key={b.id}
+                            board={b}
+                            onUpdate={handleUpdateBoard}
+                            onDelete={handleDeleteBoard}
+                            isActive={activeWhiteboardId === b.id}
+                            onSelect={onSelectWhiteboard}
+                            onOpenTableModal={onOpenTableModal}
+                            onOpenGraphModal={onOpenGraphModal}
+                            onOpenBbtModal={onOpenBbtModal}
+                            onOpenMathModal={onOpenMathModal}
+                            onOpenImagePicker={onOpenImagePicker}
+                          />
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </React.Fragment>
               );
             })}

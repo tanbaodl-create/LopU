@@ -98,7 +98,7 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
           el.tagName === 'H2' ||
           el.tagName === 'H3' ||
           el.classList.contains('word-bbt-wrapper') ||
-          (el.tagName === 'P' && /^(?:Chương|Bài|Vấn đề|Chuyên đề|Câu|Ví dụ|VD|Dạng|Dạng toán|Khái niệm|Định lý|Định nghĩa|Tính chất|Hệ quả|I\.|II\.|III\.|IV\.|V\.)\s*[\d\.\:\[]/i.test((el.textContent || '').trim()))
+          (el.tagName === 'P' && /^(?:Chương|Bài|Vấn đề|Chuyên đề|Dạng|Dạng toán|Khái niệm|Định lý|Định nghĩa|Tính chất|Hệ quả|I\.|II\.|III\.|IV\.|V\.)\s*[\d\.\:\[]/i.test((el.textContent || '').trim()))
         );
     }
 
@@ -180,3 +180,43 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
     };
   });
 };
+
+/**
+ * Tách nội dung HTML của một bước hoặc slide thành các khối con riêng biệt (đoạn văn, câu hỏi, bảng, hình ảnh...)
+ * phục vụ cơ chế chèn khoảng trống viết bài vào giữa trang bất cứ đâu theo phong cách NoteRenderer.
+ */
+export const splitStepIntoBlocks = (html: string): string[] => {
+  if (!html || !html.trim()) return [];
+  const div = document.createElement('div');
+  div.innerHTML = html.trim();
+
+  if (div.children.length === 0) {
+    return [html];
+  }
+
+  const result: string[] = [];
+  Array.from(div.children).forEach((child) => {
+    const el = child as HTMLElement;
+    const innerHtml = el.innerHTML;
+    // Nếu là đoạn văn bản thông thường chứa các ngắt dòng <br> giữa các câu
+    if (
+      (el.tagName === 'P' || el.tagName === 'DIV') &&
+      !el.classList.contains('word-bbt-wrapper') &&
+      !el.classList.contains('word-graph-wrapper') &&
+      /<br\s*\/?>/i.test(innerHtml)
+    ) {
+      const parts = innerHtml.split(/<br\s*\/?>/i);
+      parts.forEach((part) => {
+        const trimmed = part.trim();
+        if (trimmed && trimmed !== '&nbsp;') {
+          result.push(`<p class="${el.className || ''}">${trimmed}</p>`);
+        }
+      });
+    } else {
+      result.push(el.outerHTML);
+    }
+  });
+
+  return result.length > 0 ? result : [html];
+};
+

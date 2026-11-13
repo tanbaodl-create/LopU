@@ -76,6 +76,7 @@ export interface PptWhiteboardData {
   id: string;
   slideIndex: number;
   afterStepIndex: number;
+  afterBlockIndex?: number;
   theme: BoardTheme;
   height: number;
   textNote: string;
