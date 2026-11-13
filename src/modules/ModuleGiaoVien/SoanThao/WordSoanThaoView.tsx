@@ -7041,7 +7041,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           <span className="text-[11px] hidden sm:inline">Chuột</span>
                         </button>
 
-                        {/* CỤM 5 NGÒI BÚT TÙY CHỈNH: Bút 1 -> Bút 5 (Bấm chọn / Giữ ~0.6s hoặc nhấp lại để mở Bảng Cài đặt) */}
+                        {/* CỤM 5 NGÒI BÚT TÙY CHỈNH: 5 biểu tượng thể hiện loại bút và màu sắc (Bấm chọn / Giữ ~0.6s hoặc nhấp lại để mở Bảng Cài đặt) */}
                         <div className="relative flex items-center gap-1 bg-slate-200/70 p-0.5 rounded-lg border border-slate-200">
                           {pptPenSlots.map((slot, idx) => {
                             const isPenActive = pptActiveTool === 'pen' && activePenSlotIndex === idx;
@@ -7056,34 +7056,37 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                 onPointerUp={cancelPenSlotLongPress}
                                 onPointerLeave={cancelPenSlotLongPress}
                                 onClick={() => handlePenSlotClick(idx)}
-                                className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 relative ${
+                                className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex flex-col items-center justify-center gap-1 relative ${
                                   isPenActive
-                                    ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-300'
+                                    ? 'bg-white shadow-xs ring-1 ring-slate-300 scale-105'
                                     : 'text-slate-700 hover:bg-slate-200/80'
                                 }`}
-                                title={`${slot.name} (${typeMeta.label} - ${slot.strokeWidth}px). Nhấp để chọn. Nhấp lại hoặc giữ để mở bảng cài đặt loại bút, nét vẽ & màu.`}
+                                title={`${typeMeta.label} - Nét ${slot.strokeWidth}px - Màu ${slot.color}. Nhấp để chọn. Nhấp lại hoặc giữ để mở bảng cài đặt.`}
                               >
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-0.5">
                                   <SlotIcon
-                                    className={`w-3.5 h-3.5 ${slot.penType === 'laser' ? 'text-rose-500' : ''}`}
+                                    className="w-4 h-4 transition-transform"
+                                    style={{
+                                      color: slot.color,
+                                      filter: slot.color.toLowerCase() === '#ffffff' ? 'drop-shadow(0 0 1px #000)' : undefined,
+                                    }}
                                   />
-                                  <span className="text-[11px] hidden sm:inline">{slot.name}</span>
                                   {isPenActive && (
                                     <span
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setPptPenPopupSlotIndex((prev) => (prev === idx ? null : idx));
                                       }}
-                                      className="text-[9px] text-slate-400 hover:text-indigo-600 transition-colors ml-0.5"
+                                      className="text-[9px] text-slate-400 hover:text-indigo-600 transition-colors ml-0.5 cursor-pointer"
                                       title="Cài đặt ngòi bút này"
                                     >
                                       ▾
                                     </span>
                                   )}
                                 </div>
-                                {/* Vạch màu độc lập của ngòi bút */}
+                                {/* Vạch màu sắc thể hiện màu bút */}
                                 <span
-                                  className="h-1 w-full rounded-full transition-colors"
+                                  className="h-1 w-full min-w-[18px] rounded-full shadow-2xs transition-colors"
                                   style={{ backgroundColor: slot.color }}
                                 />
                               </button>
@@ -7106,7 +7109,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   <div className="flex items-center gap-1.5 font-bold text-xs text-slate-800">
                                     <Palette className="w-4 h-4 text-indigo-600" />
                                     <span>
-                                      Cài đặt {pptPenSlots[pptPenPopupSlotIndex].name} ({getPenTypeMeta(pptPenSlots[pptPenPopupSlotIndex].penType).label})
+                                      Cài đặt ngòi bút {pptPenPopupSlotIndex + 1} ({getPenTypeMeta(pptPenSlots[pptPenPopupSlotIndex].penType).label})
                                     </span>
                                   </div>
                                   <button

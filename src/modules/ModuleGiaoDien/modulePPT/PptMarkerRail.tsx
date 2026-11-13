@@ -63,9 +63,6 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
             </button>
           )}
           <span className="p-1 rounded-lg bg-purple-600 text-white shadow-xs text-xs font-black">🎬</span>
-          <span className="text-[9px] font-black tracking-tighter text-purple-900 uppercase [writing-mode:vertical-lr] rotate-180 select-none">
-            Thanh Mốc PPT
-          </span>
         </div>
 
         <div className="w-full flex-1 relative min-h-[400px]">
