@@ -801,10 +801,8 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
           prev.map((b) => {
             if (b.id === targetId) {
               const existing = b.htmlItems || [];
-              const newHeight = Math.max(b.height, 360 + existing.length * 150);
               return {
                 ...b,
-                height: newHeight,
                 htmlItems: [...existing, newItem],
               };
             }

@@ -411,67 +411,124 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     });
   };
 
-  // Di chuyển vị trí khối hình/công thức/đồ thị/bảng (Kéo thanh tiêu đề)
+  // Di chuyển vị trí khối hình/công thức/đồ thị/bảng (Kéo mượt mà 60-144 FPS trực tiếp trên đối tượng)
   const handleStartDragItem = (e: React.PointerEvent, item: BoardHtmlItem) => {
     e.preventDefault();
     e.stopPropagation();
     setSelectedHtmlItemId(item.id);
+
+    const itemEl =
+      (e.currentTarget as HTMLElement) ||
+      ((e.target as HTMLElement).closest(`[data-board-item-id="${item.id}"]`) as HTMLElement | null);
+    if (!itemEl) return;
+
+    try {
+      itemEl.setPointerCapture(e.pointerId);
+    } catch {}
+
     const startX = e.clientX;
     const startY = e.clientY;
     const initialItemX = item.x ?? 20;
     const initialItemY = item.y ?? 20;
+    let finalX = initialItemX;
+    let finalY = initialItemY;
+
+    // Tắt transition hoàn toàn trong khi kéo để chuyển động tức thì theo chuột
+    itemEl.style.transition = 'none';
+
+    let rafId: number | null = null;
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault();
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
-      const newX = Math.max(0, initialItemX + dx);
-      const newY = Math.max(0, initialItemY + dy);
-      updateHtmlItem(item.id, () => ({ x: newX, y: newY }));
+      finalX = Math.max(0, initialItemX + dx);
+      finalY = Math.max(0, initialItemY + dy);
 
-      // Tự động mở rộng độ cao bảng viết nếu kéo hình/công thức xuống dưới
-      if (newY + 220 > board.height) {
-        onUpdate({
-          ...board,
-          height: Math.max(board.height, Math.round(newY + 240)),
-        });
-      }
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        itemEl.style.left = `${finalX}px`;
+        itemEl.style.top = `${finalY}px`;
+      });
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (upEvent: PointerEvent) => {
+      if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+
+      try {
+        itemEl.releasePointerCapture(upEvent.pointerId);
+      } catch {}
+
+      itemEl.style.transition = '';
+
+      // Cập nhật vị trí cuối cùng vào state React 1 lần duy nhất khi thả chuột
+      updateHtmlItem(item.id, () => ({ x: finalX, y: finalY }));
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
   };
 
-  // Kéo góc dưới phải để phóng to/thu nhỏ khối hình
+  // Kéo góc dưới phải để phóng to/thu nhỏ khối hình mượt mà
   const handleStartResizeItem = (e: React.PointerEvent, item: BoardHtmlItem) => {
     e.preventDefault();
     e.stopPropagation();
     setSelectedHtmlItemId(item.id);
+
+    const itemEl = (e.target as HTMLElement).closest(
+      `[data-board-item-id="${item.id}"]`
+    ) as HTMLElement | null;
     const startX = e.clientX;
     const startY = e.clientY;
     const initialScale = item.scale ?? 1;
+    const rotate = item.rotate ?? 0;
+    const flipH = item.flipH ?? false;
+    const flipV = item.flipV ?? false;
+    let finalScale = initialScale;
+
+    if (itemEl) {
+      itemEl.style.transition = 'none';
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {}
+    }
+
+    let rafId: number | null = null;
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault();
       const delta = (moveEvent.clientX - startX + (moveEvent.clientY - startY)) / 250;
-      const nextScale = Math.max(0.3, Math.min(3.0, Number((initialScale + delta).toFixed(2))));
-      updateHtmlItem(item.id, () => ({ scale: nextScale }));
+      finalScale = Math.max(0.3, Math.min(3.0, Number((initialScale + delta).toFixed(2))));
+
+      if (itemEl) {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          itemEl.style.transform = `rotate(${rotate}deg) scale(${finalScale}) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`;
+        });
+      }
     };
 
-    const onPointerUp = () => {
+    const onPointerUp = (upEvent: PointerEvent) => {
+      if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+
+      if (itemEl) {
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(upEvent.pointerId);
+        } catch {}
+        itemEl.style.transition = '';
+      }
+
+      updateHtmlItem(item.id, () => ({ scale: finalScale }));
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
   };
@@ -565,10 +622,8 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       createdAt: Date.now(),
     };
     const newItems = [...(board.htmlItems || []), newItem];
-    const newHeight = Math.max(board.height, 320 + newItems.length * 120);
     onUpdate({
       ...board,
-      height: newHeight,
       htmlItems: newItems,
     });
   };
@@ -601,10 +656,8 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         createdAt: Date.now(),
       };
       const newItems = [...(board.htmlItems || []), newItem];
-      const newHeight = Math.max(board.height, 360 + newItems.length * 150);
       onUpdate({
         ...board,
-        height: newHeight,
         htmlItems: newItems,
       });
     };
@@ -648,10 +701,8 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       createdAt: Date.now(),
     };
     const newItems = [...(board.htmlItems || []), newItem];
-    const newHeight = Math.max(board.height, 380 + newItems.length * 150);
     onUpdate({
       ...board,
-      height: newHeight,
       htmlItems: newItems,
     });
   };
@@ -718,10 +769,8 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       createdAt: Date.now(),
     };
     const newItems = [...(board.htmlItems || []), newItem];
-    const newHeight = Math.max(board.height, 380 + newItems.length * 150);
     onUpdate({
       ...board,
-      height: newHeight,
       htmlItems: newItems,
     });
   };
@@ -901,22 +950,21 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     });
   }, [board.theme, board.strokes]);
 
-  // Đồng bộ kích thước canvas với chiều cao khoảng trống và các khối nội dung chèn vào
+  // Đồng bộ kích thước canvas với chiều cao khoảng trống do giáo viên thiết lập
   useEffect(() => {
     const canvas = canvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!canvas) return;
 
-    const rect = container.getBoundingClientRect();
-    const targetWidth = Math.max(300, Math.floor(rect.width));
-    const targetHeight = Math.max(board.height || 280, container.offsetHeight);
+    const parent = canvas.parentElement;
+    const targetWidth = Math.max(300, Math.floor(parent?.clientWidth || 800));
+    const targetHeight = board.height || 280;
 
     if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
       canvas.width = targetWidth;
       canvas.height = targetHeight;
       redraw();
     }
-  }, [board.height, board.htmlItems, redraw]);
+  }, [board.height, redraw]);
 
   useEffect(() => {
     redraw();
@@ -1257,30 +1305,58 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     setIsResizing(true);
     const startY = e.clientY;
     const startHeight = board.height || 280;
+    let finalHeight = startHeight;
+
+    const resizerEl = e.currentTarget as HTMLElement;
+    try {
+      resizerEl.setPointerCapture(e.pointerId);
+    } catch {}
+
+    const boardInner = containerRef.current?.querySelector('.ppt-board-inner') as HTMLElement | null;
+    const badgeEl = containerRef.current?.querySelector('.ppt-board-height-badge') as HTMLElement | null;
+
+    let rafId: number | null = null;
 
     const onPointerMove = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault();
       const deltaY = moveEvent.clientY - startY;
-      const newHeight = Math.max(40, Math.min(1600, startHeight + deltaY));
-      onUpdate({
-        ...board,
-        height: newHeight,
+      finalHeight = Math.max(40, Math.min(1600, startHeight + deltaY));
+
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (boardInner) {
+          boardInner.style.height = `${finalHeight}px`;
+        }
+        if (badgeEl) {
+          badgeEl.textContent = `${finalHeight}px`;
+        }
       });
     };
 
     const onPointerUp = (upEvent: PointerEvent) => {
+      if (rafId) cancelAnimationFrame(rafId);
       upEvent.preventDefault();
       setIsResizing(false);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+
+      try {
+        resizerEl.releasePointerCapture(upEvent.pointerId);
+      } catch {}
+
       const deltaY = upEvent.clientY - startY;
       if (startHeight + deltaY < 50) {
         onDelete(board.id);
+      } else {
+        onUpdate({
+          ...board,
+          height: finalHeight,
+        });
       }
     };
 
-    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointermove', onPointerMove, { passive: false });
     window.addEventListener('pointerup', onPointerUp);
     window.addEventListener('pointercancel', onPointerUp);
   };
@@ -1311,11 +1387,11 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
 
       {/* VÙNG CHỨA NỘI DUNG VÀ CANVAS CỦA KHOẢNG TRỐNG */}
       <div
-        className={`relative w-full overflow-hidden transition-all rounded-xl border border-slate-200/90 shadow-2xs ${
+        className={`ppt-board-inner relative w-full overflow-hidden rounded-xl border border-slate-200/90 shadow-2xs ${
           activeTool === 'pen' || activeTool === 'eraser' ? 'cursor-crosshair' : 'cursor-default'
         }`}
         style={{
-          minHeight: `${board.height || 280}px`,
+          height: `${board.height || 280}px`,
           backgroundColor:
             board.theme === 'green' ? '#0f382c' : board.theme === 'black' ? '#18181b' : '#ffffff',
           backgroundImage:
@@ -1342,6 +1418,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
             return (
               <div
                 key={item.id}
+                data-board-item-id={item.id}
                 style={{
                   position: 'absolute',
                   left: `${itemX}px`,
@@ -1360,7 +1437,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   transformOrigin: 'center center',
                   zIndex: isSelected ? 28 : 12,
                 }}
-                className="group/item select-none bg-transparent p-0 transition-all pointer-events-auto border-none shadow-none cursor-move"
+                className="group/item select-none bg-transparent p-0 pointer-events-auto border-none shadow-none cursor-move"
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
                   // Nếu bấm vào các nút thao tác tương tác (button, input, select, textarea, a) thì để nút xử lý
@@ -1576,36 +1653,63 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
             return (
               <div
                 key={item.id}
+                data-math-item-id={item.id}
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
                   if (target.closest('button')) return;
                   e.preventDefault();
                   e.stopPropagation();
+
+                  const mathEl = e.currentTarget as HTMLElement;
+                  mathEl.style.transition = 'none';
+                  try {
+                    mathEl.setPointerCapture(e.pointerId);
+                  } catch {}
+
                   const startX = e.clientX;
                   const startY = e.clientY;
                   const initialX = item.x ?? 30;
                   const initialY = item.y ?? 30;
+                  let finalX = initialX;
+                  let finalY = initialY;
+                  let rafId: number | null = null;
+
                   const onPointerMove = (mv: PointerEvent) => {
                     mv.preventDefault();
-                    const newX = Math.max(0, initialX + (mv.clientX - startX));
-                    const newY = Math.max(0, initialY + (mv.clientY - startY));
-                    onUpdate({
-                      ...board,
-                      mathItems: (board.mathItems || []).map((m) =>
-                        m.id === item.id ? { ...m, x: newX, y: newY } : m
-                      ),
+                    finalX = Math.max(0, initialX + (mv.clientX - startX));
+                    finalY = Math.max(0, initialY + (mv.clientY - startY));
+
+                    if (rafId) cancelAnimationFrame(rafId);
+                    rafId = requestAnimationFrame(() => {
+                      mathEl.style.left = `${finalX}px`;
+                      mathEl.style.top = `${finalY}px`;
                     });
                   };
-                  const onPointerUp = () => {
+
+                  const onPointerUp = (upEvt: PointerEvent) => {
+                    if (rafId) cancelAnimationFrame(rafId);
                     window.removeEventListener('pointermove', onPointerMove);
                     window.removeEventListener('pointerup', onPointerUp);
                     window.removeEventListener('pointercancel', onPointerUp);
+
+                    try {
+                      mathEl.releasePointerCapture(upEvt.pointerId);
+                    } catch {}
+                    mathEl.style.transition = '';
+
+                    onUpdate({
+                      ...board,
+                      mathItems: (board.mathItems || []).map((m) =>
+                        m.id === item.id ? { ...m, x: finalX, y: finalY } : m
+                      ),
+                    });
                   };
-                  window.addEventListener('pointermove', onPointerMove);
+
+                  window.addEventListener('pointermove', onPointerMove, { passive: false });
                   window.addEventListener('pointerup', onPointerUp);
                   window.addEventListener('pointercancel', onPointerUp);
                 }}
-                className="absolute z-25 group/math p-1 rounded-md bg-transparent border border-transparent hover:border-indigo-400/30 cursor-move flex items-center gap-1.5 transition-colors select-none"
+                className="absolute z-25 group/math p-1 rounded-md bg-transparent border border-transparent hover:border-indigo-400/30 cursor-move flex items-center gap-1.5 select-none"
                 style={{ left: `${item.x}px`, top: `${item.y}px` }}
               >
                 <div dangerouslySetInnerHTML={{ __html: mathHtml }} />
@@ -1647,7 +1751,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           >
             <GripHorizontal className="w-3.5 h-3.5 text-white" />
             <span>Kéo co giãn</span>
-            <span className="text-[10px] bg-indigo-800/90 px-1.5 py-0.2 rounded font-mono font-semibold">
+            <span className="ppt-board-height-badge text-[10px] bg-indigo-800/90 px-1.5 py-0.2 rounded font-mono font-semibold">
               {board.height}px
             </span>
             <button
