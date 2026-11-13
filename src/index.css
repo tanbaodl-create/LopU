@@ -90,3 +90,28 @@
   scrollbar-width: none !important;
 }
 
+/* Thanh điều khiển trên Đồ thị & Bảng biến thiên (BBT): Mặc định ẩn 100%, chỉ hiện khi đưa chuột vào khu vực */
+.word-bbt-controls,
+.word-graph-controls {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.2s ease-in-out !important;
+}
+
+.word-bbt-wrapper:hover .word-bbt-controls,
+.word-graph-wrapper:hover .word-graph-controls,
+.group:hover .word-bbt-controls,
+.group:hover .word-graph-controls,
+.group\/item:hover .word-bbt-controls,
+.group\/item:hover .word-graph-controls,
+[data-board-item-id]:hover .word-bbt-controls,
+[data-board-item-id]:hover .word-graph-controls {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.word-doc-student-mode .word-bbt-controls,
+.word-doc-student-mode .word-graph-controls {
+  display: none !important;
+}
+

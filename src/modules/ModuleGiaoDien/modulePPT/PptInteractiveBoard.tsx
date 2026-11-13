@@ -1468,6 +1468,20 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   zIndex: isSelected ? 28 : 12,
                 }}
                 className="group/item select-none bg-transparent p-0 pointer-events-auto border-none shadow-none cursor-move"
+                onMouseEnter={(e) => {
+                  const ctrls = e.currentTarget.querySelectorAll<HTMLElement>('.word-bbt-controls, .word-graph-controls');
+                  ctrls.forEach((c) => {
+                    c.style.setProperty('opacity', '1', 'important');
+                    c.style.setProperty('pointer-events', 'auto', 'important');
+                  });
+                }}
+                onMouseLeave={(e) => {
+                  const ctrls = e.currentTarget.querySelectorAll<HTMLElement>('.word-bbt-controls, .word-graph-controls');
+                  ctrls.forEach((c) => {
+                    c.style.setProperty('opacity', '0', 'important');
+                    c.style.setProperty('pointer-events', 'none', 'important');
+                  });
+                }}
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
                   // Nếu bấm vào các nút thao tác tương tác (button, input, select, textarea, a) thì để nút xử lý

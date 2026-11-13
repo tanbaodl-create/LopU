@@ -720,11 +720,11 @@ ${tikzPlots}
 `.trim();
 
       const graphHtml = `
-        <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-width="420" data-align="center" style="margin: 16px auto; max-width: 420px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;">
+        <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-width="420" data-align="center" style="margin: 16px auto; max-width: 420px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;" ${isTeacher ? `onmouseenter="this.style.borderColor='#94a3b8';const c=this.querySelector('.word-graph-controls');if(c){c.style.setProperty('opacity','1','important');c.style.setProperty('pointer-events','auto','important');}" onmouseleave="this.style.borderColor='transparent';const c=this.querySelector('.word-graph-controls');if(c){c.style.setProperty('opacity','0','important');c.style.setProperty('pointer-events','none','important');}"` : ''}>
           ${
             isTeacher
               ? `
-            <div class="word-graph-controls flex items-center justify-end gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="user-select: none;">
+            <div class="word-graph-controls flex items-center justify-end gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out; user-select: none;">
               <button type="button" onclick="this.closest('.word-graph-wrapper').remove()" title="Xóa đồ thị này" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-0.5 rounded hover:bg-rose-50 text-[11px] cursor-pointer">✕ Xóa</button>
             </div>
           `
@@ -817,11 +817,11 @@ ${tikzPlots}
       );
 
       const bbtHtml = `
-        <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-width="480" data-align="center" style="margin: 16px auto; max-width: 480px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;">
+        <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-width="480" data-align="center" style="margin: 16px auto; max-width: 480px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;" ${isTeacher ? `onmouseenter="this.style.borderColor='#94a3b8';const c=this.querySelector('.word-bbt-controls');if(c){c.style.setProperty('opacity','1','important');c.style.setProperty('pointer-events','auto','important');}" onmouseleave="this.style.borderColor='transparent';const c=this.querySelector('.word-bbt-controls');if(c){c.style.setProperty('opacity','0','important');c.style.setProperty('pointer-events','none','important');}"` : ''}>
           ${
             isTeacher
               ? `
-            <div class="word-bbt-controls flex items-center justify-end gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="user-select: none;">
+            <div class="word-bbt-controls flex items-center justify-end gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out; user-select: none;">
               <button type="button" onclick="this.closest('.word-bbt-wrapper').remove()" title="Xóa bảng biến thiên này" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-0.5 rounded hover:bg-rose-50 text-[11px] cursor-pointer">✕ Xóa</button>
             </div>
           `
