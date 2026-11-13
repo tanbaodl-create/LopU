@@ -2,6 +2,10 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import katex from 'katex';
 import {
   Pen,
+  Paintbrush,
+  Highlighter,
+  Pencil,
+  Sparkles,
   Eraser,
   Undo2,
   Redo2,
@@ -24,6 +28,8 @@ import {
 
 export type BoardTheme = 'white' | 'green' | 'black';
 
+export type PenType = 'ballpoint' | 'brush' | 'highlighter' | 'pencil' | 'laser';
+
 export type BoardTool =
   | 'select'
   | 'pen'
@@ -45,6 +51,8 @@ export interface BoardStroke {
   points: Point[];
   color: string;
   width: number;
+  penType?: PenType;
+  opacity?: number;
   isEraser?: boolean;
   shapeType?: 'stroke' | 'line' | 'arrow' | 'circle' | 'rect';
 }
@@ -236,10 +244,78 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   const localImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const [activeTool, setActiveTool] = useState<BoardTool>('pen');
-  const [strokeWidth, setStrokeWidth] = useState<number>(3.5);
+  const [selectedPenType, setSelectedPenType] = useState<PenType>('ballpoint');
+  const [strokeWidth, setStrokeWidth] = useState<number>(2.2);
   const [selectedColor, setSelectedColor] = useState<string>(
     board.theme === 'white' ? '#1d4ed8' : '#ffffff'
   );
+
+  // Chọn 1 trong 5 đầu bút: Bút bi, Bút lông, Highlight, Bút chì, Bút laser
+  const handleSelectPen = (pen: PenType) => {
+    setActiveTool('pen');
+    setSelectedPenType(pen);
+    if (pen === 'ballpoint') {
+      setStrokeWidth(2.2);
+      setSelectedColor(board.theme === 'white' ? '#1d4ed8' : '#ffffff');
+    } else if (pen === 'brush') {
+      setStrokeWidth(6.0);
+      setSelectedColor(board.theme === 'white' ? '#7c3aed' : '#f472b6');
+    } else if (pen === 'highlighter') {
+      setStrokeWidth(20.0);
+      setSelectedColor('#facc15');
+    } else if (pen === 'pencil') {
+      setStrokeWidth(1.4);
+      setSelectedColor(board.theme === 'white' ? '#475569' : '#cbd5e1');
+    } else if (pen === 'laser') {
+      setStrokeWidth(5.0);
+      setSelectedColor('#ef4444');
+    }
+  };
+
+  // Bảng màu thông minh tương thích theo từng đầu bút
+  const getPenColors = () => {
+    if (selectedPenType === 'highlighter') {
+      return [
+        { label: 'Vàng dạ quang', color: '#facc15' },
+        { label: 'Xanh lá neon', color: '#4ade80' },
+        { label: 'Xanh lơ neon', color: '#38bdf8' },
+        { label: 'Hồng neon', color: '#f472b6' },
+        { label: 'Cam neon', color: '#fb923c' },
+      ];
+    }
+    if (selectedPenType === 'pencil') {
+      return [
+        { label: 'Chì đen', color: board.theme === 'white' ? '#1e293b' : '#ffffff' },
+        { label: 'Chì xám', color: board.theme === 'white' ? '#475569' : '#cbd5e1' },
+        { label: 'Chì nhạt', color: '#94a3b8' },
+        { label: 'Chì xanh nháp', color: '#3b82f6' },
+      ];
+    }
+    if (selectedPenType === 'laser') {
+      return [
+        { label: 'Laser đỏ rực', color: '#ef4444' },
+        { label: 'Laser xanh lá', color: '#22c55e' },
+      ];
+    }
+    if (selectedPenType === 'brush') {
+      return [
+        { label: 'Tím', color: '#7c3aed' },
+        { label: 'Xanh lá', color: '#16a34a' },
+        { label: 'Cam', color: '#ea580c' },
+        { label: 'Xanh dương', color: '#1d4ed8' },
+        { label: 'Đen', color: board.theme === 'white' ? '#0f172a' : '#ffffff' },
+        { label: 'Đỏ', color: '#dc2626' },
+      ];
+    }
+    // Mặc định: Bút bi
+    return [
+      { label: 'Xanh dương', color: '#1d4ed8' },
+      { label: 'Đen', color: board.theme === 'white' ? '#0f172a' : '#ffffff' },
+      { label: 'Đỏ', color: '#dc2626' },
+      { label: 'Xanh lá', color: '#15803d' },
+      { label: 'Tím', color: '#7e22ce' },
+    ];
+  };
 
   const [canUndo, setCanUndo] = useState<boolean>(board.strokes.length > 0);
   const [canRedo, setCanRedo] = useState<boolean>(false);
@@ -517,15 +593,39 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     board.strokes.forEach((stroke) => {
       if (!stroke.points || stroke.points.length < 1) return;
       ctx.save();
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.lineWidth = stroke.width;
 
       if (stroke.isEraser) {
         ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = stroke.width;
       } else {
+        const pType = stroke.penType || 'ballpoint';
         ctx.globalCompositeOperation = 'source-over';
         ctx.strokeStyle = stroke.color;
+
+        if (pType === 'highlighter') {
+          ctx.globalAlpha = stroke.opacity ?? 0.38;
+          ctx.lineCap = 'square';
+          ctx.lineJoin = 'bevel';
+          ctx.lineWidth = stroke.width || 20;
+        } else if (pType === 'brush') {
+          ctx.globalAlpha = stroke.opacity ?? 0.95;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.lineWidth = stroke.width || 6;
+        } else if (pType === 'pencil') {
+          ctx.globalAlpha = stroke.opacity ?? 0.65;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.lineWidth = stroke.width || 1.4;
+        } else {
+          // Bút bi
+          ctx.globalAlpha = stroke.opacity ?? 1.0;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.lineWidth = stroke.width || 2.2;
+        }
       }
 
       ctx.beginPath();
@@ -681,11 +781,42 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     ctx.lineJoin = 'round';
     if (activeTool === 'eraser') {
       ctx.globalCompositeOperation = 'destination-out';
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       ctx.lineWidth = strokeWidth * 3.5;
     } else {
       ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = selectedColor;
-      ctx.lineWidth = strokeWidth;
+
+      if (selectedPenType === 'highlighter') {
+        ctx.globalAlpha = 0.38;
+        ctx.lineCap = 'square';
+        ctx.lineJoin = 'bevel';
+        ctx.lineWidth = strokeWidth || 20;
+      } else if (selectedPenType === 'brush') {
+        ctx.globalAlpha = 0.95;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = strokeWidth || 6;
+      } else if (selectedPenType === 'pencil') {
+        ctx.globalAlpha = 0.65;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = strokeWidth || 1.4;
+      } else if (selectedPenType === 'laser') {
+        ctx.globalAlpha = 0.95;
+        ctx.shadowColor = selectedColor;
+        ctx.shadowBlur = 12;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = strokeWidth || 5;
+      } else {
+        // Bút bi
+        ctx.globalAlpha = 1.0;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = strokeWidth || 2.2;
+      }
     }
 
     ctx.beginPath();
@@ -722,11 +853,20 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       return;
     }
 
+    // Nếu là Bút laser: vệt sáng tự tan biến sau 900ms, không lưu vào strokes
+    if (selectedPenType === 'laser' && activeTool !== 'eraser') {
+      setTimeout(() => {
+        currentPointsRef.current = [];
+        redraw();
+      }, 900);
+      return;
+    }
+
     // Nét vẽ tự do: Lọc rung tay -> Tái lấy mẫu -> Làm mượt Gaussian đa tầng
     let finalPoints = rawPoints;
     if (activeTool !== 'eraser' && rawPoints.length > 3) {
-      const filtered = filterClosePoints(rawPoints, 3.0);
-      const resampled = resampleCurveEvenly(filtered, 5.5);
+      const filtered = filterClosePoints(rawPoints, selectedPenType === 'highlighter' ? 5.0 : 3.0);
+      const resampled = resampleCurveEvenly(filtered, selectedPenType === 'highlighter' ? 8.0 : 5.5);
       finalPoints = smoothPointsGaussian(resampled, 3);
     }
 
@@ -734,6 +874,15 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       points: finalPoints,
       color: selectedColor,
       width: activeTool === 'eraser' ? strokeWidth * 3.5 : strokeWidth,
+      penType: selectedPenType,
+      opacity:
+        selectedPenType === 'highlighter'
+          ? 0.38
+          : selectedPenType === 'pencil'
+          ? 0.65
+          : selectedPenType === 'brush'
+          ? 0.95
+          : 1.0,
       isEraser: activeTool === 'eraser',
       shapeType: 'stroke',
     };
@@ -942,20 +1091,83 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           <span className="text-[11px] hidden sm:inline">Chuột</span>
         </button>
 
-        {/* Nút Bút */}
-        <button
-          type="button"
-          onClick={() => setActiveTool('pen')}
-          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-            activeTool === 'pen'
-              ? 'bg-indigo-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          title="Bút viết tay mực kỹ thuật số"
-        >
-          <Pen className="w-3.5 h-3.5" />
-          <span className="text-[11px]">Bút</span>
-        </button>
+        {/* CỤM 5 ĐẦU BÚT: BÚT BI, BÚT LÔNG, HIGHLIGHT, BÚT CHÌ, BÚT LASER */}
+        <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200">
+          {/* 1. Bút bi */}
+          <button
+            type="button"
+            onClick={() => handleSelectPen('ballpoint')}
+            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeTool === 'pen' && selectedPenType === 'ballpoint'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-200/80'
+            }`}
+            title="Bút bi: Nét thanh mảnh, viết lời giải & số liệu chính xác (Phím 1)"
+          >
+            <Pen className="w-3.5 h-3.5" />
+            <span className="text-[11px] hidden sm:inline">Bút bi</span>
+          </button>
+
+          {/* 2. Bút lông */}
+          <button
+            type="button"
+            onClick={() => handleSelectPen('brush')}
+            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeTool === 'pen' && selectedPenType === 'brush'
+                ? 'bg-purple-600 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-200/80'
+            }`}
+            title="Bút lông: Nét đậm đà, mềm mại, viết tiêu đề (Phím 2)"
+          >
+            <Paintbrush className="w-3.5 h-3.5" />
+            <span className="text-[11px] hidden sm:inline">Bút lông</span>
+          </button>
+
+          {/* 3. Bút highlight */}
+          <button
+            type="button"
+            onClick={() => handleSelectPen('highlighter')}
+            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeTool === 'pen' && selectedPenType === 'highlighter'
+                ? 'bg-amber-500 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-200/80'
+            }`}
+            title="Bút highlight: Dạ quang bán trong suốt, tô sáng từ khóa & công thức (Phím 3)"
+          >
+            <Highlighter className="w-3.5 h-3.5" />
+            <span className="text-[11px] hidden sm:inline">Highlight</span>
+          </button>
+
+          {/* 4. Bút chì */}
+          <button
+            type="button"
+            onClick={() => handleSelectPen('pencil')}
+            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeTool === 'pen' && selectedPenType === 'pencil'
+                ? 'bg-slate-700 text-white shadow-xs'
+                : 'text-slate-700 hover:bg-slate-200/80'
+            }`}
+            title="Bút chì: Nét phác thảo thanh mảnh, vẽ nháp hình học (Phím 4)"
+          >
+            <Pencil className="w-3.5 h-3.5" />
+            <span className="text-[11px] hidden sm:inline">Bút chì</span>
+          </button>
+
+          {/* 5. Bút laser */}
+          <button
+            type="button"
+            onClick={() => handleSelectPen('laser')}
+            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+              activeTool === 'pen' && selectedPenType === 'laser'
+                ? 'bg-rose-600 text-white shadow-xs animate-pulse ring-2 ring-rose-300'
+                : 'text-slate-700 hover:bg-slate-200/80'
+            }`}
+            title="Bút laser: Vệt sáng chỉ bài giảng trên slide, tự tan biến sau 1 giây (Phím 5)"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+            <span className="text-[11px] hidden sm:inline">Laser</span>
+          </button>
+        </div>
 
         {/* Nút Tẩy */}
         <button
@@ -969,16 +1181,12 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           title="Tẩy xóa nét vẽ"
         >
           <Eraser className="w-3.5 h-3.5" />
-          <span className="text-[11px]">Tẩy</span>
+          <span className="text-[11px] hidden sm:inline">Tẩy</span>
         </button>
 
-        {/* Bảng 3 màu cơ bản: Xanh, Đen, Đỏ */}
+        {/* Bảng màu động phù hợp theo đầu bút */}
         <div className="flex items-center gap-1 px-1">
-          {[
-            { color: '#1d4ed8', label: 'Xanh' },
-            { color: '#0f172a', label: 'Đen' },
-            { color: '#dc2626', label: 'Đỏ' },
-          ].map((c) => (
+          {getPenColors().map((c) => (
             <button
               key={c.color}
               type="button"
@@ -994,6 +1202,62 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
               style={{ backgroundColor: c.color }}
               title={c.label}
             />
+          ))}
+        </div>
+
+        {/* 3 Cỡ nét nhanh: Mảnh / Vừa / Đậm */}
+        <div className="flex items-center gap-0.5 px-0.5 border-l border-r border-slate-200">
+          {[
+            {
+              label: 'Mảnh',
+              size:
+                selectedPenType === 'highlighter'
+                  ? 14
+                  : selectedPenType === 'brush'
+                  ? 4
+                  : selectedPenType === 'pencil'
+                  ? 1.0
+                  : 1.5,
+              dot: 'w-1 h-1',
+            },
+            {
+              label: 'Vừa',
+              size:
+                selectedPenType === 'highlighter'
+                  ? 20
+                  : selectedPenType === 'brush'
+                  ? 6
+                  : selectedPenType === 'pencil'
+                  ? 1.4
+                  : 2.2,
+              dot: 'w-2 h-2',
+            },
+            {
+              label: 'Đậm',
+              size:
+                selectedPenType === 'highlighter'
+                  ? 28
+                  : selectedPenType === 'brush'
+                  ? 9
+                  : selectedPenType === 'pencil'
+                  ? 2.5
+                  : 3.5,
+              dot: 'w-3 h-3',
+            },
+          ].map((sz) => (
+            <button
+              key={sz.label}
+              type="button"
+              onClick={() => setStrokeWidth(sz.size)}
+              className={`p-1 rounded transition-colors cursor-pointer flex items-center justify-center ${
+                strokeWidth === sz.size
+                  ? 'bg-slate-200 text-slate-900 font-bold'
+                  : 'text-slate-400 hover:text-slate-700'
+              }`}
+              title={`Cỡ nét ${sz.label} (${sz.size}px)`}
+            >
+              <div className={`rounded-full bg-current ${sz.dot}`} />
+            </button>
           ))}
         </div>
 

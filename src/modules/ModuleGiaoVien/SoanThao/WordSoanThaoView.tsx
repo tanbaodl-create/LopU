@@ -22,6 +22,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   ArrowLeft,
+  ArrowUpDown,
   Lock,
   Bold,
   Italic,
@@ -7061,12 +7062,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
             </div>
 
-            {/* NÚT CHÈN KHOẢNG TRỐNG BIỂU TƯỢNG ^v NGAY SAU NÚT VIEW: XEM PPT */}
+            {/* NÚT CHÈN KHOẢNG TRỐNG (MŨI TÊN LÊN XUỐNG ↕) NGAY SAU NÚT VIEW: XEM PPT */}
             {wordViewMode === 'ppt' && (
               <button
                 type="button"
                 onClick={() => setIsInsertSpaceMode((prev) => !prev)}
-                className={`p-1.5 px-2.5 rounded-lg text-xs font-bold transition-all transform cursor-pointer flex items-center justify-center gap-1 shadow-xs border ${
+                className={`p-1.5 px-2.5 rounded-lg text-xs font-bold transition-all transform cursor-pointer flex items-center justify-center gap-1.5 shadow-xs border ${
                   isInsertSpaceMode
                     ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-300 ring-2 ring-amber-300 animate-pulse'
                     : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-400 active:scale-95'
@@ -7074,10 +7075,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 title={
                   isInsertSpaceMode
                     ? 'Đang bật thước chèn khoảng trống: Đưa chuột vào trang sẽ có thanh ngang, nhấp và kéo xuống để mở khoảng trống (nhấp lại nút này để tắt)'
-                    : 'Chèn khoảng trống (^v): Nhấp để bật thanh ngang, sau đó nhấp giữ và kéo xuống trên trang để mở khoảng trống viết bài'
+                    : 'Chèn khoảng trống (Mũi tên lên xuống ↕): Nhấp để bật thanh ngang, sau đó nhấp giữ và kéo xuống trên trang để mở khoảng trống viết bài'
                 }
               >
-                <span className="font-mono font-black text-xs tracking-tighter">^v</span>
+                <ArrowUpDown className="w-4 h-4" />
                 {isInsertSpaceMode && (
                   <span className="text-[10px] bg-amber-700/90 text-white px-1 py-0.2 rounded-full font-bold">
                     ✕
