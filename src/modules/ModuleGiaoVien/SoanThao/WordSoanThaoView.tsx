@@ -72,6 +72,11 @@ import {
   FileSpreadsheet,
   Download,
   X,
+  MousePointer,
+  Pen,
+  Paintbrush,
+  Pencil,
+  Eraser,
 } from 'lucide-react';
 import { InDeFileHsView } from './InDeFileHsView';
 import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker';
@@ -110,9 +115,11 @@ import {
   getPptEffectDef,
   PptWhiteboardData,
   BoardHtmlItem,
+  BoardTool,
+  PenType,
 } from '../../ModuleGiaoDien/modulePPT';
 
-export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType, PptWhiteboardData, BoardHtmlItem };
+export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType, PptWhiteboardData, BoardHtmlItem, BoardTool, PenType };
 
 export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -402,6 +409,77 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [pptWhiteboards, setPptWhiteboards] = useState<PptWhiteboardData[]>([]);
   const [activePptWhiteboardId, setActivePptWhiteboardId] = useState<string | null>(null);
   const [isInsertSpaceMode, setIsInsertSpaceMode] = useState<boolean>(false);
+
+  // Trạng thái công cụ vẽ kỹ thuật số đồng bộ giữa Menu Word và các khoảng trống vẽ PPT (Hình 1)
+  const [pptActiveTool, setPptActiveTool] = useState<BoardTool>('pen');
+  const [pptPenType, setPptPenType] = useState<PenType>('ballpoint');
+  const [pptColor, setPptColor] = useState<string>('#1d4ed8');
+  const [pptStrokeWidth, setPptStrokeWidth] = useState<number>(2.2);
+
+  const handlePptSelectPen = (pen: PenType) => {
+    setPptActiveTool('pen');
+    setPptPenType(pen);
+    if (pen === 'ballpoint') {
+      setPptStrokeWidth(2.2);
+      setPptColor('#1d4ed8');
+    } else if (pen === 'brush') {
+      setPptStrokeWidth(6.0);
+      setPptColor('#7c3aed');
+    } else if (pen === 'highlighter') {
+      setPptStrokeWidth(20.0);
+      setPptColor('#facc15');
+    } else if (pen === 'pencil') {
+      setPptStrokeWidth(1.4);
+      setPptColor('#475569');
+    } else if (pen === 'laser') {
+      setPptStrokeWidth(5.0);
+      setPptColor('#ef4444');
+    }
+  };
+
+  const getPptPenColors = () => {
+    if (pptPenType === 'highlighter') {
+      return [
+        { label: 'Vàng dạ quang', color: '#facc15' },
+        { label: 'Xanh lá neon', color: '#4ade80' },
+        { label: 'Xanh lơ neon', color: '#38bdf8' },
+        { label: 'Hồng neon', color: '#f472b6' },
+        { label: 'Cam neon', color: '#fb923c' },
+      ];
+    }
+    if (pptPenType === 'pencil') {
+      return [
+        { label: 'Chì đen', color: '#1e293b' },
+        { label: 'Chì xám', color: '#475569' },
+        { label: 'Chì nhạt', color: '#94a3b8' },
+        { label: 'Chì xanh nháp', color: '#3b82f6' },
+      ];
+    }
+    if (pptPenType === 'laser') {
+      return [
+        { label: 'Laser đỏ rực', color: '#ef4444' },
+        { label: 'Laser xanh lá', color: '#22c55e' },
+      ];
+    }
+    if (pptPenType === 'brush') {
+      return [
+        { label: 'Tím', color: '#7c3aed' },
+        { label: 'Xanh lá', color: '#16a34a' },
+        { label: 'Cam', color: '#ea580c' },
+        { label: 'Xanh dương', color: '#1d4ed8' },
+        { label: 'Đen', color: '#0f172a' },
+        { label: 'Đỏ', color: '#dc2626' },
+      ];
+    }
+    // Mặc định: Bút bi
+    return [
+      { label: 'Xanh dương', color: '#1d4ed8' },
+      { label: 'Đen', color: '#0f172a' },
+      { label: 'Đỏ', color: '#dc2626' },
+      { label: 'Xanh lá', color: '#15803d' },
+      { label: 'Tím', color: '#7e22ce' },
+    ];
+  };
 
   const handleAddPptWhiteboardAtStep = (
     stepIdx: number,
@@ -6579,296 +6657,494 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 <>
                   {/* CỤM NÚT ĐIỀU KHIỂN TRÌNH CHIẾU PPT TÍCH HỢP TRONG MENU WORD (KHI VIEW === 'ppt') */}
                   {wordViewMode === 'ppt' && (
-                    <div className="flex items-center gap-1.5 flex-wrap bg-purple-50/90 p-1 rounded-xl border border-purple-200 shadow-2xs">
-                      {/* Nút Trước (Lùi bước / Slide trước - Biểu tượng) */}
-                      <button
-                        type="button"
-                        disabled={activePptSlideIndex <= 0 && activePptStepIndex <= 0}
-                        onClick={handlePptPrev}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-slate-100 shadow-xs"
-                        title="Lùi bước / Slide trước (Phím ← hoặc PageUp)"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-
-                      {/* Dropdown Chọn slide */}
-                      <select
-                        value={activePptSlideIndex}
-                        onChange={(e) => {
-                          const newIdx = Number(e.target.value);
-                          setActivePptSlideIndex(newIdx);
-                          setActivePptStepIndex(0);
-                        }}
-                        className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer focus:outline-none max-w-[140px] sm:max-w-[180px] truncate shadow-xs"
-                        title="Chọn slide trình chiếu"
-                      >
-                        {pptSlides.map((s, idx) => (
-                          <option key={s.id || idx} value={idx}>
-                            {s.title || `Slide ${idx + 1}`}
-                          </option>
-                        ))}
-                      </select>
-
-                      {/* Nút Slide tiếp / Hiện tiếp (Biểu tượng) */}
-                      <button
-                        type="button"
-                        disabled={
-                          activePptSlideIndex >= pptSlides.length - 1 &&
-                          (revealAllSteps || activePptStepIndex >= currentPptTotalSteps - 1)
-                        }
-                        onClick={handlePptNext}
-                        className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-white shadow-xs"
-                        title={
-                          !revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
-                            ? 'Hiện tiếp hiệu ứng ⚡ (Phím → hoặc Phím Cách)'
-                            : 'Slide tiếp theo (Phím → hoặc Phím Cách)'
-                        }
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-
-                      {/* Nút Từng bước ⚡ / Hiện tất cả nếu slide có nhiều hiệu ứng */}
-                      {currentPptTotalSteps > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setRevealAllSteps(!revealAllSteps)}
-                          className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
-                            revealAllSteps
-                              ? 'bg-amber-600 text-white border-amber-500'
-                              : 'bg-slate-800 text-amber-300 border-amber-700/60 hover:bg-slate-700'
-                          }`}
-                          title={revealAllSteps ? 'Bật chế độ hiển thị lần lượt từng hiệu ứng' : 'Hiện ngay toàn bộ nội dung trong slide'}
-                        >
-                          {revealAllSteps ? 'Tất cả' : 'Từng bước ⚡'}
-                        </button>
-                      )}
-
-                      <div className="h-4 w-[1px] bg-purple-300 mx-1"></div>
-                    </div>
-                  )}
-
-                  {/* CÁC CÔNG CỤ SOẠN THẢO VĂN BẢN (ẨN KHI Ở CHẾ ĐỘ XEM PPT ĐỂ MENU GỌN GÀNG, TẬP TRUNG DẠY HỌC) */}
-                  {wordViewMode !== 'ppt' && (
                     <>
-                      {/* Undo / Redo */}
-                      <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
-                        <Undo className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
-                        <Redo className="w-4 h-4" />
-                      </button>
-
-                      <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
-
-                      {/* 1. Đậm, Nghiêng, Gạch chân (kích hoạt biểu tượng chữ B, I, U tương ứng khi bật) */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          execCommand('bold');
-                          setIsBold((prev) => !prev);
-                        }}
-                        className={`p-1.5 rounded-lg transition-all ${
-                          isBold
-                            ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
-                            : 'hover:bg-slate-200 text-slate-700 bg-transparent'
-                        }`}
-                        title="Chữ Đậm (Ctrl+B)"
-                      >
-                        <Bold className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          execCommand('italic');
-                          setIsItalic((prev) => !prev);
-                        }}
-                        className={`p-1.5 rounded-lg transition-all ${
-                          isItalic
-                            ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
-                            : 'hover:bg-slate-200 text-slate-700 bg-transparent'
-                        }`}
-                        title="Chữ Nghiêng (Ctrl+I)"
-                      >
-                        <Italic className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          execCommand('underline');
-                          setIsUnderline((prev) => !prev);
-                        }}
-                        className={`p-1.5 rounded-lg transition-all ${
-                          isUnderline
-                            ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
-                            : 'hover:bg-slate-200 text-slate-700 bg-transparent'
-                        }`}
-                        title="Gạch Chân (Ctrl+U)"
-                      >
-                        <Underline className="w-4 h-4" />
-                      </button>
-
-                      {/* Chọn màu chữ chuẩn mực Microsoft Word */}
-                      <WordTextColorPicker
-                        color={textColor}
-                        onSelectColor={(val) => {
-                          setTextColor(val);
-                          execCommand('foreColor', val);
-                        }}
-                        isOpen={openTextColorMenu}
-                        onToggle={() => {
-                          setOpenTextColorMenu(!openTextColorMenu);
-                          setOpenHighlightColorMenu(false);
-                          setOpenAlignMenu(false);
-                          setOpenInsertMenu(false);
-                          setOpenFunctionMenu(false);
-                        }}
-                        onClose={() => setOpenTextColorMenu(false)}
-                      />
-
-                      {/* Chọn màu nền chữ / Highlight chuẩn mực Microsoft Word */}
-                      <WordHighlightColorPicker
-                        color={highlightColor}
-                        onSelectColor={(val) => {
-                          setHighlightColor(val);
-                          execCommand('hiliteColor', val);
-                        }}
-                        isOpen={openHighlightColorMenu}
-                        onToggle={() => {
-                          setOpenHighlightColorMenu(!openHighlightColorMenu);
-                          setOpenTextColorMenu(false);
-                          setOpenAlignMenu(false);
-                          setOpenInsertMenu(false);
-                          setOpenFunctionMenu(false);
-                        }}
-                        onClose={() => setOpenHighlightColorMenu(false)}
-                      />
-
-                      {/* 2. DROPDOWN CỠ CHỮ ĐƯA NGAY SAU GẠCH CHÂN (U) VÀ CHỈ GHI NGẮN GỌN (mặc định 14px - điều khiển trực tiếp) */}
-                      <select
-                        value={fontSize}
-                        onChange={(e) => handleFontSizeChange(e.target.value)}
-                        className="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500 ml-1"
-                        title="Cỡ chữ (Mặc định 14px)"
-                      >
-                        <option value="12px">12px</option>
-                        <option value="14px">14px (Mặc định)</option>
-                        <option value="16px">16px</option>
-                        <option value="18px">18px</option>
-                        <option value="20px">20px</option>
-                        <option value="22px">22px</option>
-                        <option value="24px">24px</option>
-                        <option value="28px">28px</option>
-                      </select>
-
-                      <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
-
-                      {/* 3. MENU CANH LỀ (XỔ XUỐNG): Chọn canh lề tương ứng trong nút canh lề */}
-                      <div className="relative">
+                      <div className="flex items-center gap-1.5 flex-wrap bg-purple-50/90 p-1 rounded-xl border border-purple-200 shadow-2xs">
+                        {/* Nút Trước (Lùi bước / Slide trước - Biểu tượng) */}
                         <button
                           type="button"
-                          onClick={() => {
-                            setOpenAlignMenu(!openAlignMenu);
-                            setOpenTextColorMenu(false);
-                            setOpenHighlightColorMenu(false);
-                            setOpenStyleMenu(false);
-                            setOpenInsertMenu(false);
-                            setOpenFunctionMenu(false);
-                          }}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
-                            openAlignMenu ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
-                          }`}
-                          title="Canh lề văn bản (Căn trái, Căn giữa, Căn phải, Căn đều)"
+                          disabled={activePptSlideIndex <= 0 && activePptStepIndex <= 0}
+                          onClick={handlePptPrev}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-slate-100 shadow-xs"
+                          title="Lùi bước / Slide trước (Phím ← hoặc PageUp)"
                         >
-                          {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5 text-indigo-600" />}
-                          {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5 text-indigo-600" />}
-                          {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5 text-indigo-600" />}
-                          {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5 text-indigo-600" />}
-                          <span className="font-semibold">
-                            {currentAlignment === 'left' && 'Căn trái'}
-                            {currentAlignment === 'center' && 'Căn giữa'}
-                            {currentAlignment === 'right' && 'Căn phải'}
-                            {currentAlignment === 'justify' && 'Căn đều'}
-                          </span>
-                          <ChevronDown className="w-3 h-3 text-slate-400" />
+                          <ChevronLeft className="w-4 h-4" />
                         </button>
 
-                        {openAlignMenu && (
-                          <div className="absolute z-50 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl w-40 py-1 divide-y divide-slate-100 animate-fade-in">
-                            <button
-                              type="button"
-                              onClick={() => handleAlign('left')}
-                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                                currentAlignment === 'left' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                              }`}
-                            >
-                              <AlignLeft className="w-4 h-4 text-slate-500" />
-                              <span>Canh trái</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAlign('center')}
-                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                                currentAlignment === 'center' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                              }`}
-                            >
-                              <AlignCenter className="w-4 h-4 text-slate-500" />
-                              <span>Canh giữa</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAlign('right')}
-                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                                currentAlignment === 'right' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                              }`}
-                            >
-                              <AlignRight className="w-4 h-4 text-slate-500" />
-                              <span>Canh phải</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleAlign('justify')}
-                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                                currentAlignment === 'justify' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                              }`}
-                            >
-                              <AlignJustify className="w-4 h-4 text-slate-500" />
-                              <span>Canh đều 2 bên</span>
-                            </button>
-                          </div>
+                        {/* Dropdown Chọn slide */}
+                        <select
+                          value={activePptSlideIndex}
+                          onChange={(e) => {
+                            const newIdx = Number(e.target.value);
+                            setActivePptSlideIndex(newIdx);
+                            setActivePptStepIndex(0);
+                          }}
+                          className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer focus:outline-none max-w-[140px] sm:max-w-[180px] truncate shadow-xs"
+                          title="Chọn slide trình chiếu"
+                        >
+                          {pptSlides.map((s, idx) => (
+                            <option key={s.id || idx} value={idx}>
+                              {s.title || `Slide ${idx + 1}`}
+                            </option>
+                          ))}
+                        </select>
+
+                        {/* Nút Slide tiếp / Hiện tiếp (Biểu tượng) */}
+                        <button
+                          type="button"
+                          disabled={
+                            activePptSlideIndex >= pptSlides.length - 1 &&
+                            (revealAllSteps || activePptStepIndex >= currentPptTotalSteps - 1)
+                          }
+                          onClick={handlePptNext}
+                          className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-white shadow-xs"
+                          title={
+                            !revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
+                              ? 'Hiện tiếp hiệu ứng ⚡ (Phím → hoặc Phím Cách)'
+                              : 'Slide tiếp theo (Phím → hoặc Phím Cách)'
+                          }
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+
+                        {/* Nút Từng bước ⚡ / Hiện tất cả nếu slide có nhiều hiệu ứng */}
+                        {currentPptTotalSteps > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => setRevealAllSteps(!revealAllSteps)}
+                            className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
+                              revealAllSteps
+                                ? 'bg-amber-600 text-white border-amber-500'
+                                : 'bg-slate-800 text-amber-300 border-amber-700/60 hover:bg-slate-700'
+                            }`}
+                            title={revealAllSteps ? 'Bật chế độ hiển thị lần lượt từng hiệu ứng' : 'Hiện ngay toàn bộ nội dung trong slide'}
+                          >
+                            {revealAllSteps ? 'Tất cả' : 'Từng bước ⚡'}
+                          </button>
                         )}
                       </div>
 
-                      {/* Danh sách */}
-                      <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách chấm">
-                        <List className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách số">
-                        <ListOrdered className="w-4 h-4" />
-                      </button>
+                      {/* THANH CÔNG CỤ VIẾT VẼ TAY KỸ THUẬT SỐ KHI XEM PPT (HÌNH 1 - TÍCH HỢP TRỰC TIẾP TRÊN MENU WORD) */}
+                      <div className="flex items-center gap-1.5 bg-slate-50/95 p-1 rounded-xl border border-slate-200/90 shadow-2xs flex-wrap">
+                        {/* Nút Chuột */}
+                        <button
+                          type="button"
+                          onClick={() => setPptActiveTool('select')}
+                          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            pptActiveTool === 'select'
+                              ? 'bg-slate-800 text-white shadow-xs'
+                              : 'text-slate-600 hover:bg-slate-200/70'
+                          }`}
+                          title="Chuột tương tác / Nhập liệu vào bảng"
+                        >
+                          <MousePointer className="w-3.5 h-3.5" />
+                          <span className="text-[11px] hidden sm:inline">Chuột</span>
+                        </button>
 
-                      {/* NÚT STYLE & SOẠN BÀI HỢP NHẤT */}
-                      <WordStyleMenu
-                        selectedStyle={selectedStyle}
-                        onSelectStyle={handleSelectStyle}
-                        isOpen={openStyleMenu}
-                        onToggle={() => {
-                          setOpenStyleMenu(!openStyleMenu);
-                          setOpenAlignMenu(false);
-                          setOpenTextColorMenu(false);
-                          setOpenHighlightColorMenu(false);
-                          setOpenInsertMenu(false);
-                          setOpenFunctionMenu(false);
-                          setOpenWordViewMenu(false);
-                        }}
-                        onClose={() => setOpenStyleMenu(false)}
-                        canAuthor={isTeacherOrHigher(currentRole)}
-                        tienTrinh={tienTrinhChuyenDe}
-                        insertPositionMode={insertPositionMode}
-                        onSetInsertPositionMode={setInsertPositionMode}
-                        onInsertLessonTemplate={handleInsertLessonTemplate}
-                      />
+                        {/* Cụm 5 đầu bút: Bút bi, Bút lông, Highlight, Bút chì, Laser */}
+                        <div className="flex items-center gap-0.5 bg-slate-200/70 p-0.5 rounded-lg border border-slate-200">
+                          {/* 1. Bút bi */}
+                          <button
+                            type="button"
+                            onClick={() => handlePptSelectPen('ballpoint')}
+                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              pptActiveTool === 'pen' && pptPenType === 'ballpoint'
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'text-slate-700 hover:bg-slate-200'
+                            }`}
+                            title="Bút bi: Nét thanh mảnh, viết lời giải & số liệu chính xác (Phím 1)"
+                          >
+                            <Pen className="w-3.5 h-3.5" />
+                            <span className="text-[11px] hidden sm:inline">Bút bi</span>
+                          </button>
 
-                      <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
+                          {/* 2. Bút lông */}
+                          <button
+                            type="button"
+                            onClick={() => handlePptSelectPen('brush')}
+                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              pptActiveTool === 'pen' && pptPenType === 'brush'
+                                ? 'bg-purple-600 text-white shadow-xs'
+                                : 'text-slate-700 hover:bg-slate-200'
+                            }`}
+                            title="Bút lông: Nét đậm đà, mềm mại, viết tiêu đề (Phím 2)"
+                          >
+                            <Paintbrush className="w-3.5 h-3.5" />
+                            <span className="text-[11px] hidden sm:inline">Bút lông</span>
+                          </button>
+
+                          {/* 3. Highlight */}
+                          <button
+                            type="button"
+                            onClick={() => handlePptSelectPen('highlighter')}
+                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              pptActiveTool === 'pen' && pptPenType === 'highlighter'
+                                ? 'bg-amber-500 text-white shadow-xs'
+                                : 'text-slate-700 hover:bg-slate-200'
+                            }`}
+                            title="Bút highlight: Tô sáng từ khóa & công thức (Phím 3)"
+                          >
+                            <Highlighter className="w-3.5 h-3.5" />
+                            <span className="text-[11px] hidden sm:inline">Highlight</span>
+                          </button>
+
+                          {/* 4. Bút chì */}
+                          <button
+                            type="button"
+                            onClick={() => handlePptSelectPen('pencil')}
+                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              pptActiveTool === 'pen' && pptPenType === 'pencil'
+                                ? 'bg-slate-700 text-white shadow-xs'
+                                : 'text-slate-700 hover:bg-slate-200'
+                            }`}
+                            title="Bút chì: Nét phác thảo thanh mảnh, vẽ nháp hình học (Phím 4)"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                            <span className="text-[11px] hidden sm:inline">Bút chì</span>
+                          </button>
+
+                          {/* 5. Laser */}
+                          <button
+                            type="button"
+                            onClick={() => handlePptSelectPen('laser')}
+                            className={`px-2 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                              pptActiveTool === 'pen' && pptPenType === 'laser'
+                                ? 'bg-rose-600 text-white shadow-xs animate-pulse ring-2 ring-rose-300'
+                                : 'text-slate-700 hover:bg-slate-200'
+                            }`}
+                            title="Bút laser: Vệt sáng chỉ bài giảng trên slide (Phím 5)"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-rose-500" />
+                            <span className="text-[11px] hidden sm:inline">Laser</span>
+                          </button>
+                        </div>
+
+                        {/* Nút Tẩy */}
+                        <button
+                          type="button"
+                          onClick={() => setPptActiveTool('eraser')}
+                          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            pptActiveTool === 'eraser'
+                              ? 'bg-rose-600 text-white shadow-xs'
+                              : 'text-slate-600 hover:bg-slate-200/70'
+                          }`}
+                          title="Tẩy xóa nét vẽ"
+                        >
+                          <Eraser className="w-3.5 h-3.5" />
+                          <span className="text-[11px] hidden sm:inline">Tẩy</span>
+                        </button>
+
+                        {/* Bảng màu động phù hợp theo từng đầu bút */}
+                        <div className="flex items-center gap-1 px-1">
+                          {getPptPenColors().map((c) => (
+                            <button
+                              key={c.color}
+                              type="button"
+                              onClick={() => {
+                                setPptColor(c.color);
+                                setPptActiveTool('pen');
+                              }}
+                              className={`w-3.5 h-3.5 rounded-full border transition-transform cursor-pointer ${
+                                pptColor === c.color && pptActiveTool === 'pen'
+                                  ? 'scale-125 border-indigo-700 ring-2 ring-indigo-300 shadow-xs'
+                                  : 'border-slate-300 opacity-80 hover:opacity-100 hover:scale-110'
+                              }`}
+                              style={{ backgroundColor: c.color }}
+                              title={c.label}
+                            />
+                          ))}
+                        </div>
+
+                        {/* 3 Cỡ nét nhanh: Mảnh / Vừa / Đậm */}
+                        <div className="flex items-center gap-0.5 px-0.5 border-l border-slate-200">
+                          {[
+                            {
+                              label: 'Mảnh',
+                              size:
+                                pptPenType === 'highlighter'
+                                  ? 14
+                                  : pptPenType === 'brush'
+                                  ? 4
+                                  : pptPenType === 'pencil'
+                                  ? 1.0
+                                  : 1.5,
+                              dot: 'w-1 h-1',
+                            },
+                            {
+                              label: 'Vừa',
+                              size:
+                                pptPenType === 'highlighter'
+                                  ? 20
+                                  : pptPenType === 'brush'
+                                  ? 6
+                                  : pptPenType === 'pencil'
+                                  ? 1.4
+                                  : 2.2,
+                              dot: 'w-2 h-2',
+                            },
+                            {
+                              label: 'Đậm',
+                              size:
+                                pptPenType === 'highlighter'
+                                  ? 28
+                                  : pptPenType === 'brush'
+                                  ? 9
+                                  : pptPenType === 'pencil'
+                                  ? 2.5
+                                  : 3.5,
+                              dot: 'w-3 h-3',
+                            },
+                          ].map((sz) => (
+                            <button
+                              key={sz.label}
+                              type="button"
+                              onClick={() => setPptStrokeWidth(sz.size)}
+                              className={`p-1 rounded transition-colors cursor-pointer flex items-center justify-center ${
+                                pptStrokeWidth === sz.size
+                                  ? 'bg-slate-200 text-slate-900 font-bold'
+                                  : 'text-slate-400 hover:text-slate-700'
+                              }`}
+                              title={`Cỡ nét ${sz.label} (${sz.size}px)`}
+                            >
+                              <div className={`rounded-full bg-current ${sz.dot}`} />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* CÁC CÔNG CỤ SOẠN THẢO VĂN BẢN (ẨN KHI Ở CHẾ ĐỘ XEM PPT, BỐ TRÍ THÀNH CÁC CỤM GỌN GÀNG KHI SOẠN THẢO) */}
+                  {wordViewMode !== 'ppt' && (
+                    <>
+                      {/* Nhóm 1: Hoàn tác (Undo / Redo) */}
+                      <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                        <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
+                          <Undo className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
+                          <Redo className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Nhóm 2: Định dạng kiểu chữ, màu sắc & cỡ chữ gọn gàng */}
+                      <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                        {/* Đậm, Nghiêng, Gạch chân */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            execCommand('bold');
+                            setIsBold((prev) => !prev);
+                          }}
+                          className={`p-1.5 rounded-lg transition-all ${
+                            isBold
+                              ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                              : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                          }`}
+                          title="Chữ Đậm (Ctrl+B)"
+                        >
+                          <Bold className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            execCommand('italic');
+                            setIsItalic((prev) => !prev);
+                          }}
+                          className={`p-1.5 rounded-lg transition-all ${
+                            isItalic
+                              ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                              : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                          }`}
+                          title="Chữ Nghiêng (Ctrl+I)"
+                        >
+                          <Italic className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            execCommand('underline');
+                            setIsUnderline((prev) => !prev);
+                          }}
+                          className={`p-1.5 rounded-lg transition-all ${
+                            isUnderline
+                              ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                              : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                          }`}
+                          title="Gạch Chân (Ctrl+U)"
+                        >
+                          <Underline className="w-4 h-4" />
+                        </button>
+
+                        <div className="h-4 w-[1px] bg-slate-300 mx-0.5"></div>
+
+                        {/* Chọn màu chữ A▾ */}
+                        <WordTextColorPicker
+                          color={textColor}
+                          onSelectColor={(val) => {
+                            setTextColor(val);
+                            execCommand('foreColor', val);
+                          }}
+                          isOpen={openTextColorMenu}
+                          onToggle={() => {
+                            setOpenTextColorMenu(!openTextColorMenu);
+                            setOpenHighlightColorMenu(false);
+                            setOpenAlignMenu(false);
+                            setOpenInsertMenu(false);
+                            setOpenFunctionMenu(false);
+                          }}
+                          onClose={() => setOpenTextColorMenu(false)}
+                        />
+
+                        {/* Chọn màu highlight 🖍️▾ */}
+                        <WordHighlightColorPicker
+                          color={highlightColor}
+                          onSelectColor={(val) => {
+                            setHighlightColor(val);
+                            execCommand('hiliteColor', val);
+                          }}
+                          isOpen={openHighlightColorMenu}
+                          onToggle={() => {
+                            setOpenHighlightColorMenu(!openHighlightColorMenu);
+                            setOpenTextColorMenu(false);
+                            setOpenAlignMenu(false);
+                            setOpenInsertMenu(false);
+                            setOpenFunctionMenu(false);
+                          }}
+                          onClose={() => setOpenHighlightColorMenu(false)}
+                        />
+
+                        <div className="h-4 w-[1px] bg-slate-300 mx-0.5"></div>
+
+                        {/* Dropdown cỡ chữ: Rút gọn chỉ hiển thị '14px' thay vì '14px (Mặc định)' rất dài */}
+                        <select
+                          value={fontSize}
+                          onChange={(e) => handleFontSizeChange(e.target.value)}
+                          className="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500"
+                          title="Cỡ chữ (Mặc định 14px)"
+                        >
+                          <option value="12px">12px</option>
+                          <option value="14px">14px</option>
+                          <option value="16px">16px</option>
+                          <option value="18px">18px</option>
+                          <option value="20px">20px</option>
+                          <option value="22px">22px</option>
+                          <option value="24px">24px</option>
+                          <option value="28px">28px</option>
+                        </select>
+                      </div>
+
+                      {/* Nhóm 3: Canh lề & Danh sách */}
+                      <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                        {/* Menu Canh lề */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenAlignMenu(!openAlignMenu);
+                              setOpenTextColorMenu(false);
+                              setOpenHighlightColorMenu(false);
+                              setOpenStyleMenu(false);
+                              setOpenInsertMenu(false);
+                              setOpenFunctionMenu(false);
+                            }}
+                            className={`px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 border transition-colors cursor-pointer ${
+                              openAlignMenu ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
+                            }`}
+                            title="Canh lề văn bản (Căn trái, Căn giữa, Căn phải, Căn đều)"
+                          >
+                            {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5 text-indigo-600" />}
+                            {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5 text-indigo-600" />}
+                            {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5 text-indigo-600" />}
+                            {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5 text-indigo-600" />}
+                            <span className="font-semibold text-xs">
+                              {currentAlignment === 'left' && 'Căn trái'}
+                              {currentAlignment === 'center' && 'Căn giữa'}
+                              {currentAlignment === 'right' && 'Căn phải'}
+                              {currentAlignment === 'justify' && 'Căn đều'}
+                            </span>
+                            <ChevronDown className="w-3 h-3 text-slate-400" />
+                          </button>
+
+                          {openAlignMenu && (
+                            <div className="absolute z-50 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl w-40 py-1 divide-y divide-slate-100 animate-fade-in">
+                              <button
+                                type="button"
+                                onClick={() => handleAlign('left')}
+                                className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                  currentAlignment === 'left' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                                }`}
+                              >
+                                <AlignLeft className="w-4 h-4 text-slate-500" />
+                                <span>Canh trái</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAlign('center')}
+                                className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                  currentAlignment === 'center' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                                }`}
+                              >
+                                <AlignCenter className="w-4 h-4 text-slate-500" />
+                                <span>Canh giữa</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAlign('right')}
+                                className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                  currentAlignment === 'right' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                                }`}
+                              >
+                                <AlignRight className="w-4 h-4 text-slate-500" />
+                                <span>Canh phải</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleAlign('justify')}
+                                className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                  currentAlignment === 'justify' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                                }`}
+                              >
+                                <AlignJustify className="w-4 h-4 text-slate-500" />
+                                <span>Canh đều 2 bên</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="h-4 w-[1px] bg-slate-300 mx-0.5"></div>
+
+                        {/* Danh sách chấm & số */}
+                        <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách chấm (:≡)">
+                          <List className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách số (1.≡)">
+                          <ListOrdered className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Nhóm 4: Nút Style & Soạn bài */}
+                      <div className="flex items-center bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                        <WordStyleMenu
+                          selectedStyle={selectedStyle}
+                          onSelectStyle={handleSelectStyle}
+                          isOpen={openStyleMenu}
+                          onToggle={() => {
+                            setOpenStyleMenu(!openStyleMenu);
+                            setOpenAlignMenu(false);
+                            setOpenTextColorMenu(false);
+                            setOpenHighlightColorMenu(false);
+                            setOpenInsertMenu(false);
+                            setOpenFunctionMenu(false);
+                            setOpenWordViewMenu(false);
+                          }}
+                          onClose={() => setOpenStyleMenu(false)}
+                          canAuthor={isTeacherOrHigher(currentRole)}
+                          tienTrinh={tienTrinhChuyenDe}
+                          insertPositionMode={insertPositionMode}
+                          onSetInsertPositionMode={setInsertPositionMode}
+                          onInsertLessonTemplate={handleInsertLessonTemplate}
+                        />
+                      </div>
                     </>
                   )}
 
@@ -7316,6 +7592,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 onExitInsertSpaceMode={() => setIsInsertSpaceMode(false)}
                 activeWhiteboardId={activePptWhiteboardId}
                 onSelectWhiteboard={setActivePptWhiteboardId}
+                activeTool={pptActiveTool}
+                onToolChange={setPptActiveTool}
+                selectedPenType={pptPenType}
+                onPenTypeChange={setPptPenType}
+                selectedColor={pptColor}
+                onColorChange={setPptColor}
+                strokeWidth={pptStrokeWidth}
+                onStrokeWidthChange={setPptStrokeWidth}
                 onOpenTableModal={() => {
                   saveCurrentSelection();
                   setShowTableModal(true);

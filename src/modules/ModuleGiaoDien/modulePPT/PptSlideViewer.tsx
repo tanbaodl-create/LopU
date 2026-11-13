@@ -6,6 +6,8 @@ import {
   PptInteractiveBoard,
   PptWhiteboardData,
   NoteRendererSpaceIcon,
+  BoardTool,
+  PenType,
 } from './PptInteractiveBoard';
 
 interface PptSlideViewerProps {
@@ -37,6 +39,14 @@ interface PptSlideViewerProps {
   docTitle?: string;
   onExitPpt: () => void;
   isTeacher?: boolean;
+  activeTool?: BoardTool;
+  onToolChange?: (tool: BoardTool) => void;
+  selectedPenType?: PenType;
+  onPenTypeChange?: (pen: PenType) => void;
+  selectedColor?: string;
+  onColorChange?: (color: string) => void;
+  strokeWidth?: number;
+  onStrokeWidthChange?: (width: number) => void;
 }
 
 export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
@@ -64,6 +74,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   docTitle = 'Tài liệu Chuyên đề',
   onExitPpt,
   isTeacher = true,
+  activeTool,
+  onToolChange,
+  selectedPenType,
+  onPenTypeChange,
+  selectedColor,
+  onColorChange,
+  strokeWidth,
+  onStrokeWidthChange,
 }) => {
   const [internalStepIndex, setInternalStepIndex] = useState<number>(0);
   const [internalRevealAll, setInternalRevealAll] = useState<boolean>(false);
@@ -552,6 +570,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                   onOpenBbtModal={onOpenBbtModal}
                   onOpenMathModal={onOpenMathModal}
                   onOpenImagePicker={onOpenImagePicker}
+                  activeTool={activeTool}
+                  onToolChange={onToolChange}
+                  selectedPenType={selectedPenType}
+                  onPenTypeChange={onPenTypeChange}
+                  selectedColor={selectedColor}
+                  onColorChange={onColorChange}
+                  strokeWidth={strokeWidth}
+                  onStrokeWidthChange={onStrokeWidthChange}
                 />
               ))}
 
@@ -638,6 +664,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                         onOpenBbtModal={onOpenBbtModal}
                         onOpenMathModal={onOpenMathModal}
                         onOpenImagePicker={onOpenImagePicker}
+                        activeTool={activeTool}
+                        onToolChange={onToolChange}
+                        selectedPenType={selectedPenType}
+                        onPenTypeChange={onPenTypeChange}
+                        selectedColor={selectedColor}
+                        onColorChange={onColorChange}
+                        strokeWidth={strokeWidth}
+                        onStrokeWidthChange={onStrokeWidthChange}
                       />
                     ))}
                   </React.Fragment>
@@ -685,6 +719,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                             onOpenBbtModal={onOpenBbtModal}
                             onOpenMathModal={onOpenMathModal}
                             onOpenImagePicker={onOpenImagePicker}
+                            activeTool={activeTool}
+                            onToolChange={onToolChange}
+                            selectedPenType={selectedPenType}
+                            onPenTypeChange={onPenTypeChange}
+                            selectedColor={selectedColor}
+                            onColorChange={onColorChange}
+                            strokeWidth={strokeWidth}
+                            onStrokeWidthChange={onStrokeWidthChange}
                           />
                         ))}
                       </React.Fragment>

@@ -112,6 +112,14 @@ interface PptInteractiveBoardProps {
   onOpenBbtModal?: () => void;
   onOpenMathModal?: () => void;
   onOpenImagePicker?: () => void;
+  activeTool?: BoardTool;
+  onToolChange?: (tool: BoardTool) => void;
+  selectedPenType?: PenType;
+  onPenTypeChange?: (pen: PenType) => void;
+  selectedColor?: string;
+  onColorChange?: (color: string) => void;
+  strokeWidth?: number;
+  onStrokeWidthChange?: (width: number) => void;
 }
 
 /**
@@ -253,17 +261,53 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   onOpenBbtModal,
   onOpenMathModal,
   onOpenImagePicker,
+  activeTool: controlledActiveTool,
+  onToolChange,
+  selectedPenType: controlledPenType,
+  onPenTypeChange,
+  selectedColor: controlledColor,
+  onColorChange,
+  strokeWidth: controlledStrokeWidth,
+  onStrokeWidthChange,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const localImageInputRef = useRef<HTMLInputElement | null>(null);
 
-  const [activeTool, setActiveTool] = useState<BoardTool>('pen');
-  const [selectedPenType, setSelectedPenType] = useState<PenType>('ballpoint');
-  const [strokeWidth, setStrokeWidth] = useState<number>(2.2);
-  const [selectedColor, setSelectedColor] = useState<string>(
+  const [internalActiveTool, setInternalActiveTool] = useState<BoardTool>('pen');
+  const [internalPenType, setInternalPenType] = useState<PenType>('ballpoint');
+  const [internalStrokeWidth, setInternalStrokeWidth] = useState<number>(2.2);
+  const [internalColor, setInternalColor] = useState<string>(
     board.theme === 'white' ? '#1d4ed8' : '#ffffff'
   );
+
+  const activeTool = controlledActiveTool !== undefined ? controlledActiveTool : internalActiveTool;
+  const setActiveTool = (t: BoardTool | ((prev: BoardTool) => BoardTool)) => {
+    const nextVal = typeof t === 'function' ? t(activeTool) : t;
+    setInternalActiveTool(nextVal);
+    onToolChange?.(nextVal);
+  };
+
+  const selectedPenType = controlledPenType !== undefined ? controlledPenType : internalPenType;
+  const setSelectedPenType = (p: PenType | ((prev: PenType) => PenType)) => {
+    const nextVal = typeof p === 'function' ? p(selectedPenType) : p;
+    setInternalPenType(nextVal);
+    onPenTypeChange?.(nextVal);
+  };
+
+  const strokeWidth = controlledStrokeWidth !== undefined ? controlledStrokeWidth : internalStrokeWidth;
+  const setStrokeWidth = (w: number | ((prev: number) => number)) => {
+    const nextVal = typeof w === 'function' ? w(strokeWidth) : w;
+    setInternalStrokeWidth(nextVal);
+    onStrokeWidthChange?.(nextVal);
+  };
+
+  const selectedColor = controlledColor !== undefined ? controlledColor : internalColor;
+  const setSelectedColor = (c: string | ((prev: string) => string)) => {
+    const nextVal = typeof c === 'function' ? c(selectedColor) : c;
+    setInternalColor(nextVal);
+    onColorChange?.(nextVal);
+  };
 
   // Chọn 1 trong 5 đầu bút: Bút bi, Bút lông, Highlight, Bút chì, Bút laser
   const handleSelectPen = (pen: PenType) => {
