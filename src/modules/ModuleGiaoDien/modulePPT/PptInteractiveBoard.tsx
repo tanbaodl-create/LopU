@@ -1360,18 +1360,11 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   transformOrigin: 'center center',
                   zIndex: isSelected ? 28 : 12,
                 }}
-                className="group/item select-none bg-transparent p-0 transition-all pointer-events-auto border-none shadow-none"
+                className="group/item select-none bg-transparent p-0 transition-all pointer-events-auto border-none shadow-none cursor-move"
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
-                  // Nếu bấm vào nút kéo di chuyển ✥ Di chuyển (hoặc thanh điều khiển)
-                  if (
-                    target.closest('.graph-drag-handle') ||
-                    target.closest('.bbt-drag-handle') ||
-                    target.closest('.drag-handle') ||
-                    (item.type === 'math' && !target.closest('button')) ||
-                    (item.type === 'image' && !target.closest('button'))
-                  ) {
-                    handleStartDragItem(e, item);
+                  // Nếu bấm vào các nút thao tác tương tác (button, input, select, textarea, a) thì để nút xử lý
+                  if (target.closest('button, input, select, textarea, a')) {
                     return;
                   }
                   // Nếu bấm vào góc kéo co giãn đồ thị
@@ -1379,6 +1372,8 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                     handleStartResizeItem(e, item);
                     return;
                   }
+                  // Mặc định chọn đối tượng là kéo đi được ngay
+                  handleStartDragItem(e, item);
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1482,69 +1477,65 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   }
                 }}
               >
-                {/* THANH ĐIỀU KHIỂN TÁC VỤ NHẸ NHÀNG CHO HÌNH ẢNH / BẢNG (CHỈ HIỆN KHI CHỌN VÀ KHÔNG PHẢI ĐỒ THỊ/BBT VÌ ĐỒ THỊ/BBT ĐÃ CÓ THANH RIÊNG) */}
-                {isSelected && (item.type === 'image' || item.type === 'table') && (
+                {/* THANH ĐIỀU KHIỂN TÁC VỤ CHO HÌNH ẢNH / BẢNG / CÔNG THỨC: CHỈ HIỆN KHI RÊ CHUỘT VÀO KHU VỰC, BỎ NÚT DI CHUYỂN */}
+                {(item.type === 'image' || item.type === 'table' || item.type === 'math') && (
                   <div
-                    className="absolute -top-7 left-0 flex items-center gap-1 bg-white/90 backdrop-blur-xs rounded-full shadow-sm border border-slate-200 px-2 py-0.5 text-xs z-30 select-none animate-fadeIn"
+                    className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 backdrop-blur-xs rounded-full shadow-md border border-slate-200 px-2.5 py-1 text-xs z-30 select-none opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 pointer-events-none group-hover/item:pointer-events-auto"
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    <span
-                      onPointerDown={(e) => handleStartDragItem(e, item)}
-                      className="cursor-move text-slate-500 hover:text-indigo-600 p-0.5 flex items-center gap-0.5 text-[10px] font-bold"
-                      title="Kéo di chuyển vị trí"
-                    >
-                      <GripHorizontal className="w-3 h-3" />
-                      <span>Di chuyển</span>
-                    </span>
-                    <div className="w-[1px] h-2.5 bg-slate-300"></div>
                     <button
                       type="button"
                       onClick={() => handleZoomItem(item.id, -0.15)}
-                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
-                      title="Thu nhỏ"
+                      className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full cursor-pointer transition-colors"
+                      title="Thu nhỏ (-15%)"
                     >
-                      <ZoomOut className="w-3 h-3" />
+                      <ZoomOut className="w-3.5 h-3.5" />
                     </button>
                     <button
                       type="button"
                       onClick={() => handleZoomItem(item.id, 0.15)}
-                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
-                      title="Phóng to"
+                      className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full cursor-pointer transition-colors"
+                      title="Phóng to (+15%)"
                     >
-                      <ZoomIn className="w-3 h-3" />
+                      <ZoomIn className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => handleRotateItem(item.id)}
-                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
-                      title="Xoay 90°"
-                    >
-                      <RotateCw className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleFlipHItem(item.id)}
-                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
-                      title="Lật ngang"
-                    >
-                      <FlipHorizontal className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleFlipVItem(item.id)}
-                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
-                      title="Lật dọc"
-                    >
-                      <FlipVertical className="w-3 h-3" />
-                    </button>
-                    <div className="w-[1px] h-2.5 bg-slate-300"></div>
+                    {item.type !== 'math' && (
+                      <>
+                        <div className="w-[1px] h-3 bg-slate-200 mx-0.5"></div>
+                        <button
+                          type="button"
+                          onClick={() => handleRotateItem(item.id)}
+                          className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full cursor-pointer transition-colors"
+                          title="Xoay 90°"
+                        >
+                          <RotateCw className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleFlipHItem(item.id)}
+                          className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full cursor-pointer transition-colors"
+                          title="Lật ngang"
+                        >
+                          <FlipHorizontal className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleFlipVItem(item.id)}
+                          className="p-1 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-full cursor-pointer transition-colors"
+                          title="Lật dọc"
+                        >
+                          <FlipVertical className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                    <div className="w-[1px] h-3 bg-slate-200 mx-0.5"></div>
                     <button
                       type="button"
                       onClick={() => handleDeleteHtmlItem(item.id)}
-                      className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
-                      title="Xóa"
+                      className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-full cursor-pointer transition-colors"
+                      title="Xóa mục này"
                     >
-                      <X className="w-3 h-3" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 )}

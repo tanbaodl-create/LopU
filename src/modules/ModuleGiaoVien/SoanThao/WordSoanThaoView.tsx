@@ -2680,12 +2680,8 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
     return `
       <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-formula="${encodeURIComponent(formula)}" data-xmin="${xMinNum}" data-xmax="${xMaxNum}" data-ymin="${yMinNum}" data-ymax="${yMaxNum}" data-unitx="${unitX}" data-unity="${unitY}" data-show-axis-labels="${showAxisLabels}" data-show-origin-label="${showOriginLabel}" data-show-extrema-labels="${showExtremaLabels}" data-xlabel="${encodeURIComponent(xLabel)}" data-ylabel="${encodeURIComponent(yLabel)}" data-varname="${varName}" data-req="${encodeURIComponent(requirement)}" data-width="${initialWidth}" style="text-align: center; margin: 16px auto; background: transparent; border: 1.5px dashed transparent; position: relative; max-width: ${initialWidth}px; width: 100%; display: block; user-select: none;" ${isTeacher ? `onmouseover="this.style.borderColor='#94a3b8'" onmouseout="this.style.borderColor='transparent'"` : ''}>
         ${isTeacher ? `
-        <div class="word-graph-controls flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs transition-opacity" style="user-select: none;">
+        <div class="word-graph-controls opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs" style="user-select: none;">
           <div class="flex items-center gap-1.5">
-            <span class="graph-drag-handle cursor-move font-bold text-slate-600 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]" title="Bấm giữ và kéo để di chuyển toàn bộ đồ thị đến vị trí mong muốn">
-              ✥ Di chuyển
-            </span>
-            <span class="text-slate-300">|</span>
             <button type="button" class="edit-graph-btn text-indigo-600 hover:text-indigo-800 font-bold px-1.5 py-0.5 rounded hover:bg-indigo-50 flex items-center gap-1 text-[11px] cursor-pointer" title="Mở lại cửa sổ nhập hàm để chỉnh sửa đồ thị này">
               ✏️ Sửa hàm
             </button>
@@ -3729,12 +3725,8 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
     return `
       <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-formula="${encodeURIComponent(formulaParam || '')}" data-xpoints="${encodeURIComponent(xPointsStr)}" data-yprimesigns="${encodeURIComponent(yPrimeSignsStr)}" data-yvalues="${encodeURIComponent(yValuesStr)}" data-mode="${modeParam || 'manual'}" data-width="${initialWidth}" data-align="${align}" data-varname="${encodeURIComponent(varName)}" data-funcrow="${encodeURIComponent(funcRow)}" data-derivrow="${encodeURIComponent(derivRow)}" style="text-align: ${align}; margin: 16px auto; background: transparent; border: 1.5px dashed transparent; position: relative; max-width: ${initialWidth}px; width: 100%; display: block; user-select: none; ${marginStyle}" ${isTeacher ? `onmouseover="this.style.borderColor='#94a3b8'" onmouseout="this.style.borderColor='transparent'"` : ''}>
         ${isTeacher ? `
-          <div class="word-bbt-controls flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs transition-opacity" style="user-select: none;">
+          <div class="word-bbt-controls opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs" style="user-select: none;">
             <div class="flex items-center gap-1.5">
-              <span class="bbt-drag-handle cursor-move font-bold text-slate-600 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]" title="Bấm giữ và kéo để di chuyển toàn bộ bảng biến thiên">
-                ✥ Di chuyển
-              </span>
-              <span class="text-slate-300">|</span>
               <button type="button" class="edit-bbt-btn text-emerald-600 hover:text-emerald-800 font-bold px-2 py-0.5 rounded hover:bg-emerald-50 flex items-center gap-1 text-[11px] cursor-pointer" title="Mở lại cửa sổ để chỉnh sửa hoặc đổi hàm số cho bảng biến thiên này">
                 ✏️ Sửa BBT
               </button>
@@ -8056,6 +8048,20 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   border: 1.5px dashed transparent !important;
                   outline: none !important;
                   cursor: default !important;
+                }
+                /* Thanh điều khiển trên đồ thị / BBT chỉ hiện khi rê chuột vào */
+                .word-graph-controls,
+                .word-bbt-controls {
+                  opacity: 0;
+                  pointer-events: none;
+                  transition: opacity 0.2s ease-in-out;
+                }
+                .word-graph-wrapper:hover .word-graph-controls,
+                .word-bbt-wrapper:hover .word-bbt-controls,
+                .group:hover .word-graph-controls,
+                .group:hover .word-bbt-controls {
+                  opacity: 1 !important;
+                  pointer-events: auto !important;
                 }
                 .word-doc-student-mode .graph-draggable-text {
                   cursor: default !important;

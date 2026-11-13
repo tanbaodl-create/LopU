@@ -724,8 +724,7 @@ ${tikzPlots}
           ${
             isTeacher
               ? `
-            <div class="word-graph-controls flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs transition-opacity" style="user-select: none;">
-              <span class="graph-drag-handle cursor-move font-bold text-slate-600 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]" title="Bấm giữ và kéo để di chuyển">✥ Di chuyển</span>
+            <div class="word-graph-controls flex items-center justify-end gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="user-select: none;">
               <button type="button" onclick="this.closest('.word-graph-wrapper').remove()" title="Xóa đồ thị này" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-0.5 rounded hover:bg-rose-50 text-[11px] cursor-pointer">✕ Xóa</button>
             </div>
           `
@@ -822,8 +821,7 @@ ${tikzPlots}
           ${
             isTeacher
               ? `
-            <div class="word-bbt-controls flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs transition-opacity" style="user-select: none;">
-              <span class="bbt-drag-handle cursor-move font-bold text-slate-600 flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-slate-100 text-[11px]" title="Bấm giữ và kéo để di chuyển">✥ Di chuyển</span>
+            <div class="word-bbt-controls flex items-center justify-end gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto" style="user-select: none;">
               <button type="button" onclick="this.closest('.word-bbt-wrapper').remove()" title="Xóa bảng biến thiên này" class="text-rose-600 hover:text-rose-800 font-bold px-2 py-0.5 rounded hover:bg-rose-50 text-[11px] cursor-pointer">✕ Xóa</button>
             </div>
           `
