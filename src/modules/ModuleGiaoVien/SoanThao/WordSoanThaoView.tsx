@@ -7954,8 +7954,8 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           {/* Vùng hiển thị theo chế độ View được chọn (Chỉ hiển thị khi đã hoàn tất đồng bộ từ Drive hoặc học sinh xem ngay từ cache) */}
           {!(isLoadingFromDrive || (isTeacherOrHigher(currentRole) && isReauthenticating)) && (
             wordViewMode === 'ppt' ? (
-              <div className="fixed inset-0 z-40 bg-slate-200/95 overflow-y-auto w-screen h-screen pt-24 sm:pt-28 pb-16 px-1 sm:px-3">
-                <div className="w-full max-w-none">
+              <div className="fixed inset-0 z-40 bg-white overflow-hidden w-screen h-screen p-0 m-0">
+                <div className="w-full h-full">
                   <PptSlideViewer
                     slides={pptSlides}
                     activeSlideIndex={activePptSlideIndex}

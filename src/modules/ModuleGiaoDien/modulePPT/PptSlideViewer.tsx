@@ -368,7 +368,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   }, [slides, activeSlideIndex, activeStepIndex, revealAllSteps, totalSteps, isInsertSpaceMode, onExitInsertSpaceMode, onSlideChange, onExitPpt]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950 p-4 sm:p-6 flex flex-col justify-between overflow-y-auto pt-24 pb-8 space-y-4">
+    <div className="fixed inset-0 z-50 bg-white flex flex-col justify-between overflow-y-auto w-full h-full min-h-screen p-0 m-0">
       {/* Định nghĩa các chuyển động CSS của 10 hiệu ứng trình chiếu PPT cơ bản */}
       <style>{`
         @keyframes pptFadeIn {
@@ -455,7 +455,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         onPointerLeave={handleSlidePointerLeave}
         onPointerDown={handleSlidePointerDown}
         onClick={handleSlideClick}
-        className={`bg-white rounded-2xl shadow-2xl p-4 sm:p-8 min-h-[520px] w-full max-w-none flex flex-col justify-between border border-slate-200 select-none transition-all relative ${
+        className={`bg-white w-full min-h-screen flex-1 flex flex-col justify-between p-6 sm:p-12 pt-24 sm:pt-28 pb-8 select-none transition-all relative border-none rounded-none shadow-none ${
           isInsertSpaceMode ? 'cursor-ns-resize ring-2 ring-indigo-400/40' : 'cursor-pointer'
         }`}
         title={
