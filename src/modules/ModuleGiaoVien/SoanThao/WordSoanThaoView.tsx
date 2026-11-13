@@ -107,7 +107,6 @@ import {
   PptRailClickMenuData,
   PptEffectType,
   getPptEffectDef,
-  NoteRendererSpaceIcon,
   PptWhiteboardData,
 } from '../../ModuleGiaoDien/modulePPT';
 
@@ -6471,22 +6470,15 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   {/* CỤM NÚT ĐIỀU KHIỂN TRÌNH CHIẾU PPT TÍCH HỢP TRONG MENU WORD (KHI VIEW === 'ppt') */}
                   {wordViewMode === 'ppt' && (
                     <div className="flex items-center gap-1.5 flex-wrap bg-purple-50/90 p-1 rounded-xl border border-purple-200 shadow-2xs">
-                      {/* Huy hiệu Slide PPT & Bước hiệu ứng */}
-                      <span className="px-2.5 py-1 rounded-lg bg-purple-700 text-white font-black text-xs tracking-wider flex items-center gap-1 shadow-xs">
-                        <Tv className="w-3.5 h-3.5" />
-                        <span>Slide {Math.min(activePptSlideIndex + 1, Math.max(1, pptSlides.length))}/{Math.max(1, pptSlides.length)}</span>
-                      </span>
-
-                      {/* Nút Trước (Lùi bước / Slide trước) */}
+                      {/* Nút Trước (Lùi bước / Slide trước - Biểu tượng) */}
                       <button
                         type="button"
                         disabled={activePptSlideIndex <= 0 && activePptStepIndex <= 0}
                         onClick={handlePptPrev}
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-slate-100 shadow-xs"
+                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-slate-100 shadow-xs"
                         title="Lùi bước / Slide trước (Phím ← hoặc PageUp)"
                       >
-                        <ChevronLeft className="w-3.5 h-3.5" />
-                        <span>Trước</span>
+                        <ChevronLeft className="w-4 h-4" />
                       </button>
 
                       {/* Dropdown Chọn slide */}
@@ -6507,7 +6499,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         ))}
                       </select>
 
-                      {/* Nút Slide tiếp / Hiện tiếp ⚡ */}
+                      {/* Nút Slide tiếp / Hiện tiếp (Biểu tượng) */}
                       <button
                         type="button"
                         disabled={
@@ -6515,15 +6507,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           (revealAllSteps || activePptStepIndex >= currentPptTotalSteps - 1)
                         }
                         onClick={handlePptNext}
-                        className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-white shadow-xs"
-                        title="Tiến bước / Slide tiếp theo (Phím → hoặc Phím Cách)"
+                        className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-white shadow-xs"
+                        title={
+                          !revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
+                            ? 'Hiện tiếp hiệu ứng ⚡ (Phím → hoặc Phím Cách)'
+                            : 'Slide tiếp theo (Phím → hoặc Phím Cách)'
+                        }
                       >
-                        <span>
-                          {!revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
-                            ? 'Hiện tiếp ⚡'
-                            : 'Slide tiếp'}
-                        </span>
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        <ChevronRight className="w-4 h-4" />
                       </button>
 
                       {/* Nút Từng bước ⚡ / Hiện tất cả nếu slide có nhiều hiệu ứng */}
@@ -6541,30 +6532,6 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           {revealAllSteps ? 'Tất cả' : 'Từng bước ⚡'}
                         </button>
                       )}
-
-                      {/* Nút Chèn khoảng trống (NoteRenderer Space Tool) */}
-                      <button
-                        type="button"
-                        onClick={() => setIsInsertSpaceMode((prev) => !prev)}
-                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all transform cursor-pointer flex items-center gap-1.5 shadow-xs border ${
-                          isInsertSpaceMode
-                            ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-300 ring-2 ring-amber-300 animate-pulse'
-                            : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-400 active:scale-95'
-                        }`}
-                        title={
-                          isInsertSpaceMode
-                            ? 'Đang bật thước chèn khoảng trống: Đưa chuột vào trang sẽ có thanh ngang, nhấp và kéo xuống để mở khoảng trống (nhấp lại nút này để tắt)'
-                            : 'Chèn khoảng trống (như NoteRenderer): Nhấp để bật thanh ngang, sau đó nhấp giữ và kéo xuống trên trang để mở khoảng trống viết bài'
-                        }
-                      >
-                        <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
-                        <span>{isInsertSpaceMode ? '↕️ Đang chèn...' : 'Chèn khoảng trống'}</span>
-                        {isInsertSpaceMode && (
-                          <span className="text-[10px] bg-amber-700/90 text-white px-1.5 py-0.2 rounded-full font-bold">
-                            ✕ Hủy
-                          </span>
-                        )}
-                      </button>
 
                       <div className="h-4 w-[1px] bg-purple-300 mx-1"></div>
                     </div>
@@ -6998,6 +6965,31 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
             </div>
 
+            {/* NÚT CHÈN KHOẢNG TRỐNG BIỂU TƯỢNG ^v NGAY SAU NÚT VIEW: XEM PPT */}
+            {wordViewMode === 'ppt' && (
+              <button
+                type="button"
+                onClick={() => setIsInsertSpaceMode((prev) => !prev)}
+                className={`p-1.5 px-2.5 rounded-lg text-xs font-bold transition-all transform cursor-pointer flex items-center justify-center gap-1 shadow-xs border ${
+                  isInsertSpaceMode
+                    ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-300 ring-2 ring-amber-300 animate-pulse'
+                    : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-400 active:scale-95'
+                }`}
+                title={
+                  isInsertSpaceMode
+                    ? 'Đang bật thước chèn khoảng trống: Đưa chuột vào trang sẽ có thanh ngang, nhấp và kéo xuống để mở khoảng trống (nhấp lại nút này để tắt)'
+                    : 'Chèn khoảng trống (^v): Nhấp để bật thanh ngang, sau đó nhấp giữ và kéo xuống trên trang để mở khoảng trống viết bài'
+                }
+              >
+                <span className="font-mono font-black text-xs tracking-tighter">^v</span>
+                {isInsertSpaceMode && (
+                  <span className="text-[10px] bg-amber-700/90 text-white px-1 py-0.2 rounded-full font-bold">
+                    ✕
+                  </span>
+                )}
+              </button>
+            )}
+
                   {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) & Nút Thoát PPT */}
                   <div className="ml-auto flex items-center gap-2">
                     {/* Nút Thoát PPT nổi bật khi đang ở chế độ xem PPT */}
@@ -7015,10 +7007,6 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         <span>Thoát PPT</span>
                       </button>
                     )}
-                    <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs" title="Tài khoản Giáo viên có Quyền biên soạn tài liệu (Chỉnh sửa, xóa, đổi tên, đặt mốc PPT &amp; hiệu ứng)">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Quyền biên soạn: Đã kích hoạt ✓</span>
-                    </span>
                     <DongBoDriveButton
                       isSaving={isSaving}
                       syncStatus={syncStatus}
@@ -7034,20 +7022,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     {wordViewMode === 'ppt' ? (
                       /* Khi học sinh xem PPT: Nút điều hướng PPT + Cỡ chữ + Thoát PPT */
                       <>
-                        <span className="px-2.5 py-1 rounded-lg bg-purple-700 text-white font-black text-xs tracking-wider flex items-center gap-1 shadow-xs">
-                          <Tv className="w-3.5 h-3.5" />
-                          <span>Slide {Math.min(activePptSlideIndex + 1, Math.max(1, pptSlides.length))}/{Math.max(1, pptSlides.length)}</span>
-                        </span>
-
                         <button
                           type="button"
                           disabled={activePptSlideIndex <= 0 && activePptStepIndex <= 0}
                           onClick={handlePptPrev}
-                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-slate-100 shadow-xs"
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-slate-100 shadow-xs"
                           title="Lùi bước / Slide trước"
                         >
-                          <ChevronLeft className="w-3.5 h-3.5" />
-                          <span>Trước</span>
+                          <ChevronLeft className="w-4 h-4" />
                         </button>
 
                         <select
@@ -7074,15 +7056,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                             (revealAllSteps || activePptStepIndex >= currentPptTotalSteps - 1)
                           }
                           onClick={handlePptNext}
-                          className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-white shadow-xs"
-                          title="Tiến bước / Slide tiếp theo"
+                          className="p-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-white shadow-xs"
+                          title={
+                            !revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
+                              ? 'Hiện tiếp hiệu ứng ⚡'
+                              : 'Slide tiếp theo'
+                          }
                         >
-                          <span>
-                            {!revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
-                              ? 'Hiện tiếp ⚡'
-                              : 'Slide tiếp'}
-                          </span>
-                          <ChevronRight className="w-3.5 h-3.5" />
+                          <ChevronRight className="w-4 h-4" />
                         </button>
 
                         <button
