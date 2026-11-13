@@ -425,9 +425,9 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   const DEFAULT_PPT_5_PENS: PptPenSlot[] = [
     { id: 0, name: 'Bút 1', penType: 'ballpoint', color: '#1d4ed8', strokeWidth: 2.2 },
-    { id: 1, name: 'Bút 2', penType: 'brush', color: '#7c3aed', strokeWidth: 6.0 },
-    { id: 2, name: 'Bút 3', penType: 'highlighter', color: '#facc15', strokeWidth: 20.0 },
-    { id: 3, name: 'Bút 4', penType: 'pencil', color: '#475569', strokeWidth: 1.5 },
+    { id: 1, name: 'Bút 2', penType: 'fountain', color: '#7e22ce', strokeWidth: 2.8 },
+    { id: 2, name: 'Bút 3', penType: 'brush', color: '#059669', strokeWidth: 6.0 },
+    { id: 3, name: 'Bút 4', penType: 'highlighter', color: '#facc15', strokeWidth: 20.0 },
     { id: 4, name: 'Bút 5', penType: 'laser', color: '#ef4444', strokeWidth: 5.0 },
   ];
 
@@ -504,6 +504,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         let newWidth = slot.strokeWidth;
         if (newType === 'highlighter' && newWidth < 10) newWidth = 20;
         else if (newType === 'brush' && (newWidth < 3 || newWidth > 14)) newWidth = 6.0;
+        else if (newType === 'fountain' && (newWidth < 1.5 || newWidth > 8)) newWidth = 2.8;
         else if (newType === 'ballpoint' && newWidth > 5) newWidth = 2.2;
         else if (newType === 'pencil' && newWidth > 4) newWidth = 1.5;
         else if (newType === 'laser' && (newWidth < 2 || newWidth > 8)) newWidth = 5.0;
@@ -551,6 +552,8 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   const getPenTypeMeta = (type: PenType) => {
     switch (type) {
+      case 'fountain':
+        return { label: 'Bút máy', icon: PenTool };
       case 'brush':
         return { label: 'Bút lông', icon: Paintbrush };
       case 'highlighter':
@@ -565,7 +568,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
     }
   };
 
-  // Bảng màu mẫu tương thích theo từng loại bút (Bút bi, Bút lông, Highlight, Bút chì, Laser)
+  // Bảng màu mẫu tương thích theo từng loại bút (Bút bi, Bút máy, Bút lông, Highlight, Bút chì, Laser)
   const getPptPenSampleColors = (penType: PenType) => {
     if (penType === 'highlighter') {
       return [
@@ -575,6 +578,16 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         { label: 'Hồng neon', color: '#f472b6' },
         { label: 'Cam neon', color: '#fb923c' },
         { label: 'Tím neon', color: '#c084fc' },
+      ];
+    }
+    if (penType === 'fountain') {
+      return [
+        { label: 'Xanh mực', color: '#1d4ed8' },
+        { label: 'Tím hoa cà', color: '#7e22ce' },
+        { label: 'Xanh đen', color: '#0f172a' },
+        { label: 'Đỏ mực', color: '#dc2626' },
+        { label: 'Xanh ngọc', color: '#059669' },
+        { label: 'Nâu sẫm', color: '#78350f' },
       ];
     }
     if (penType === 'brush') {
@@ -625,6 +638,13 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         { label: 'Mảnh', size: 14, dot: 'w-1.5 h-1.5' },
         { label: 'Vừa', size: 20, dot: 'w-2.5 h-2.5' },
         { label: 'Đậm', size: 28, dot: 'w-3.5 h-3.5' },
+      ];
+    }
+    if (penType === 'fountain') {
+      return [
+        { label: 'Mảnh', size: 1.8, dot: 'w-1 h-1' },
+        { label: 'Vừa', size: 2.8, dot: 'w-2 h-2' },
+        { label: 'Đậm', size: 4.5, dot: 'w-2.5 h-2.5' },
       ];
     }
     if (penType === 'brush') {
@@ -7069,7 +7089,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                 onClick={() => setPptPenPopupSlotIndex(null)}
                               />
                               <div
-                                className="absolute top-full left-0 mt-2 z-50 w-84 bg-white rounded-2xl border border-slate-200 shadow-2xl p-3.5 space-y-3.5 select-none animate-fadeIn"
+                                className="absolute top-full left-0 mt-2 z-50 w-88 sm:w-96 max-w-[95vw] bg-white rounded-2xl border border-slate-200 shadow-2xl p-3.5 space-y-3.5 select-none animate-fadeIn"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 {/* Tiêu đề popup */}
@@ -7090,14 +7110,15 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                   </button>
                                 </div>
 
-                                {/* 1. CHỌN LOẠI BÚT (5 LOẠI: Bút bi, Bút lông, Highlight, Bút chì, Laser) */}
+                                {/* 1. CHỌN LOẠI BÚT (6 LOẠI: Bút bi, Bút máy, Bút lông, Highlight, Bút chì, Laser) */}
                                 <div>
                                   <div className="text-[11px] font-bold text-slate-500 mb-1.5 flex items-center justify-between">
                                     <span>1. Chọn loại bút:</span>
                                   </div>
-                                  <div className="grid grid-cols-5 gap-1 p-0.5 bg-slate-100 rounded-xl border border-slate-200/80">
+                                  <div className="grid grid-cols-6 gap-1 p-0.5 bg-slate-100 rounded-xl border border-slate-200/80">
                                     {[
                                       { type: 'ballpoint', label: 'Bút bi', icon: Pen },
+                                      { type: 'fountain', label: 'Bút máy', icon: PenTool },
                                       { type: 'brush', label: 'Bút lông', icon: Paintbrush },
                                       { type: 'highlighter', label: 'Highlight', icon: Highlighter },
                                       { type: 'pencil', label: 'Bút chì', icon: Pencil },
@@ -7118,7 +7139,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                           title={p.label}
                                         >
                                           <Icon className="w-3.5 h-3.5 mb-0.5" />
-                                          <span className="truncate max-w-full text-[9.5px]">{p.label}</span>
+                                          <span className="truncate max-w-full text-[9px]">{p.label}</span>
                                         </button>
                                       );
                                     })}
@@ -7168,17 +7189,20 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                                       min={
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 8 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'brush' ? 2 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'fountain' ? 1.2 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 0.8 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'laser' ? 2 : 1
                                       }
                                       max={
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 36 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'brush' ? 14 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'fountain' ? 8 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 4 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'laser' ? 10 : 6
                                       }
                                       step={
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'highlighter' ? 2 :
+                                        pptPenSlots[pptPenPopupSlotIndex].penType === 'fountain' ? 0.2 :
                                         pptPenSlots[pptPenPopupSlotIndex].penType === 'pencil' ? 0.2 : 0.5
                                       }
                                       value={pptPenSlots[pptPenPopupSlotIndex].strokeWidth}

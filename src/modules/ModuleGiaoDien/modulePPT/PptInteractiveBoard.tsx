@@ -26,7 +26,7 @@ import {
 
 export type BoardTheme = 'white' | 'green' | 'black';
 
-export type PenType = 'ballpoint' | 'brush' | 'highlighter' | 'pencil' | 'laser';
+export type PenType = 'ballpoint' | 'fountain' | 'brush' | 'highlighter' | 'pencil' | 'laser';
 
 export type BoardTool =
   | 'select'
@@ -308,6 +308,9 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     if (pen === 'ballpoint') {
       setStrokeWidth(2.2);
       setSelectedColor(board.theme === 'white' ? '#1d4ed8' : '#ffffff');
+    } else if (pen === 'fountain') {
+      setStrokeWidth(2.8);
+      setSelectedColor(board.theme === 'white' ? '#1d4ed8' : '#60a5fa');
     } else if (pen === 'brush') {
       setStrokeWidth(6.0);
       setSelectedColor(board.theme === 'white' ? '#7c3aed' : '#f472b6');
@@ -332,6 +335,15 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         { label: 'Xanh lơ neon', color: '#38bdf8' },
         { label: 'Hồng neon', color: '#f472b6' },
         { label: 'Cam neon', color: '#fb923c' },
+      ];
+    }
+    if (selectedPenType === 'fountain') {
+      return [
+        { label: 'Xanh mực', color: '#1d4ed8' },
+        { label: 'Tím hoa cà', color: '#7e22ce' },
+        { label: 'Xanh đen', color: board.theme === 'white' ? '#0f172a' : '#ffffff' },
+        { label: 'Đỏ mực', color: '#dc2626' },
+        { label: 'Xanh ngọc', color: '#059669' },
       ];
     }
     if (selectedPenType === 'pencil') {
@@ -818,6 +830,12 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           ctx.lineCap = 'round';
           ctx.lineJoin = 'round';
           ctx.lineWidth = stroke.width || 6;
+        } else if (pType === 'fountain') {
+          // Bút máy: Ngòi mài mực đậm đà, sắc sảo nét thanh nét đậm chuẩn xác
+          ctx.globalAlpha = stroke.opacity ?? 1.0;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.lineWidth = stroke.width || 2.8;
         } else if (pType === 'pencil') {
           ctx.globalAlpha = stroke.opacity ?? 0.65;
           ctx.lineCap = 'round';
@@ -1002,6 +1020,11 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         ctx.lineWidth = strokeWidth || 6;
+      } else if (selectedPenType === 'fountain') {
+        ctx.globalAlpha = 1.0;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = strokeWidth || 2.8;
       } else if (selectedPenType === 'pencil') {
         ctx.globalAlpha = 0.65;
         ctx.lineCap = 'round';
