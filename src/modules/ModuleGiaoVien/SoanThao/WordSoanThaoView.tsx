@@ -399,6 +399,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   // Danh sách khoảng trống viết bảng tương tác chèn vào các bước slide PPT (NoteRenderer style)
   const [pptWhiteboards, setPptWhiteboards] = useState<PptWhiteboardData[]>([]);
+  const [isInsertSpaceMode, setIsInsertSpaceMode] = useState<boolean>(false);
 
   const handleAddPptWhiteboardAtStep = (stepIdx: number, initialHeight: number = 280) => {
     const newBoard: PptWhiteboardData = {
@@ -6544,12 +6545,25 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                       {/* Nút Chèn khoảng trống (NoteRenderer Space Tool) */}
                       <button
                         type="button"
-                        onClick={() => handleAddPptWhiteboardAtStep(activePptStepIndex, 280)}
-                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all transform active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs border border-indigo-400"
-                        title="Chèn khoảng trống (như NoteRenderer): Mở khoảng trống viết bài giảng / lời giải ở giữa; nội dung tiếp theo sẽ dời xuống bên dưới"
+                        onClick={() => setIsInsertSpaceMode((prev) => !prev)}
+                        className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all transform cursor-pointer flex items-center gap-1.5 shadow-xs border ${
+                          isInsertSpaceMode
+                            ? 'bg-amber-500 hover:bg-amber-600 text-white border-amber-300 ring-2 ring-amber-300 animate-pulse'
+                            : 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-400 active:scale-95'
+                        }`}
+                        title={
+                          isInsertSpaceMode
+                            ? 'Đang bật thước chèn khoảng trống: Đưa chuột vào trang sẽ có thanh ngang, nhấp và kéo xuống để mở khoảng trống (nhấp lại nút này để tắt)'
+                            : 'Chèn khoảng trống (như NoteRenderer): Nhấp để bật thanh ngang, sau đó nhấp giữ và kéo xuống trên trang để mở khoảng trống viết bài'
+                        }
                       >
                         <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
-                        <span>Chèn khoảng trống</span>
+                        <span>{isInsertSpaceMode ? '↕️ Đang chèn...' : 'Chèn khoảng trống'}</span>
+                        {isInsertSpaceMode && (
+                          <span className="text-[10px] bg-amber-700/90 text-white px-1.5 py-0.2 rounded-full font-bold">
+                            ✕ Hủy
+                          </span>
+                        )}
                       </button>
 
                       <div className="h-4 w-[1px] bg-purple-300 mx-1"></div>
@@ -7190,6 +7204,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 onSlideChange={(newIdx) => {
                   setActivePptSlideIndex(newIdx);
                   setActivePptStepIndex(0);
+                  setIsInsertSpaceMode(false);
                 }}
                 activeStepIndex={activePptStepIndex}
                 onStepChange={setActivePptStepIndex}
@@ -7199,10 +7214,13 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 onUpdateWhiteboard={handleUpdatePptWhiteboard}
                 onDeleteWhiteboard={handleDeletePptWhiteboard}
                 onAddWhiteboardAtStep={handleAddPptWhiteboardAtStep}
+                isInsertSpaceMode={isInsertSpaceMode}
+                onExitInsertSpaceMode={() => setIsInsertSpaceMode(false)}
                 tienTrinhChuyenDe={tienTrinhChuyenDe}
                 docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
                 isTeacher={isTeacherOrHigher(currentRole)}
                 onExitPpt={() => {
+                  setIsInsertSpaceMode(false);
                   setIsPptFullScreen(false);
                   setWordViewMode('full');
                 }}

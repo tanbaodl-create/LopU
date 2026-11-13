@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PptSlideItem } from './types';
 import { getEffectLabel } from './PptMarkerRail';
 import {
@@ -19,6 +19,8 @@ interface PptSlideViewerProps {
   onUpdateWhiteboard?: (updated: PptWhiteboardData) => void;
   onDeleteWhiteboard?: (id: string) => void;
   onAddWhiteboardAtStep?: (stepIdx: number, initialHeight?: number) => void;
+  isInsertSpaceMode?: boolean;
+  onExitInsertSpaceMode?: () => void;
   tienTrinhChuyenDe?: string;
   docTitle?: string;
   onExitPpt: () => void;
@@ -37,6 +39,8 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   onUpdateWhiteboard,
   onDeleteWhiteboard,
   onAddWhiteboardAtStep,
+  isInsertSpaceMode = false,
+  onExitInsertSpaceMode,
   tienTrinhChuyenDe = 'Kiến thức',
   docTitle = 'Tài liệu Chuyên đề',
   onExitPpt,
@@ -45,6 +49,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   const [internalStepIndex, setInternalStepIndex] = useState<number>(0);
   const [internalRevealAll, setInternalRevealAll] = useState<boolean>(false);
   const [internalWhiteboards, setInternalWhiteboards] = useState<PptWhiteboardData[]>([]);
+
+  const slideCardRef = useRef<HTMLDivElement>(null);
+  const [hoverY, setHoverY] = useState<number | null>(null);
+  const [dragSpaceState, setDragSpaceState] = useState<{
+    startY: number;
+    currentY: number;
+    targetStepIdx: number;
+  } | null>(null);
 
   const activeStepIndex = controlledStepIndex !== undefined ? controlledStepIndex : internalStepIndex;
   const setActiveStepIndex = (val: number | ((prev: number) => number)) => {
@@ -98,71 +110,109 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     }
   };
 
-  // Kéo chuột/bút xuống để chèn khoảng trống trực tiếp (NoteRenderer drag-to-insert mechanism)
-  const handleStartCreateSpaceDrag = (stepIdx: number, e: React.PointerEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const startY = e.clientY;
-    let createdId: string | null = null;
-
-    const onPointerMove = (moveEvent: PointerEvent) => {
-      moveEvent.preventDefault();
-      const deltaY = moveEvent.clientY - startY;
-      if (deltaY > 20) {
-        if (!createdId) {
-          createdId = `space-${activeSlideIndex}-${stepIdx}-${Date.now()}`;
-          const newSpace: PptWhiteboardData = {
-            id: createdId,
-            slideIndex: activeSlideIndex,
-            afterStepIndex: stepIdx,
-            theme: 'white',
-            height: Math.max(120, Math.min(1200, deltaY)),
-            textNote: '',
-            showTextEditor: false,
-            strokes: [],
-          };
-          if (onUpdateWhiteboard) {
-            onUpdateWhiteboard(newSpace);
-          } else {
-            setInternalWhiteboards((prev) => [...prev, newSpace]);
-          }
-        } else {
-          const h = Math.max(80, Math.min(1400, deltaY));
-          if (onUpdateWhiteboard) {
-            const currentItem = whiteboards.find((b) => b.id === createdId);
-            if (currentItem) {
-              onUpdateWhiteboard({ ...currentItem, height: h });
-            }
-          } else {
-            setInternalWhiteboards((prev) =>
-              prev.map((b) => (b.id === createdId ? { ...b, height: h } : b))
-            );
-          }
-        }
-      }
-    };
-
-    const onPointerUp = (upEvent: PointerEvent) => {
-      upEvent.preventDefault();
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-      // Nếu chỉ nhấp chuột mà không kéo thì mở khoảng trống chuẩn 280px
-      if (!createdId && Math.abs(upEvent.clientY - startY) < 15) {
-        handleAddBoardAtStep(stepIdx, 280);
-      }
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
-  };
-
   const currentSlide = slides[Math.min(activeSlideIndex, Math.max(0, slides.length - 1))] || slides[0];
   const totalSteps = currentSlide?.steps?.length || 1;
   const visibleSteps = revealAllSteps
     ? currentSlide?.steps || []
     : (currentSlide?.steps || []).slice(0, activeStepIndex + 1);
+
+  // Khi di chuột trên trang ở chế độ chèn khoảng trống (NoteRenderer hover horizontal line)
+  const handleSlidePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isInsertSpaceMode || dragSpaceState) return;
+    if (!slideCardRef.current) return;
+    const rect = slideCardRef.current.getBoundingClientRect();
+    const relY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
+    setHoverY(relY);
+  };
+
+  const handleSlidePointerLeave = () => {
+    if (!dragSpaceState) {
+      setHoverY(null);
+    }
+  };
+
+  // Xác định vị trí bước (step) tương ứng với tọa độ Y
+  const findTargetStepAtY = (clientY: number): number => {
+    if (!slideCardRef.current) return Math.max(0, visibleSteps.length - 1);
+    const stepElements = Array.from(
+      slideCardRef.current.querySelectorAll<HTMLElement>('[data-step-index]')
+    );
+    if (stepElements.length === 0) return Math.max(0, visibleSteps.length - 1);
+
+    for (let i = 0; i < stepElements.length; i++) {
+      const rect = stepElements[i].getBoundingClientRect();
+      if (clientY <= rect.bottom) {
+        return i;
+      }
+    }
+    return Math.max(0, visibleSteps.length - 1);
+  };
+
+  // Nhấp chuột để bắt đầu, giữ chuột kéo đến vị trí kết thúc sẽ thả chuột ra (như NoteRenderer)
+  const handleSlidePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isInsertSpaceMode) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, select, canvas, textarea, .no-space-insert')) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startY = e.clientY;
+    const targetStepIdx = findTargetStepAtY(startY);
+
+    setDragSpaceState({
+      startY,
+      currentY: startY,
+      targetStepIdx,
+    });
+
+    const onWindowPointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      setDragSpaceState((prev) => (prev ? { ...prev, currentY: moveEvent.clientY } : null));
+    };
+
+    const onWindowPointerUp = (upEvent: PointerEvent) => {
+      upEvent.preventDefault();
+      window.removeEventListener('pointermove', onWindowPointerMove);
+      window.removeEventListener('pointerup', onWindowPointerUp);
+      window.removeEventListener('pointercancel', onWindowPointerUp);
+
+      const deltaY = upEvent.clientY - startY;
+      if (deltaY >= 40) {
+        handleAddBoardAtStep(targetStepIdx, Math.round(deltaY));
+      } else {
+        // Nhấp chuột mà không kéo thì mở khoảng trống chuẩn 280px
+        handleAddBoardAtStep(targetStepIdx, 280);
+      }
+
+      setDragSpaceState(null);
+      setHoverY(null);
+      if (onExitInsertSpaceMode) {
+        onExitInsertSpaceMode();
+      }
+    };
+
+    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointerup', onWindowPointerUp);
+    window.addEventListener('pointercancel', onWindowPointerUp);
+  };
+
+  const handleSlideClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isInsertSpaceMode || dragSpaceState) {
+      return;
+    }
+    const target = e.target as HTMLElement;
+    if (!target.closest('button, a, input, select, canvas, textarea, .no-slide-advance')) {
+      if (!revealAllSteps && activeStepIndex < totalSteps - 1) {
+        setActiveStepIndex((prev) => (typeof prev === 'number' ? prev + 1 : activeStepIndex + 1));
+      } else if (activeSlideIndex < slides.length - 1) {
+        onSlideChange(activeSlideIndex + 1);
+        setActiveStepIndex(0);
+      }
+    }
+  };
 
   // Reset bước hiệu ứng khi đổi slide nếu đang dùng internal state
   useEffect(() => {
@@ -195,12 +245,20 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
+        if (isInsertSpaceMode) {
+          setHoverY(null);
+          setDragSpaceState(null);
+          if (onExitInsertSpaceMode) {
+            onExitInsertSpaceMode();
+          }
+          return;
+        }
         onExitPpt();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [slides, activeSlideIndex, activeStepIndex, revealAllSteps, totalSteps, onSlideChange, onExitPpt]);
+  }, [slides, activeSlideIndex, activeStepIndex, revealAllSteps, totalSteps, isInsertSpaceMode, onExitInsertSpaceMode, onSlideChange, onExitPpt]);
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950 p-4 sm:p-6 flex flex-col justify-between overflow-y-auto pt-24 pb-8 space-y-4">
@@ -285,20 +343,82 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
 
       {/* Khung Chiếu Slide Chính PPT (Toàn màn hình, không còn thanh đen PPT riêng lẻ) */}
       <div
-        onClick={(e) => {
-          const target = e.target as HTMLElement;
-          if (!target.closest('button, a, input, select, canvas, textarea, .no-slide-advance')) {
-            if (!revealAllSteps && activeStepIndex < totalSteps - 1) {
-              setActiveStepIndex((prev) => (typeof prev === 'number' ? prev + 1 : activeStepIndex + 1));
-            } else if (activeSlideIndex < slides.length - 1) {
-              onSlideChange(activeSlideIndex + 1);
-              setActiveStepIndex(0);
-            }
-          }
-        }}
-        className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 cursor-pointer select-none transition-all relative w-full"
-        title="Nhấp chuột trái vào nền để hiện bước hiệu ứng kế tiếp hoặc chuyển slide"
+        ref={slideCardRef}
+        onPointerMove={handleSlidePointerMove}
+        onPointerLeave={handleSlidePointerLeave}
+        onPointerDown={handleSlidePointerDown}
+        onClick={handleSlideClick}
+        className={`bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 select-none transition-all relative w-full ${
+          isInsertSpaceMode ? 'cursor-ns-resize ring-2 ring-indigo-400/40' : 'cursor-pointer'
+        }`}
+        title={
+          isInsertSpaceMode
+            ? 'Đang ở chế độ chèn khoảng trống: Nhấp chuột để bắt đầu, giữ & kéo xuống đến vị trí kết thúc sẽ thả chuột ra'
+            : 'Nhấp chuột trái vào nền để hiện bước hiệu ứng kế tiếp hoặc chuyển slide'
+        }
       >
+        {/* 1. THANH NGANG THEO CON TRỎ CHUỘT KHI Ở CHẾ ĐỘ CHÈN KHOẢNG TRỐNG (NOTERENDERER HOVER RULER) */}
+        {isInsertSpaceMode && hoverY !== null && !dragSpaceState && (
+          <div
+            style={{ top: `${hoverY}px` }}
+            className="absolute left-0 right-0 z-40 pointer-events-none -translate-y-1/2 flex items-center transition-all"
+          >
+            <div className="w-full h-1 bg-indigo-500 shadow-md relative flex items-center justify-center">
+              <span className="absolute left-4 text-white text-xs font-black drop-shadow animate-pulse">
+                ▶
+              </span>
+              <div className="px-3.5 py-1 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-xl border-2 border-white flex items-center gap-1.5 transform hover:scale-105 transition-transform">
+                <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
+                <span>Nhấp chuột để bắt đầu, giữ & kéo xuống để mở khoảng trống</span>
+              </div>
+              <span className="absolute right-4 text-white text-xs font-black drop-shadow animate-pulse">
+                ◀
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 2. KHU VỰC KHOẢNG TRỐNG ĐANG ĐƯỢC KÉO MỞ RỘNG (NOTERENDERER REAL-TIME DRAGGING PREVIEW) */}
+        {isInsertSpaceMode && dragSpaceState && slideCardRef.current && (
+          <div
+            style={{
+              top: `${dragSpaceState.startY - slideCardRef.current.getBoundingClientRect().top}px`,
+              height: `${Math.max(16, dragSpaceState.currentY - dragSpaceState.startY)}px`,
+            }}
+            className="absolute left-0 right-0 z-40 bg-indigo-500/15 border-y-2 border-dashed border-indigo-600 flex flex-col justify-between pointer-events-none transition-all shadow-inner overflow-hidden"
+          >
+            {/* Vạch ngang trên: Điểm bắt đầu */}
+            <div className="w-full h-1.5 bg-indigo-600 flex items-center justify-between px-3">
+              <span className="text-[10px] text-white bg-indigo-700 px-2 py-0.5 rounded font-black shadow-xs">
+                BẮT ĐẦU CHÈN
+              </span>
+              <span className="text-[10px] text-indigo-700 font-bold bg-white/95 px-2 py-0.5 rounded shadow-xs">
+                Vạch trên
+              </span>
+            </div>
+
+            {/* Thông số độ cao khoảng trống kéo theo thời gian thực */}
+            <div className="flex items-center justify-center py-2">
+              <div className="px-4 py-1.5 rounded-full bg-indigo-700 text-white text-xs font-extrabold shadow-2xl border-2 border-white flex items-center gap-2 animate-bounce">
+                <NoteRendererSpaceIcon className="w-4 h-4 text-white" />
+                <span>
+                  ↕️ Khoảng trống: {Math.max(40, Math.round(dragSpaceState.currentY - dragSpaceState.startY))}px — Thả chuột để hoàn tất
+                </span>
+              </div>
+            </div>
+
+            {/* Vạch ngang dưới: Điểm kết thúc theo con trỏ chuột */}
+            <div className="w-full h-1.5 bg-indigo-600 flex items-center justify-between px-3">
+              <span className="text-[10px] text-white bg-indigo-700 px-2 py-0.5 rounded font-black shadow-xs">
+                KẾT THÚC (THẢ CHUỘT RA)
+              </span>
+              <span className="text-[10px] text-indigo-700 font-bold bg-white/95 px-2 py-0.5 rounded shadow-xs">
+                Vạch dưới
+              </span>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-4">
           {/* Tiêu đề Slide */}
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -377,6 +497,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
               return (
                 <React.Fragment key={`${currentSlide?.id}-step-${sIdx}`}>
                   <div
+                    data-step-index={sIdx}
                     className={animClass}
                     dangerouslySetInnerHTML={{ __html: stepHtml }}
                   />
@@ -390,29 +511,6 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                       onDelete={handleDeleteBoard}
                     />
                   ))}
-
-                  {/* THANH CHÈN KHOẢNG TRỐNG TRỰC TIẾP (NOTERENDERER DRAG & CLICK TO INSERT SPACE) */}
-                  {isTeacher && isNewlyRevealed && currentStepBoards.length === 0 && (
-                    <div className="py-2.5">
-                      <div
-                        onPointerDown={(e) => handleStartCreateSpaceDrag(sIdx, e)}
-                        className="w-full py-2 px-3.5 rounded-xl border-2 border-dashed border-indigo-400/80 bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-900 font-bold text-xs flex items-center justify-between shadow-2xs transition-all cursor-ns-resize select-none group"
-                        title="Chèn khoảng trống: Đặt bút hoặc chuột ở đây rồi kéo xuống để tạo một khoảng trống viết bài chèn vào giữa; kéo lên để thu hẹp (như NoteRenderer)"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="p-1 rounded-lg bg-indigo-600 text-white shadow-xs group-hover:scale-110 transition-transform">
-                            <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
-                          </span>
-                          <span className="text-[11px] sm:text-xs text-indigo-950 font-black">
-                            ↕️ ĐẶT BÚT KÉO XUỐNG ĐỂ CHÈN KHOẢNG TRỐNG VIẾT BÀI (HOẶC NHẤP ĐỂ MỞ)
-                          </span>
-                        </div>
-                        <span className="text-[10px] text-indigo-700 font-semibold bg-white/90 px-2 py-0.5 rounded-full border border-indigo-200">
-                          NoteRenderer Style
-                        </span>
-                      </div>
-                    </div>
-                  )}
                 </React.Fragment>
               );
             })}
