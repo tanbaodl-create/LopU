@@ -7,16 +7,8 @@ import {
   Pencil,
   Sparkles,
   Eraser,
-  Undo2,
-  Redo2,
-  Trash2,
-  Type,
-  Download,
   GripHorizontal,
   Sigma,
-  Shapes,
-  Maximize2,
-  Check,
   X,
   Table,
   Image as ImageIcon,
@@ -1246,7 +1238,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     const onPointerMove = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault();
       const deltaY = moveEvent.clientY - startY;
-      const newHeight = Math.max(80, Math.min(1600, startHeight + deltaY));
+      const newHeight = Math.max(40, Math.min(1600, startHeight + deltaY));
       onUpdate({
         ...board,
         height: newHeight,
@@ -1259,6 +1251,10 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('pointercancel', onPointerUp);
+      const deltaY = upEvent.clientY - startY;
+      if (startHeight + deltaY < 50) {
+        onDelete(board.id);
+      }
     };
 
     window.addEventListener('pointermove', onPointerMove);
@@ -1286,340 +1282,9 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         className="hidden"
       />
 
-      {/* BẢNG CÔNG CỤ NỔI NHẸ NHÀNG KHI RÊ CHUỘT VÀO KHOẢNG TRỐNG (HOVER MINI-TOOLBAR) */}
-      <div className="absolute top-2 right-2 z-35 opacity-0 group-hover:opacity-100 transition-all duration-200 flex items-center gap-1 bg-white/95 backdrop-blur-md px-2 py-1 rounded-xl shadow-md border border-slate-200 select-none">
-        {/* Nút Chuột / Tương tác */}
-        <button
-          type="button"
-          onClick={() => setActiveTool('select')}
-          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-            activeTool === 'select'
-              ? 'bg-slate-800 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          title="Chuột tương tác / Nhập liệu vào bảng"
-        >
-          <MousePointer className="w-3.5 h-3.5" />
-          <span className="text-[11px] hidden sm:inline">Chuột</span>
-        </button>
 
-        {/* CỤM 5 ĐẦU BÚT: BÚT BI, BÚT LÔNG, HIGHLIGHT, BÚT CHÌ, BÚT LASER */}
-        <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200">
-          {/* 1. Bút bi */}
-          <button
-            type="button"
-            onClick={() => handleSelectPen('ballpoint')}
-            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'pen' && selectedPenType === 'ballpoint'
-                ? 'bg-blue-600 text-white shadow-xs'
-                : 'text-slate-700 hover:bg-slate-200/80'
-            }`}
-            title="Bút bi: Nét thanh mảnh, viết lời giải & số liệu chính xác (Phím 1)"
-          >
-            <Pen className="w-3.5 h-3.5" />
-            <span className="text-[11px] hidden sm:inline">Bút bi</span>
-          </button>
 
-          {/* 2. Bút lông */}
-          <button
-            type="button"
-            onClick={() => handleSelectPen('brush')}
-            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'pen' && selectedPenType === 'brush'
-                ? 'bg-purple-600 text-white shadow-xs'
-                : 'text-slate-700 hover:bg-slate-200/80'
-            }`}
-            title="Bút lông: Nét đậm đà, mềm mại, viết tiêu đề (Phím 2)"
-          >
-            <Paintbrush className="w-3.5 h-3.5" />
-            <span className="text-[11px] hidden sm:inline">Bút lông</span>
-          </button>
 
-          {/* 3. Bút highlight */}
-          <button
-            type="button"
-            onClick={() => handleSelectPen('highlighter')}
-            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'pen' && selectedPenType === 'highlighter'
-                ? 'bg-amber-500 text-white shadow-xs'
-                : 'text-slate-700 hover:bg-slate-200/80'
-            }`}
-            title="Bút highlight: Dạ quang bán trong suốt, tô sáng từ khóa & công thức (Phím 3)"
-          >
-            <Highlighter className="w-3.5 h-3.5" />
-            <span className="text-[11px] hidden sm:inline">Highlight</span>
-          </button>
-
-          {/* 4. Bút chì */}
-          <button
-            type="button"
-            onClick={() => handleSelectPen('pencil')}
-            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'pen' && selectedPenType === 'pencil'
-                ? 'bg-slate-700 text-white shadow-xs'
-                : 'text-slate-700 hover:bg-slate-200/80'
-            }`}
-            title="Bút chì: Nét phác thảo thanh mảnh, vẽ nháp hình học (Phím 4)"
-          >
-            <Pencil className="w-3.5 h-3.5" />
-            <span className="text-[11px] hidden sm:inline">Bút chì</span>
-          </button>
-
-          {/* 5. Bút laser */}
-          <button
-            type="button"
-            onClick={() => handleSelectPen('laser')}
-            className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-              activeTool === 'pen' && selectedPenType === 'laser'
-                ? 'bg-rose-600 text-white shadow-xs animate-pulse ring-2 ring-rose-300'
-                : 'text-slate-700 hover:bg-slate-200/80'
-            }`}
-            title="Bút laser: Vệt sáng chỉ bài giảng trên slide, tự tan biến sau 1 giây (Phím 5)"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-rose-500" />
-            <span className="text-[11px] hidden sm:inline">Laser</span>
-          </button>
-        </div>
-
-        {/* Nút Tẩy */}
-        <button
-          type="button"
-          onClick={() => setActiveTool('eraser')}
-          className={`p-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-            activeTool === 'eraser'
-              ? 'bg-rose-600 text-white shadow-xs'
-              : 'text-slate-600 hover:bg-slate-100'
-          }`}
-          title="Tẩy xóa nét vẽ"
-        >
-          <Eraser className="w-3.5 h-3.5" />
-          <span className="text-[11px] hidden sm:inline">Tẩy</span>
-        </button>
-
-        {/* Bảng màu động phù hợp theo đầu bút */}
-        <div className="flex items-center gap-1 px-1">
-          {getPenColors().map((c) => (
-            <button
-              key={c.color}
-              type="button"
-              onClick={() => {
-                setSelectedColor(c.color);
-                setActiveTool('pen');
-              }}
-              className={`w-3.5 h-3.5 rounded-full border transition-transform cursor-pointer ${
-                selectedColor === c.color && activeTool === 'pen'
-                  ? 'scale-125 border-indigo-700 ring-2 ring-indigo-300 shadow-xs'
-                  : 'border-slate-300 opacity-80 hover:opacity-100 hover:scale-110'
-              }`}
-              style={{ backgroundColor: c.color }}
-              title={c.label}
-            />
-          ))}
-        </div>
-
-        {/* 3 Cỡ nét nhanh: Mảnh / Vừa / Đậm */}
-        <div className="flex items-center gap-0.5 px-0.5 border-l border-r border-slate-200">
-          {[
-            {
-              label: 'Mảnh',
-              size:
-                selectedPenType === 'highlighter'
-                  ? 14
-                  : selectedPenType === 'brush'
-                  ? 4
-                  : selectedPenType === 'pencil'
-                  ? 1.0
-                  : 1.5,
-              dot: 'w-1 h-1',
-            },
-            {
-              label: 'Vừa',
-              size:
-                selectedPenType === 'highlighter'
-                  ? 20
-                  : selectedPenType === 'brush'
-                  ? 6
-                  : selectedPenType === 'pencil'
-                  ? 1.4
-                  : 2.2,
-              dot: 'w-2 h-2',
-            },
-            {
-              label: 'Đậm',
-              size:
-                selectedPenType === 'highlighter'
-                  ? 28
-                  : selectedPenType === 'brush'
-                  ? 9
-                  : selectedPenType === 'pencil'
-                  ? 2.5
-                  : 3.5,
-              dot: 'w-3 h-3',
-            },
-          ].map((sz) => (
-            <button
-              key={sz.label}
-              type="button"
-              onClick={() => setStrokeWidth(sz.size)}
-              className={`p-1 rounded transition-colors cursor-pointer flex items-center justify-center ${
-                strokeWidth === sz.size
-                  ? 'bg-slate-200 text-slate-900 font-bold'
-                  : 'text-slate-400 hover:text-slate-700'
-              }`}
-              title={`Cỡ nét ${sz.label} (${sz.size}px)`}
-            >
-              <div className={`rounded-full bg-current ${sz.dot}`} />
-            </button>
-          ))}
-        </div>
-
-        <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
-
-        {/* CÁC NÚT CHÈN LÊN VÙNG KHOẢNG TRỐNG */}
-        {/* 1. Chèn Bảng */}
-        <button
-          type="button"
-          onClick={() => {
-            onSelect?.(board.id);
-            if (onOpenTableModal) {
-              onOpenTableModal();
-            } else {
-              handleQuickInsertTable(3, 3);
-            }
-          }}
-          className="p-1.5 rounded-lg text-indigo-700 bg-indigo-50 hover:bg-indigo-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-indigo-200 shadow-2xs"
-          title="Chèn bảng vào khoảng trống này"
-        >
-          <Table className="w-3.5 h-3.5 text-indigo-600" />
-          <span className="text-[11px]">Bảng</span>
-        </button>
-
-        {/* 2. Chèn Hình ảnh */}
-        <button
-          type="button"
-          onClick={() => {
-            onSelect?.(board.id);
-            if (onOpenImagePicker) {
-              onOpenImagePicker();
-            } else {
-              localImageInputRef.current?.click();
-            }
-          }}
-          className="p-1.5 rounded-lg text-emerald-700 bg-emerald-50 hover:bg-emerald-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-emerald-200 shadow-2xs"
-          title="Chèn hình ảnh từ máy tính vào khoảng trống này"
-        >
-          <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />
-          <span className="text-[11px]">Ảnh</span>
-        </button>
-
-        {/* 3. Chèn Công thức */}
-        <button
-          type="button"
-          onClick={() => {
-            onSelect?.(board.id);
-            if (onOpenMathModal) {
-              onOpenMathModal();
-            } else {
-              setShowMathPanel(true);
-            }
-          }}
-          className="p-1.5 rounded-lg text-purple-700 bg-purple-50 hover:bg-purple-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-purple-200 shadow-2xs"
-          title="Chèn công thức toán (KaTeX/LaTeX) vào khoảng trống này"
-        >
-          <Sigma className="w-3.5 h-3.5 text-purple-600" />
-          <span className="text-[11px]">Công thức</span>
-        </button>
-
-        {/* 4. Chèn Đồ thị */}
-        <button
-          type="button"
-          onClick={() => {
-            onSelect?.(board.id);
-            if (onOpenGraphModal) {
-              onOpenGraphModal();
-            } else {
-              handleQuickInsertGraph('parabola');
-            }
-          }}
-          className="p-1.5 rounded-lg text-blue-700 bg-blue-50 hover:bg-blue-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-blue-200 shadow-2xs"
-          title="Chèn đồ thị hàm số vào khoảng trống này"
-        >
-          <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
-          <span className="text-[11px]">Đồ thị</span>
-        </button>
-
-        {/* 5. Chèn Bảng biến thiên */}
-        <button
-          type="button"
-          onClick={() => {
-            onSelect?.(board.id);
-            if (onOpenBbtModal) {
-              onOpenBbtModal();
-            } else {
-              handleQuickInsertBbt();
-            }
-          }}
-          className="p-1.5 rounded-lg text-amber-700 bg-amber-50 hover:bg-amber-100 text-xs font-bold transition-all cursor-pointer flex items-center gap-1 border border-amber-200 shadow-2xs"
-          title="Chèn bảng biến thiên vào khoảng trống này"
-        >
-          <BarChart3 className="w-3.5 h-3.5 text-amber-600" />
-          <span className="text-[11px]">BBT</span>
-        </button>
-
-        <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
-
-        {/* Hoàn tác */}
-        <button
-          type="button"
-          disabled={!canUndo}
-          onClick={handleUndo}
-          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
-          title="Hoàn tác nét vẽ (Undo)"
-        >
-          <Undo2 className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Làm lại */}
-        <button
-          type="button"
-          disabled={!canRedo}
-          onClick={handleRedo}
-          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-colors"
-          title="Làm lại (Redo)"
-        >
-          <Redo2 className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Xóa sạch nét trên bảng */}
-        <button
-          type="button"
-          onClick={handleClear}
-          className="p-1.5 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50 cursor-pointer transition-colors"
-          title="Xóa toàn bộ nét vẽ và nội dung trong khoảng trống này"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
-
-        <div className="h-3.5 w-[1px] bg-slate-200 mx-0.5"></div>
-
-        {/* Xóa / Đóng khoảng trống */}
-        <button
-          type="button"
-          onClick={() => {
-            if (
-              (board.strokes.length === 0 && (!board.htmlItems || board.htmlItems.length === 0)) ||
-              window.confirm('Xóa bỏ khoảng trống này?')
-            ) {
-              onDelete(board.id);
-            }
-          }}
-          className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-rose-600 hover:text-white text-slate-600 font-bold text-[11px] transition-colors cursor-pointer flex items-center gap-1 shadow-2xs"
-          title="Xóa bỏ khoảng trống này"
-        >
-          <X className="w-3 h-3" />
-          <span>Xóa</span>
-        </button>
-      </div>
 
       {/* VÙNG CHỨA NỘI DUNG VÀ CANVAS CỦA KHOẢNG TRỐNG */}
       <div
@@ -1885,6 +1550,22 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
             <span className="text-[10px] bg-indigo-800/90 px-1.5 py-0.2 rounded font-mono font-semibold">
               {board.height}px
             </span>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (
+                  (board.strokes.length === 0 && (!board.htmlItems || board.htmlItems.length === 0)) ||
+                  window.confirm('Xóa bỏ khoảng trống này?')
+                ) {
+                  onDelete(board.id);
+                }
+              }}
+              className="ml-1 hover:bg-rose-600 p-0.5 rounded-full transition-colors cursor-pointer text-white/80 hover:text-white"
+              title="Xóa bỏ khoảng trống này"
+            >
+              <X className="w-3 h-3" />
+            </button>
           </div>
         </div>
       </div>
