@@ -6884,6 +6884,16 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             </div>
 
             <div className="flex items-center gap-2 shrink-0">
+              {/* Nút Lưu Drive: ở chế độ khác PPT hiện trước nút Quay lại bài học (nếu có cửa sổ word hiện thì nó hiện; cửa sổ word ẩn thì nó ẩn) */}
+              {wordViewMode !== 'ppt' && isTeacherOrHigher(currentRole) && (
+                <DongBoDriveButton
+                  isSaving={isSaving}
+                  syncStatus={syncStatus}
+                  lastSavedTime={lastSavedTime}
+                  onClick={handleSaveToDrive}
+                />
+              )}
+
               <button
                 type="button"
                 onClick={() => {
@@ -6892,10 +6902,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   );
                 }}
                 className="px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                title="Quay lại danh sách tài liệu lớp học"
+                title="Quay lại danh sách bài học / tài liệu lớp học"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-teal-700" />
-                <span>Quay lại Lớp Học</span>
+                <span>Quay lại bài học</span>
               </button>
 
               {isTeacherOrHigher(currentRole) && (
@@ -7808,17 +7818,17 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               </button>
             )}
 
-                  {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
-                  <div className="ml-auto flex items-center gap-2">
-                    {wordViewMode !== 'ppt' && (
+                  {/* Chế độ xem PPT: Nút Lưu Drive hiện ở cuối menu word (góc trên bên phải) */}
+                  {wordViewMode === 'ppt' && isTeacherOrHigher(currentRole) && (
+                    <div className="ml-auto flex items-center gap-2 shrink-0">
                       <DongBoDriveButton
                         isSaving={isSaving}
                         syncStatus={syncStatus}
                         lastSavedTime={lastSavedTime}
                         onClick={handleSaveToDrive}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 /* TOOLBAR DÀNH CHO HỌC SINH: CHỈ XEM HOẶC TRÌNH CHIẾU */
@@ -7944,10 +7954,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         );
                       }}
                       className="px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5 shadow-2xs"
-                      title="Quay lại danh sách lớp học"
+                      title="Quay lại danh sách bài học / tài liệu lớp học"
                     >
                       <ArrowLeft className="w-3.5 h-3.5 text-teal-700" />
-                      <span>Quay lại Lớp Học</span>
+                      <span>Quay lại bài học</span>
                     </button>
                   </div>
                 </div>
