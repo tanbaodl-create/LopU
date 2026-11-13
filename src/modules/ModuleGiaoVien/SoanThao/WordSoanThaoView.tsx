@@ -6970,6 +6970,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 }}
                 tienTrinhChuyenDe={tienTrinhChuyenDe}
                 docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
+                isTeacher={isTeacherOrHigher(currentRole)}
                 onExitPpt={() => {
                   setIsPptFullScreen(false);
                   setWordViewMode('full');

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { PptSlideItem } from './types';
 import { getEffectLabel, getEffectIcon } from './PptMarkerRail';
+import { PptInteractiveBoard, PptWhiteboardData } from './PptInteractiveBoard';
 
 interface PptSlideViewerProps {
   slides: PptSlideItem[];
@@ -16,6 +17,7 @@ interface PptSlideViewerProps {
   tienTrinhChuyenDe?: string;
   docTitle?: string;
   onExitPpt: () => void;
+  isTeacher?: boolean;
 }
 
 export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
@@ -25,10 +27,35 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   tienTrinhChuyenDe = 'Kiến thức',
   docTitle = 'Tài liệu Chuyên đề',
   onExitPpt,
+  isTeacher = true,
 }) => {
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [revealAllSteps, setRevealAllSteps] = useState<boolean>(false);
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
+  const [whiteboards, setWhiteboards] = useState<PptWhiteboardData[]>([]);
+
+  // Thêm một khối bảng viết mới sau bước chỉ định
+  const handleAddBoardAtStep = (stepIdx: number) => {
+    const newBoard: PptWhiteboardData = {
+      id: `board-${activeSlideIndex}-${stepIdx}-${Date.now()}`,
+      slideIndex: activeSlideIndex,
+      afterStepIndex: stepIdx,
+      theme: 'green',
+      height: 320,
+      textNote: '',
+      showTextEditor: false,
+      strokes: [],
+    };
+    setWhiteboards((prev) => [...prev, newBoard]);
+  };
+
+  const handleUpdateBoard = (updated: PptWhiteboardData) => {
+    setWhiteboards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+  };
+
+  const handleDeleteBoard = (id: string) => {
+    setWhiteboards((prev) => prev.filter((b) => b.id !== id));
+  };
 
   const currentSlide = slides[Math.min(activeSlideIndex, Math.max(0, slides.length - 1))] || slides[0];
   const totalSteps = currentSlide?.steps?.length || 1;
@@ -257,6 +284,18 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             </button>
           )}
 
+          {/* Nút Chèn Bảng viết lời giải tương tác dành cho Giáo viên */}
+          {isTeacher && (
+            <button
+              type="button"
+              onClick={() => handleAddBoardAtStep(activeStepIndex)}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 shadow-xs border border-emerald-500"
+              title="Chèn thêm bảng viết tương tác (bảng xanh / bảng trắng) để viết bài giảng, lời giải"
+            >
+              <span>✍️ + Bảng viết</span>
+            </button>
+          )}
+
           <div className="h-4 w-[1px] bg-slate-700 mx-1"></div>
 
           <button
@@ -282,7 +321,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
       <div
         onClick={(e) => {
           const target = e.target as HTMLElement;
-          if (!target.closest('button, a, input, select')) {
+          if (!target.closest('button, a, input, select, canvas, textarea, .no-slide-advance')) {
             if (!revealAllSteps && activeStepIndex < totalSteps - 1) {
               setActiveStepIndex(prev => prev + 1);
             } else if (activeSlideIndex < slides.length - 1) {
@@ -364,12 +403,45 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                 }
               }
 
+              // Các khối bảng viết tương tác được chèn sau bước sIdx này
+              const currentStepBoards = whiteboards.filter(
+                (b) => b.slideIndex === activeSlideIndex && b.afterStepIndex === sIdx
+              );
+
               return (
-                <div
-                  key={`${currentSlide?.id}-step-${sIdx}`}
-                  className={animClass}
-                  dangerouslySetInnerHTML={{ __html: stepHtml }}
-                />
+                <React.Fragment key={`${currentSlide?.id}-step-${sIdx}`}>
+                  <div
+                    className={animClass}
+                    dangerouslySetInnerHTML={{ __html: stepHtml }}
+                  />
+
+                  {/* KHỐI BẢNG VIẾT TƯƠNG TÁC XUẤT HIỆN TẠI ĐÂY */}
+                  {currentStepBoards.map((b) => (
+                    <PptInteractiveBoard
+                      key={b.id}
+                      board={b}
+                      onUpdate={handleUpdateBoard}
+                      onDelete={handleDeleteBoard}
+                    />
+                  ))}
+
+                  {/* Nút chèn bảng viết trực tiếp cho giáo viên (khi chưa chèn bảng ở bước này) */}
+                  {isTeacher && isNewlyRevealed && currentStepBoards.length === 0 && (
+                    <div className="pt-1 pb-1 flex justify-start">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddBoardAtStep(sIdx);
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs shadow-2xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                        title="Chèn bảng viết tại đây để viết bài giảng / lời giải trực tiếp"
+                      >
+                        <span>✍️ + Chèn bảng viết lời giải tại đây</span>
+                      </button>
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
 
