@@ -4555,8 +4555,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       const isSlide =
         child.getAttribute('data-slide-break') === 'true' ||
         child.classList.contains('slide-break-point') ||
-        child.classList.contains('slide-break') ||
-        (idx === 0 && children.length > 0);
+        child.classList.contains('slide-break');
 
       const isEffect =
         !isSlide &&
@@ -4604,6 +4603,17 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         marker: currentMarker,
       });
     });
+
+    if (children.length === 0) {
+      lineItems.push({
+        elementIndex: 0,
+        topOffset: 32,
+        snippet: 'Đầu tài liệu',
+        hasSlideMarker: false,
+        hasEffectMarker: false,
+        marker: undefined,
+      });
+    }
 
     setRailMarkers(markers);
     setRailLineItems(lineItems);
@@ -6975,14 +6985,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
           {/* Cửa sổ Soạn thảo Word chiếm toàn bộ giao diện ưu tiên */}
           <div className="space-y-4">
-            {/* Menu Thanh công cụ Word - Khi ở chế độ PPT sẽ NỔI Ở TRÊN CÙNG toàn màn hình, tích hợp đầy đủ nút Trước, Chọn slide, Slide tiếp, Chèn khoảng trống & Thoát PPT */}
+            {/* Menu Thanh công cụ Word - Khi ở chế độ PPT sẽ NỔI Ở TRÊN CÙNG phủ kín 100% chiều ngang màn hình, tích hợp đầy đủ nút Trước, Chọn slide, Slide tiếp, Chèn khoảng trống, Nút Lưu Drive góc phải & Thoát PPT */}
             <div
-              className={`bg-white/95 backdrop-blur-md border shadow-2xl flex flex-wrap items-center gap-1.5 transition-all ${
+              className={`bg-white/95 backdrop-blur-md flex flex-wrap items-center gap-1.5 transition-all ${
                 wordViewMode === 'ppt'
-                  ? 'fixed top-2 left-2 right-2 sm:left-4 sm:right-4 z-[60] p-2 rounded-2xl border-purple-300 ring-2 ring-purple-500/20 shadow-purple-900/25 max-h-[88vh] overflow-visible'
-                  : 'sticky top-16 z-40 p-2.5 rounded-t-2xl border-slate-300 border-b shadow-lg'
+                  ? 'fixed top-0 left-0 right-0 w-full z-[60] px-3 sm:px-6 py-2 border-b border-purple-200/90 shadow-md rounded-none'
+                  : 'sticky top-16 z-40 p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-lg'
               }`}
-              style={wordViewMode === 'ppt' ? { position: 'fixed', top: '8px' } : { top: '64px', position: 'sticky' }}
+              style={wordViewMode === 'ppt' ? { position: 'fixed', top: 0, left: 0, right: 0, width: '100%' } : { top: '64px', position: 'sticky' }}
             >
               {isTeacherOrHigher(currentRole) ? (
                 <>

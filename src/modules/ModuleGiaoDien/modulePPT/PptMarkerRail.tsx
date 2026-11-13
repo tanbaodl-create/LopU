@@ -1,5 +1,5 @@
 import React from 'react';
-import { Plus, Wand2 } from 'lucide-react';
+import { Plus, Wand2, Clapperboard, Sparkles } from 'lucide-react';
 import {
   RailMarker,
   RailLineItem,
@@ -48,7 +48,7 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
         title="Thanh Mốc PPT: Kích vào dấu + đầu dòng bất kỳ để đặt mốc slide hoặc hiệu ứng"
       >
         {/* Nút hợp nhất Biểu tượng Phân tích mốc tự động và Biểu tượng Thanh mốc PPT làm 1 */}
-        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30">
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30">
           <button
             type="button"
             onClick={(e) => {
@@ -57,11 +57,11 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
                 onAutoAnalyze();
               }
             }}
-            className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-700 hover:to-amber-600 text-white shadow-md transition-all transform hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center border-2 border-white relative"
+            className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-700 hover:to-amber-600 text-white shadow-md transition-all transform hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center border-2 border-white relative group/btn"
             title="Thanh Mốc PPT: Kích vào để Tự động phân tích & đặt mốc Slide / Hiệu ứng toàn bài"
           >
-            <span className="text-sm select-none">🎬</span>
-            <span className="absolute -bottom-1 -right-1 text-[11px] filter drop-shadow">🪄</span>
+            <Clapperboard className="w-4 h-4 text-white" />
+            <Sparkles className="w-2.5 h-2.5 text-amber-300 absolute -bottom-0.5 -right-0.5 filter drop-shadow" />
           </button>
         </div>
 
@@ -186,7 +186,7 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
                 <div className="flex flex-col text-left leading-tight">
                   <span>+ Mốc Slide mới</span>
                   <span className={`text-[10px] font-normal ${clickMenu.isSlide ? 'text-purple-100' : 'text-purple-600'}`}>
-                    Ngắt thành trang slide riêng biệt
+                    Ngắt thành trang slide riêng biệt (tính từ dòng này đến mốc tiếp theo)
                   </span>
                 </div>
               </span>
@@ -207,7 +207,7 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
                 )}
               </div>
               <div className="text-[10px] text-amber-900/80 font-medium">
-                Chọn 1 trong 10 hiệu ứng trình chiếu PPT:
+                Đặt mốc hiệu ứng (tính từ dòng này đến mốc tiếp theo) - Chọn 1 trong 10 hiệu ứng:
               </div>
 
               {/* Lưới 10 hiệu ứng cơ bản */}
