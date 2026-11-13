@@ -23,6 +23,12 @@ import {
   TrendingUp,
   BarChart3,
   MousePointer,
+  RotateCw,
+  FlipHorizontal,
+  FlipVertical,
+  ZoomIn,
+  ZoomOut,
+  Move,
   Plus,
 } from 'lucide-react';
 
@@ -69,6 +75,14 @@ export interface BoardHtmlItem {
   type: 'table' | 'image' | 'math' | 'graph' | 'bbt' | 'html';
   html: string;
   title?: string;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  scale?: number;
+  rotate?: number;
+  flipH?: boolean;
+  flipV?: boolean;
   createdAt?: number;
 }
 
@@ -330,10 +344,131 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   const [showShapeMenu, setShowShapeMenu] = useState<boolean>(false);
   const [latexInput, setLatexInput] = useState<string>('y = \\frac{1}{2}x^2 - 3x + 4');
   const [renderedLatexPreview, setRenderedLatexPreview] = useState<string>('');
+  const [selectedHtmlItemId, setSelectedHtmlItemId] = useState<string | null>(null);
+
+  // Cập nhật thuộc tính của một khối hình/công thức/đồ thị/bảng
+  const updateHtmlItem = (
+    itemId: string,
+    updater: (item: BoardHtmlItem) => Partial<BoardHtmlItem>
+  ) => {
+    const updatedItems = (board.htmlItems || []).map((it) => {
+      if (it.id === itemId) {
+        return { ...it, ...updater(it) };
+      }
+      return it;
+    });
+    onUpdate({
+      ...board,
+      htmlItems: updatedItems,
+    });
+  };
+
+  // Di chuyển vị trí khối hình/công thức/đồ thị/bảng (Kéo thanh tiêu đề)
+  const handleStartDragItem = (e: React.PointerEvent, item: BoardHtmlItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedHtmlItemId(item.id);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialItemX = item.x ?? 20;
+    const initialItemY = item.y ?? 20;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const newX = Math.max(0, initialItemX + dx);
+      const newY = Math.max(0, initialItemY + dy);
+      updateHtmlItem(item.id, () => ({ x: newX, y: newY }));
+
+      // Tự động mở rộng độ cao bảng viết nếu kéo hình/công thức xuống dưới
+      if (newY + 220 > board.height) {
+        onUpdate({
+          ...board,
+          height: Math.max(board.height, Math.round(newY + 240)),
+        });
+      }
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Kéo góc dưới phải để phóng to/thu nhỏ khối hình
+  const handleStartResizeItem = (e: React.PointerEvent, item: BoardHtmlItem) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setSelectedHtmlItemId(item.id);
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialScale = item.scale ?? 1;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      const delta = (moveEvent.clientX - startX + (moveEvent.clientY - startY)) / 250;
+      const nextScale = Math.max(0.3, Math.min(3.0, Number((initialScale + delta).toFixed(2))));
+      updateHtmlItem(item.id, () => ({ scale: nextScale }));
+    };
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  };
+
+  // Phóng to / thu nhỏ nhanh bằng nút bấm
+  const handleZoomItem = (itemId: string, delta: number) => {
+    updateHtmlItem(itemId, (it) => {
+      const current = it.scale ?? 1;
+      const nextScale = Math.max(0.3, Math.min(3.0, Number((current + delta).toFixed(2))));
+      return { scale: nextScale };
+    });
+  };
+
+  // Đặt lại tỉ lệ 100%
+  const handleResetScaleItem = (itemId: string) => {
+    updateHtmlItem(itemId, () => ({ scale: 1 }));
+  };
+
+  // Xoay 90° theo chiều kim đồng hồ
+  const handleRotateItem = (itemId: string) => {
+    updateHtmlItem(itemId, (it) => ({
+      rotate: ((it.rotate ?? 0) + 90) % 360,
+    }));
+  };
+
+  // Lật đối xứng theo chiều ngang (Trái ↔ Phải)
+  const handleFlipHItem = (itemId: string) => {
+    updateHtmlItem(itemId, (it) => ({
+      flipH: !it.flipH,
+    }));
+  };
+
+  // Lật đối xứng theo chiều dọc (Trên ↕ Dưới)
+  const handleFlipVItem = (itemId: string) => {
+    updateHtmlItem(itemId, (it) => ({
+      flipV: !it.flipV,
+    }));
+  };
 
   // Xóa một khối nội dung đã chèn trên bảng
   const handleDeleteHtmlItem = (itemId: string) => {
     const updatedItems = (board.htmlItems || []).filter((it) => it.id !== itemId);
+    if (selectedHtmlItemId === itemId) {
+      setSelectedHtmlItemId(null);
+    }
     onUpdate({
       ...board,
       htmlItems: updatedItems,
@@ -366,11 +501,19 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </table>
       </div>
     `;
+    const existingCount = board.htmlItems?.length || 0;
     const newItem: BoardHtmlItem = {
       id: `table-${Date.now()}`,
       type: 'table',
       title: `Bảng ${rows}x${cols}`,
       html: tableHtml,
+      x: 24 + ((existingCount * 28) % 200),
+      y: 20 + ((existingCount * 24) % 150),
+      width: 440,
+      scale: 1,
+      rotate: 0,
+      flipH: false,
+      flipV: false,
       createdAt: Date.now(),
     };
     const newItems = [...(board.htmlItems || []), newItem];
@@ -394,11 +537,19 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           <img src="${src}" alt="${file.name}" style="max-width: 100%; max-height: 480px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin: 0 auto; display: inline-block;" />
         </div>
       `;
+      const existingCount = board.htmlItems?.length || 0;
       const newItem: BoardHtmlItem = {
         id: `img-${Date.now()}`,
         type: 'image',
         title: file.name,
         html: imgHtml,
+        x: 24 + ((existingCount * 28) % 200),
+        y: 20 + ((existingCount * 24) % 150),
+        width: 400,
+        scale: 1,
+        rotate: 0,
+        flipH: false,
+        flipV: false,
         createdAt: Date.now(),
       };
       const newItems = [...(board.htmlItems || []), newItem];
@@ -433,11 +584,19 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </svg>
       </div>
     `;
+    const existingCount = board.htmlItems?.length || 0;
     const newItem: BoardHtmlItem = {
       id: `graph-${Date.now()}`,
       type: 'graph',
       title: `Đồ thị ${formulaStr}`,
       html: svgHtml,
+      x: 24 + ((existingCount * 28) % 200),
+      y: 20 + ((existingCount * 24) % 150),
+      width: 380,
+      scale: 1,
+      rotate: 0,
+      flipH: false,
+      flipV: false,
       createdAt: Date.now(),
     };
     const newItems = [...(board.htmlItems || []), newItem];
@@ -495,11 +654,19 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </table>
       </div>
     `;
+    const existingCount = board.htmlItems?.length || 0;
     const newItem: BoardHtmlItem = {
       id: `bbt-${Date.now()}`,
       type: 'bbt',
       title: 'Bảng biến thiên hàm bậc 3',
       html: bbtHtml,
+      x: 24 + ((existingCount * 28) % 200),
+      y: 20 + ((existingCount * 24) % 150),
+      width: 460,
+      scale: 1,
+      rotate: 0,
+      flipH: false,
+      flipV: false,
       createdAt: Date.now(),
     };
     const newItems = [...(board.htmlItems || []), newItem];
@@ -1429,22 +1596,62 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         }}
       >
         {/* LỚP 1: CÁC KHỐI NỘI DUNG CHÈN VÀO (BẢNG, HÌNH ẢNH, CÔNG THỨC, ĐỒ THỊ, BẢNG BIẾN THIÊN) */}
-        {board.htmlItems && board.htmlItems.length > 0 && (
-          <div className="relative z-10 w-full p-3.5 flex flex-col gap-3 pointer-events-auto">
-            {board.htmlItems.map((item) => (
+        {/* Hỗ trợ đầy đủ: Thay đổi vị trí, phóng to/thu nhỏ, xoay hình, lật hình, viết tay trực tiếp lên trên */}
+        {board.htmlItems &&
+          board.htmlItems.map((item, idx) => {
+            const isSelected = selectedHtmlItemId === item.id;
+            const itemX = item.x ?? (24 + ((idx * 30) % 200));
+            const itemY = item.y ?? (20 + ((idx * 25) % 150));
+            const scale = item.scale ?? 1;
+            const rotate = item.rotate ?? 0;
+            const flipH = item.flipH ?? false;
+            const flipV = item.flipV ?? false;
+
+            return (
               <div
                 key={item.id}
-                className="relative group/item bg-white/95 rounded-xl border border-slate-200/90 shadow-xs p-3 transition-all"
+                style={{
+                  position: 'absolute',
+                  left: `${itemX}px`,
+                  top: `${itemY}px`,
+                  width: item.width
+                    ? `${item.width}px`
+                    : item.type === 'image' || item.type === 'graph'
+                    ? '400px'
+                    : item.type === 'bbt'
+                    ? '460px'
+                    : item.type === 'table'
+                    ? '440px'
+                    : '360px',
+                  maxWidth: '96%',
+                  transform: `rotate(${rotate}deg) scale(${scale}) scaleX(${flipH ? -1 : 1}) scaleY(${flipV ? -1 : 1})`,
+                  transformOrigin: 'center center',
+                  zIndex: isSelected ? 28 : 12,
+                }}
+                className={`group/item select-none rounded-xl border transition-shadow bg-white/95 shadow-md p-3 ${
+                  isSelected
+                    ? 'border-indigo-500 ring-2 ring-indigo-300/70 shadow-lg'
+                    : 'border-slate-300 hover:border-indigo-400'
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedHtmlItemId(item.id);
+                }}
               >
-                {/* Thanh điều khiển nhỏ của từng khối */}
-                <div className="flex items-center justify-between pb-1.5 mb-2 border-b border-slate-100 text-xs select-none">
-                  <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px]">
-                    {item.type === 'table' && <Table className="w-3.5 h-3.5 text-indigo-600" />}
-                    {item.type === 'image' && <ImageIcon className="w-3.5 h-3.5 text-emerald-600" />}
-                    {item.type === 'math' && <Sigma className="w-3.5 h-3.5 text-purple-600" />}
-                    {item.type === 'graph' && <TrendingUp className="w-3.5 h-3.5 text-blue-600" />}
-                    {item.type === 'bbt' && <BarChart3 className="w-3.5 h-3.5 text-amber-600" />}
-                    <span>
+                {/* 1. THANH ĐIỀU KHIỂN TRÊN CÙNG CỦA KHỐI (z-30 ĐỂ LUÔN TƯƠNG TÁC ĐƯỢC NGAY CẢ KHI BÚT ĐANG BẬT) */}
+                <div
+                  onPointerDown={(e) => handleStartDragItem(e, item)}
+                  className="relative z-30 flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200/80 text-xs select-none cursor-move bg-slate-100/95 -mx-3 -mt-3 px-3 py-1.5 rounded-t-xl hover:bg-slate-200/90 transition-colors"
+                  title="Nhấp giữ và kéo để thay đổi vị trí tự do trên bảng"
+                >
+                  <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px] truncate">
+                    <GripHorizontal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    {item.type === 'table' && <Table className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
+                    {item.type === 'image' && <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                    {item.type === 'math' && <Sigma className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                    {item.type === 'graph' && <TrendingUp className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
+                    {item.type === 'bbt' && <BarChart3 className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
+                    <span className="truncate max-w-[110px]">
                       {item.title ||
                         (item.type === 'table'
                           ? 'Bảng số liệu'
@@ -1457,14 +1664,89 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                           : 'Công thức toán')}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
+
+                  {/* CỤM NÚT ĐIỀU KHIỂN: THU NHỎ, PHÓNG TO, XOAY 90°, LẬT NGANG, LẬT DỌC, XÓA */}
+                  <div
+                    className="flex items-center gap-0.5 shrink-0"
+                    onPointerDown={(e) => e.stopPropagation()}
+                  >
+                    {/* Thu nhỏ */}
                     <button
                       type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteHtmlItem(item.id);
-                      }}
-                      className="p-1 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                      onClick={() => handleZoomItem(item.id, -0.15)}
+                      className="p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                      title="Thu nhỏ (-15%)"
+                    >
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Tỉ lệ scale */}
+                    <button
+                      type="button"
+                      onClick={() => handleResetScaleItem(item.id)}
+                      className="px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:text-indigo-600 rounded bg-slate-200/80 hover:bg-slate-300/80 cursor-pointer"
+                      title="Nhấp để đặt lại tỉ lệ chuẩn 100%"
+                    >
+                      {Math.round(scale * 100)}%
+                    </button>
+
+                    {/* Phóng to */}
+                    <button
+                      type="button"
+                      onClick={() => handleZoomItem(item.id, 0.15)}
+                      className="p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                      title="Phóng to (+15%)"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="w-[1px] h-3 bg-slate-300 mx-0.5"></div>
+
+                    {/* Xoay hình 90° */}
+                    <button
+                      type="button"
+                      onClick={() => handleRotateItem(item.id)}
+                      className="p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                      title={`Xoay hình 90° theo chiều kim đồng hồ (Hiện tại: ${rotate}°)`}
+                    >
+                      <RotateCw className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Lật ngang */}
+                    <button
+                      type="button"
+                      onClick={() => handleFlipHItem(item.id)}
+                      className={`p-1 rounded transition-colors cursor-pointer ${
+                        flipH
+                          ? 'bg-indigo-100 text-indigo-700 font-bold ring-1 ring-indigo-400'
+                          : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
+                      }`}
+                      title="Lật hình theo chiều ngang (Trái ↔ Phải)"
+                    >
+                      <FlipHorizontal className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Lật dọc */}
+                    <button
+                      type="button"
+                      onClick={() => handleFlipVItem(item.id)}
+                      className={`p-1 rounded transition-colors cursor-pointer ${
+                        flipV
+                          ? 'bg-indigo-100 text-indigo-700 font-bold ring-1 ring-indigo-400'
+                          : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
+                      }`}
+                      title="Lật hình theo chiều dọc (Trên ↕ Dưới)"
+                    >
+                      <FlipVertical className="w-3.5 h-3.5" />
+                    </button>
+
+                    <div className="w-[1px] h-3 bg-slate-300 mx-0.5"></div>
+
+                    {/* Gỡ bỏ khối */}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHtmlItem(item.id)}
+                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                       title="Gỡ khối này khỏi khoảng trống"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1472,15 +1754,23 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   </div>
                 </div>
 
-                {/* Render nội dung HTML */}
+                {/* 2. NỘI DUNG HTML CỦA KHỐI (z-10 ĐỂ CANVAS z-20 NẰM ĐÈ LÊN CHO PHÉP VIẾT TAY TRỰC TIẾP LÊN ĐÓ) */}
                 <div
-                  className="w-full overflow-x-auto select-text text-slate-900"
+                  className="w-full overflow-hidden select-none text-slate-900 pointer-events-auto"
                   dangerouslySetInnerHTML={{ __html: item.html }}
                 />
+
+                {/* 3. GÓC KÉO THAY ĐỔI KÍCH THƯỚC ↘ (z-30) */}
+                <div
+                  onPointerDown={(e) => handleStartResizeItem(e, item)}
+                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-tl-lg rounded-br-xl flex items-center justify-center cursor-nwse-resize shadow-md z-30 transition-transform hover:scale-110"
+                  title="Kéo góc này để phóng to / thu nhỏ hình"
+                >
+                  <span className="text-[10px] font-black leading-none select-none">⤢</span>
+                </div>
               </div>
-            ))}
-          </div>
-        )}
+            );
+          })}
 
         {/* LỚP 2: CANVAS VẼ TAY MỰC KỸ THUẬT SỐ NẰM TRÊN CÙNG ĐỂ VIẾT LÊN BẢNG / GHI CHÚ */}
         <canvas

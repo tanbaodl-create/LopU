@@ -506,11 +506,19 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         itemTitle = 'Công thức toán';
       }
 
+      const existingCount = targetBoard?.htmlItems?.length || 0;
       const newItem: BoardHtmlItem = {
         id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         type: itemType,
         title: itemTitle,
         html: html,
+        x: 24 + ((existingCount * 30) % 200),
+        y: 20 + ((existingCount * 25) % 150),
+        width: itemType === 'image' || itemType === 'graph' ? 420 : itemType === 'bbt' ? 480 : itemType === 'table' ? 440 : 360,
+        scale: 1,
+        rotate: 0,
+        flipH: false,
+        flipV: false,
         createdAt: Date.now(),
       };
 
@@ -6639,225 +6647,230 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     </div>
                   )}
 
-                  {/* Undo / Redo */}
-                  <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
-              <Undo className="w-4 h-4" />
-            </button>
-            <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
-              <Redo className="w-4 h-4" />
-            </button>
+                  {/* CÁC CÔNG CỤ SOẠN THẢO VĂN BẢN (ẨN KHI Ở CHẾ ĐỘ XEM PPT ĐỂ MENU GỌN GÀNG, TẬP TRUNG DẠY HỌC) */}
+                  {wordViewMode !== 'ppt' && (
+                    <>
+                      {/* Undo / Redo */}
+                      <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
+                        <Undo className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
+                        <Redo className="w-4 h-4" />
+                      </button>
 
-            <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
+                      <div className="h-5 w-[1px] bg-slate-300 mx-0.5"></div>
 
-            {/* 1. Đậm, Nghiêng, Gạch chân (kích hoạt biểu tượng chữ B, I, U tương ứng khi bật) */}
-            <button
-              type="button"
-              onClick={() => {
-                execCommand('bold');
-                setIsBold((prev) => !prev);
-              }}
-              className={`p-1.5 rounded-lg transition-all ${
-                isBold
-                  ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
-                  : 'hover:bg-slate-200 text-slate-700 bg-transparent'
-              }`}
-              title="Chữ Đậm (Ctrl+B)"
-            >
-              <Bold className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                execCommand('italic');
-                setIsItalic((prev) => !prev);
-              }}
-              className={`p-1.5 rounded-lg transition-all ${
-                isItalic
-                  ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
-                  : 'hover:bg-slate-200 text-slate-700 bg-transparent'
-              }`}
-              title="Chữ Nghiêng (Ctrl+I)"
-            >
-              <Italic className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                execCommand('underline');
-                setIsUnderline((prev) => !prev);
-              }}
-              className={`p-1.5 rounded-lg transition-all ${
-                isUnderline
-                  ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
-                  : 'hover:bg-slate-200 text-slate-700 bg-transparent'
-              }`}
-              title="Gạch Chân (Ctrl+U)"
-            >
-              <Underline className="w-4 h-4" />
-            </button>
+                      {/* 1. Đậm, Nghiêng, Gạch chân (kích hoạt biểu tượng chữ B, I, U tương ứng khi bật) */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          execCommand('bold');
+                          setIsBold((prev) => !prev);
+                        }}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          isBold
+                            ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                            : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                        }`}
+                        title="Chữ Đậm (Ctrl+B)"
+                      >
+                        <Bold className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          execCommand('italic');
+                          setIsItalic((prev) => !prev);
+                        }}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          isItalic
+                            ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                            : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                        }`}
+                        title="Chữ Nghiêng (Ctrl+I)"
+                      >
+                        <Italic className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          execCommand('underline');
+                          setIsUnderline((prev) => !prev);
+                        }}
+                        className={`p-1.5 rounded-lg transition-all ${
+                          isUnderline
+                            ? 'bg-indigo-600 text-white shadow-xs font-bold ring-2 ring-indigo-300'
+                            : 'hover:bg-slate-200 text-slate-700 bg-transparent'
+                        }`}
+                        title="Gạch Chân (Ctrl+U)"
+                      >
+                        <Underline className="w-4 h-4" />
+                      </button>
 
-            {/* Chọn màu chữ chuẩn mực Microsoft Word */}
-            <WordTextColorPicker
-              color={textColor}
-              onSelectColor={(val) => {
-                setTextColor(val);
-                execCommand('foreColor', val);
-              }}
-              isOpen={openTextColorMenu}
-              onToggle={() => {
-                setOpenTextColorMenu(!openTextColorMenu);
-                setOpenHighlightColorMenu(false);
-                setOpenAlignMenu(false);
-                setOpenInsertMenu(false);
-                setOpenFunctionMenu(false);
-              }}
-              onClose={() => setOpenTextColorMenu(false)}
-            />
+                      {/* Chọn màu chữ chuẩn mực Microsoft Word */}
+                      <WordTextColorPicker
+                        color={textColor}
+                        onSelectColor={(val) => {
+                          setTextColor(val);
+                          execCommand('foreColor', val);
+                        }}
+                        isOpen={openTextColorMenu}
+                        onToggle={() => {
+                          setOpenTextColorMenu(!openTextColorMenu);
+                          setOpenHighlightColorMenu(false);
+                          setOpenAlignMenu(false);
+                          setOpenInsertMenu(false);
+                          setOpenFunctionMenu(false);
+                        }}
+                        onClose={() => setOpenTextColorMenu(false)}
+                      />
 
-            {/* Chọn màu nền chữ / Highlight chuẩn mực Microsoft Word */}
-            <WordHighlightColorPicker
-              color={highlightColor}
-              onSelectColor={(val) => {
-                setHighlightColor(val);
-                execCommand('hiliteColor', val);
-              }}
-              isOpen={openHighlightColorMenu}
-              onToggle={() => {
-                setOpenHighlightColorMenu(!openHighlightColorMenu);
-                setOpenTextColorMenu(false);
-                setOpenAlignMenu(false);
-                setOpenInsertMenu(false);
-                setOpenFunctionMenu(false);
-              }}
-              onClose={() => setOpenHighlightColorMenu(false)}
-            />
+                      {/* Chọn màu nền chữ / Highlight chuẩn mực Microsoft Word */}
+                      <WordHighlightColorPicker
+                        color={highlightColor}
+                        onSelectColor={(val) => {
+                          setHighlightColor(val);
+                          execCommand('hiliteColor', val);
+                        }}
+                        isOpen={openHighlightColorMenu}
+                        onToggle={() => {
+                          setOpenHighlightColorMenu(!openHighlightColorMenu);
+                          setOpenTextColorMenu(false);
+                          setOpenAlignMenu(false);
+                          setOpenInsertMenu(false);
+                          setOpenFunctionMenu(false);
+                        }}
+                        onClose={() => setOpenHighlightColorMenu(false)}
+                      />
 
-            {/* 2. DROPDOWN CỠ CHỮ ĐƯA NGAY SAU GẠCH CHÂN (U) VÀ CHỈ GHI NGẮN GỌN (mặc định 14px - điều khiển trực tiếp) */}
-            <select
-              value={fontSize}
-              onChange={(e) => handleFontSizeChange(e.target.value)}
-              className="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500 ml-1"
-              title="Cỡ chữ (Mặc định 14px)"
-            >
-              <option value="12px">12px</option>
-              <option value="14px">14px (Mặc định)</option>
-              <option value="16px">16px</option>
-              <option value="18px">18px</option>
-              <option value="20px">20px</option>
-              <option value="22px">22px</option>
-              <option value="24px">24px</option>
-              <option value="28px">28px</option>
-            </select>
+                      {/* 2. DROPDOWN CỠ CHỮ ĐƯA NGAY SAU GẠCH CHÂN (U) VÀ CHỈ GHI NGẮN GỌN (mặc định 14px - điều khiển trực tiếp) */}
+                      <select
+                        value={fontSize}
+                        onChange={(e) => handleFontSizeChange(e.target.value)}
+                        className="text-xs font-bold bg-white border border-slate-300 rounded-lg px-2 py-1 text-slate-800 shadow-2xs cursor-pointer focus:ring-1 focus:ring-indigo-500 ml-1"
+                        title="Cỡ chữ (Mặc định 14px)"
+                      >
+                        <option value="12px">12px</option>
+                        <option value="14px">14px (Mặc định)</option>
+                        <option value="16px">16px</option>
+                        <option value="18px">18px</option>
+                        <option value="20px">20px</option>
+                        <option value="22px">22px</option>
+                        <option value="24px">24px</option>
+                        <option value="28px">28px</option>
+                      </select>
 
-            <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
+                      <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
 
-            {/* 3. MENU CANH LỀ (XỔ XUỐNG): Chọn canh lề tương ứng trong nút canh lề */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenAlignMenu(!openAlignMenu);
-                  setOpenTextColorMenu(false);
-                  setOpenHighlightColorMenu(false);
-                  setOpenStyleMenu(false);
-                  setOpenInsertMenu(false);
-                  setOpenFunctionMenu(false);
-                }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
-                  openAlignMenu ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
-                }`}
-                title="Canh lề văn bản (Căn trái, Căn giữa, Căn phải, Căn đều)"
-              >
-                {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5 text-indigo-600" />}
-                {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5 text-indigo-600" />}
-                {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5 text-indigo-600" />}
-                {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5 text-indigo-600" />}
-                <span className="font-semibold">
-                  {currentAlignment === 'left' && 'Căn trái'}
-                  {currentAlignment === 'center' && 'Căn giữa'}
-                  {currentAlignment === 'right' && 'Căn phải'}
-                  {currentAlignment === 'justify' && 'Căn đều'}
-                </span>
-                <ChevronDown className="w-3 h-3 text-slate-400" />
-              </button>
+                      {/* 3. MENU CANH LỀ (XỔ XUỐNG): Chọn canh lề tương ứng trong nút canh lề */}
+                      <div className="relative">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenAlignMenu(!openAlignMenu);
+                            setOpenTextColorMenu(false);
+                            setOpenHighlightColorMenu(false);
+                            setOpenStyleMenu(false);
+                            setOpenInsertMenu(false);
+                            setOpenFunctionMenu(false);
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-colors cursor-pointer ${
+                            openAlignMenu ? 'bg-indigo-100 text-indigo-800 border-indigo-300' : 'bg-white hover:bg-slate-200 text-slate-700 border-slate-200'
+                          }`}
+                          title="Canh lề văn bản (Căn trái, Căn giữa, Căn phải, Căn đều)"
+                        >
+                          {currentAlignment === 'left' && <AlignLeft className="w-3.5 h-3.5 text-indigo-600" />}
+                          {currentAlignment === 'center' && <AlignCenter className="w-3.5 h-3.5 text-indigo-600" />}
+                          {currentAlignment === 'right' && <AlignRight className="w-3.5 h-3.5 text-indigo-600" />}
+                          {currentAlignment === 'justify' && <AlignJustify className="w-3.5 h-3.5 text-indigo-600" />}
+                          <span className="font-semibold">
+                            {currentAlignment === 'left' && 'Căn trái'}
+                            {currentAlignment === 'center' && 'Căn giữa'}
+                            {currentAlignment === 'right' && 'Căn phải'}
+                            {currentAlignment === 'justify' && 'Căn đều'}
+                          </span>
+                          <ChevronDown className="w-3 h-3 text-slate-400" />
+                        </button>
 
-              {openAlignMenu && (
-                <div className="absolute z-50 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl w-40 py-1 divide-y divide-slate-100 animate-fade-in">
-                  <button
-                    type="button"
-                    onClick={() => handleAlign('left')}
-                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                      currentAlignment === 'left' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                    }`}
-                  >
-                    <AlignLeft className="w-4 h-4 text-slate-500" />
-                    <span>Canh trái</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAlign('center')}
-                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                      currentAlignment === 'center' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                    }`}
-                  >
-                    <AlignCenter className="w-4 h-4 text-slate-500" />
-                    <span>Canh giữa</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAlign('right')}
-                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                      currentAlignment === 'right' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                    }`}
-                  >
-                    <AlignRight className="w-4 h-4 text-slate-500" />
-                    <span>Canh phải</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleAlign('justify')}
-                    className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
-                      currentAlignment === 'justify' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
-                    }`}
-                  >
-                    <AlignJustify className="w-4 h-4 text-slate-500" />
-                    <span>Canh đều 2 bên</span>
-                  </button>
-                </div>
-              )}
-            </div>
+                        {openAlignMenu && (
+                          <div className="absolute z-50 left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-xl w-40 py-1 divide-y divide-slate-100 animate-fade-in">
+                            <button
+                              type="button"
+                              onClick={() => handleAlign('left')}
+                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                currentAlignment === 'left' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                              }`}
+                            >
+                              <AlignLeft className="w-4 h-4 text-slate-500" />
+                              <span>Canh trái</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAlign('center')}
+                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                currentAlignment === 'center' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                              }`}
+                            >
+                              <AlignCenter className="w-4 h-4 text-slate-500" />
+                              <span>Canh giữa</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAlign('right')}
+                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                currentAlignment === 'right' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                              }`}
+                            >
+                              <AlignRight className="w-4 h-4 text-slate-500" />
+                              <span>Canh phải</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleAlign('justify')}
+                              className={`w-full px-3 py-2 text-xs flex items-center gap-2 hover:bg-indigo-50 text-slate-700 text-left font-semibold ${
+                                currentAlignment === 'justify' ? 'bg-indigo-50 text-indigo-700 font-bold' : ''
+                              }`}
+                            >
+                              <AlignJustify className="w-4 h-4 text-slate-500" />
+                              <span>Canh đều 2 bên</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
 
-            {/* Danh sách */}
-            <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách chấm">
-              <List className="w-4 h-4" />
-            </button>
-            <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách số">
-              <ListOrdered className="w-4 h-4" />
-            </button>
+                      {/* Danh sách */}
+                      <button onClick={() => execCommand('insertUnorderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách chấm">
+                        <List className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => execCommand('insertOrderedList')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Danh sách số">
+                        <ListOrdered className="w-4 h-4" />
+                      </button>
 
-            {/* NÚT STYLE & SOẠN BÀI HỢP NHẤT: Bố trí khoa học, các style chuẩn mực không giải thích dài dòng */}
-            <WordStyleMenu
-              selectedStyle={selectedStyle}
-              onSelectStyle={handleSelectStyle}
-              isOpen={openStyleMenu}
-              onToggle={() => {
-                setOpenStyleMenu(!openStyleMenu);
-                setOpenAlignMenu(false);
-                setOpenTextColorMenu(false);
-                setOpenHighlightColorMenu(false);
-                setOpenInsertMenu(false);
-                setOpenFunctionMenu(false);
-                setOpenWordViewMenu(false);
-              }}
-              onClose={() => setOpenStyleMenu(false)}
-              canAuthor={isTeacherOrHigher(currentRole)}
-              tienTrinh={tienTrinhChuyenDe}
-              insertPositionMode={insertPositionMode}
-              onSetInsertPositionMode={setInsertPositionMode}
-              onInsertLessonTemplate={handleInsertLessonTemplate}
-            />
+                      {/* NÚT STYLE & SOẠN BÀI HỢP NHẤT */}
+                      <WordStyleMenu
+                        selectedStyle={selectedStyle}
+                        onSelectStyle={handleSelectStyle}
+                        isOpen={openStyleMenu}
+                        onToggle={() => {
+                          setOpenStyleMenu(!openStyleMenu);
+                          setOpenAlignMenu(false);
+                          setOpenTextColorMenu(false);
+                          setOpenHighlightColorMenu(false);
+                          setOpenInsertMenu(false);
+                          setOpenFunctionMenu(false);
+                          setOpenWordViewMenu(false);
+                        }}
+                        onClose={() => setOpenStyleMenu(false)}
+                        canAuthor={isTeacherOrHigher(currentRole)}
+                        tienTrinh={tienTrinhChuyenDe}
+                        insertPositionMode={insertPositionMode}
+                        onSetInsertPositionMode={setInsertPositionMode}
+                        onInsertLessonTemplate={handleInsertLessonTemplate}
+                      />
 
-            <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
+                      <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
+                    </>
+                  )}
 
             {/* 4. MENU CHÈN: Độc lập trong module con SoanThao/MenuChen (Chèn bảng, Chèn hình ảnh, Chèn File, Chèn Thư mục E-Learning) */}
             <MenuChen
@@ -7109,12 +7122,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                         <span>Thoát PPT</span>
                       </button>
                     )}
-                    <DongBoDriveButton
-                      isSaving={isSaving}
-                      syncStatus={syncStatus}
-                      lastSavedTime={lastSavedTime}
-                      onClick={handleSaveToDrive}
-                    />
+                    {wordViewMode !== 'ppt' && (
+                      <DongBoDriveButton
+                        isSaving={isSaving}
+                        syncStatus={syncStatus}
+                        lastSavedTime={lastSavedTime}
+                        onClick={handleSaveToDrive}
+                      />
+                    )}
                   </div>
                 </>
               ) : (
