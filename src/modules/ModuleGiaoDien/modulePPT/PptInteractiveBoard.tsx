@@ -580,6 +580,35 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     });
   };
 
+  // Tính vị trí mặc định cho đối tượng chèn tiếp theo nằm bên dưới đối tượng trước đó
+  const calculateNextItemPosition = (itemType: string): { x: number; y: number } => {
+    const existing = board.htmlItems || [];
+    const mathExisting = board.mathItems || [];
+    if (existing.length === 0 && mathExisting.length === 0) {
+      return { x: 24, y: 20 };
+    }
+    let maxBottom = 0;
+    for (const it of existing) {
+      const itemH =
+        it.type === 'graph' ? 300 :
+        it.type === 'bbt' ? 200 :
+        it.type === 'table' ? 200 :
+        it.type === 'image' ? 280 :
+        it.type === 'math' ? 90 : 240;
+      const bottom = (it.y ?? 20) + itemH;
+      if (bottom > maxBottom) {
+        maxBottom = bottom;
+      }
+    }
+    for (const m of mathExisting) {
+      const bottom = (m.y ?? 30) + 90;
+      if (bottom > maxBottom) {
+        maxBottom = bottom;
+      }
+    }
+    return { x: 24, y: maxBottom + 24 };
+  };
+
   // Chèn nhanh bảng số liệu vào khoảng trống
   const handleQuickInsertTable = (rows: number = 3, cols: number = 3) => {
     let headers = '';
@@ -606,14 +635,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </table>
       </div>
     `;
-    const existingCount = board.htmlItems?.length || 0;
+    const { x: itemX, y: itemY } = calculateNextItemPosition('table');
     const newItem: BoardHtmlItem = {
       id: `table-${Date.now()}`,
       type: 'table',
       title: `Bảng ${rows}x${cols}`,
       html: tableHtml,
-      x: 24 + ((existingCount * 28) % 200),
-      y: 20 + ((existingCount * 24) % 150),
+      x: itemX,
+      y: itemY,
       width: 440,
       scale: 1,
       rotate: 0,
@@ -640,14 +669,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
           <img src="${src}" alt="${file.name}" style="max-width: 100%; max-height: 480px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); margin: 0 auto; display: inline-block;" />
         </div>
       `;
-      const existingCount = board.htmlItems?.length || 0;
+      const { x: itemX, y: itemY } = calculateNextItemPosition('image');
       const newItem: BoardHtmlItem = {
         id: `img-${Date.now()}`,
         type: 'image',
         title: file.name,
         html: imgHtml,
-        x: 24 + ((existingCount * 28) % 200),
-        y: 20 + ((existingCount * 24) % 150),
+        x: itemX,
+        y: itemY,
         width: 400,
         scale: 1,
         rotate: 0,
@@ -685,14 +714,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </svg>
       </div>
     `;
-    const existingCount = board.htmlItems?.length || 0;
+    const { x: itemX, y: itemY } = calculateNextItemPosition('graph');
     const newItem: BoardHtmlItem = {
       id: `graph-${Date.now()}`,
       type: 'graph',
       title: `Đồ thị ${formulaStr}`,
       html: svgHtml,
-      x: 24 + ((existingCount * 28) % 200),
-      y: 20 + ((existingCount * 24) % 150),
+      x: itemX,
+      y: itemY,
       width: 380,
       scale: 1,
       rotate: 0,
@@ -753,14 +782,14 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
         </table>
       </div>
     `;
-    const existingCount = board.htmlItems?.length || 0;
+    const { x: itemX, y: itemY } = calculateNextItemPosition('bbt');
     const newItem: BoardHtmlItem = {
       id: `bbt-${Date.now()}`,
       type: 'bbt',
       title: 'Bảng biến thiên hàm bậc 3',
       html: bbtHtml,
-      x: 24 + ((existingCount * 28) % 200),
-      y: 20 + ((existingCount * 24) % 150),
+      x: itemX,
+      y: itemY,
       width: 460,
       scale: 1,
       rotate: 0,
@@ -1232,11 +1261,12 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
   // CHÈN CÔNG THỨC TOÁN KATEX VÀO BẢNG
   const handleInsertMathToBoard = () => {
     if (!latexInput.trim()) return;
+    const { x: itemX, y: itemY } = calculateNextItemPosition('math');
     const newMathItem: BoardMathItem = {
       id: `math-${Date.now()}`,
       latex: latexInput.trim(),
-      x: 30,
-      y: 30,
+      x: itemX,
+      y: itemY,
     };
     const mathItems = [...(board.mathItems || []), newMathItem];
     onUpdate({ ...board, mathItems });

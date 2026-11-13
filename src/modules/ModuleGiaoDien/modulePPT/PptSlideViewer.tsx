@@ -448,14 +448,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         }
       `}</style>
 
-      {/* Khung Chiếu Slide Chính PPT (Toàn màn hình, không còn thanh đen PPT riêng lẻ) */}
+      {/* Khung Chiếu Slide Chính PPT (Phủ hết chiều ngang màn hình, toàn màn hình) */}
       <div
         ref={slideCardRef}
         onPointerMove={handleSlidePointerMove}
         onPointerLeave={handleSlidePointerLeave}
         onPointerDown={handleSlidePointerDown}
         onClick={handleSlideClick}
-        className={`bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 select-none transition-all relative w-full ${
+        className={`bg-white rounded-2xl shadow-2xl p-4 sm:p-8 min-h-[520px] w-full max-w-none flex flex-col justify-between border border-slate-200 select-none transition-all relative ${
           isInsertSpaceMode ? 'cursor-ns-resize ring-2 ring-indigo-400/40' : 'cursor-pointer'
         }`}
         title={

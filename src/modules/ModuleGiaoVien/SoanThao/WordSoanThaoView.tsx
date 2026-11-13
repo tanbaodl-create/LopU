@@ -779,14 +779,33 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
         itemTitle = 'Công thức toán';
       }
 
-      const existingCount = targetBoard?.htmlItems?.length || 0;
+      const existingItems = targetBoard?.htmlItems || [];
+      let nextY = 20;
+      if (existingItems.length > 0) {
+        // Tìm vị trí đáy thấp nhất của các đối tượng đã chèn trước đó để chèn đối tượng tiếp theo ở ngay bên dưới
+        let maxBottom = 0;
+        for (const it of existingItems) {
+          const itemH =
+            it.type === 'graph' ? 300 :
+            it.type === 'bbt' ? 200 :
+            it.type === 'table' ? 200 :
+            it.type === 'image' ? 280 :
+            it.type === 'math' ? 90 : 240;
+          const bottom = (it.y ?? 20) + itemH;
+          if (bottom > maxBottom) {
+            maxBottom = bottom;
+          }
+        }
+        nextY = maxBottom + 24;
+      }
+
       const newItem: BoardHtmlItem = {
         id: `item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         type: itemType,
         title: itemTitle,
         html: html,
-        x: 24 + ((existingCount * 30) % 200),
-        y: 20 + ((existingCount * 25) % 150),
+        x: 24,
+        y: nextY,
         width: itemType === 'image' || itemType === 'graph' ? 420 : itemType === 'bbt' ? 480 : itemType === 'table' ? 440 : 360,
         scale: 1,
         rotate: 0,
@@ -7932,59 +7951,63 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           {/* Vùng hiển thị theo chế độ View được chọn (Chỉ hiển thị khi đã hoàn tất đồng bộ từ Drive hoặc học sinh xem ngay từ cache) */}
           {!(isLoadingFromDrive || (isTeacherOrHigher(currentRole) && isReauthenticating)) && (
             wordViewMode === 'ppt' ? (
-              <PptSlideViewer
-                slides={pptSlides}
-                activeSlideIndex={activePptSlideIndex}
-                onSlideChange={(newIdx) => {
-                  setActivePptSlideIndex(newIdx);
-                  setActivePptStepIndex(0);
-                  setIsInsertSpaceMode(false);
-                }}
-                activeStepIndex={activePptStepIndex}
-                onStepChange={setActivePptStepIndex}
-                revealAllSteps={revealAllSteps}
-                onToggleRevealAll={() => setRevealAllSteps((prev) => !prev)}
-                whiteboards={pptWhiteboards}
-                onUpdateWhiteboard={handleUpdatePptWhiteboard}
-                onDeleteWhiteboard={handleDeletePptWhiteboard}
-                onAddWhiteboardAtStep={handleAddPptWhiteboardAtStep}
-                isInsertSpaceMode={isInsertSpaceMode}
-                onExitInsertSpaceMode={() => setIsInsertSpaceMode(false)}
-                activeWhiteboardId={activePptWhiteboardId}
-                onSelectWhiteboard={setActivePptWhiteboardId}
-                activeTool={pptActiveTool}
-                onToolChange={setPptActiveTool}
-                selectedPenType={pptPenType}
-                onPenTypeChange={setPptPenType}
-                selectedColor={currentPptColor}
-                onColorChange={handlePptChangeColor}
-                strokeWidth={currentPptStrokeWidth}
-                onStrokeWidthChange={handlePptChangeStrokeWidth}
-                onOpenTableModal={() => {
-                  saveCurrentSelection();
-                  setShowTableModal(true);
-                }}
-                onOpenImagePicker={() => {
-                  imageInputRef.current?.click();
-                }}
-                onOpenMathModal={() => {
-                  setShowMathTypeModal(true);
-                }}
-                onOpenGraphModal={() => {
-                  setShowWordGraphModal(true);
-                }}
-                onOpenBbtModal={() => {
-                  setShowWordBBTModal(true);
-                }}
-                tienTrinhChuyenDe={tienTrinhChuyenDe}
-                docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
-                isTeacher={isTeacherOrHigher(currentRole)}
-                onExitPpt={() => {
-                  setIsInsertSpaceMode(false);
-                  setIsPptFullScreen(false);
-                  setWordViewMode('full');
-                }}
-              />
+              <div className="fixed inset-0 z-40 bg-slate-200/95 overflow-y-auto w-screen h-screen pt-24 sm:pt-28 pb-16 px-1 sm:px-3">
+                <div className="w-full max-w-none">
+                  <PptSlideViewer
+                    slides={pptSlides}
+                    activeSlideIndex={activePptSlideIndex}
+                    onSlideChange={(newIdx) => {
+                      setActivePptSlideIndex(newIdx);
+                      setActivePptStepIndex(0);
+                      setIsInsertSpaceMode(false);
+                    }}
+                    activeStepIndex={activePptStepIndex}
+                    onStepChange={setActivePptStepIndex}
+                    revealAllSteps={revealAllSteps}
+                    onToggleRevealAll={() => setRevealAllSteps((prev) => !prev)}
+                    whiteboards={pptWhiteboards}
+                    onUpdateWhiteboard={handleUpdatePptWhiteboard}
+                    onDeleteWhiteboard={handleDeletePptWhiteboard}
+                    onAddWhiteboardAtStep={handleAddPptWhiteboardAtStep}
+                    isInsertSpaceMode={isInsertSpaceMode}
+                    onExitInsertSpaceMode={() => setIsInsertSpaceMode(false)}
+                    activeWhiteboardId={activePptWhiteboardId}
+                    onSelectWhiteboard={setActivePptWhiteboardId}
+                    activeTool={pptActiveTool}
+                    onToolChange={setPptActiveTool}
+                    selectedPenType={pptPenType}
+                    onPenTypeChange={setPptPenType}
+                    selectedColor={currentPptColor}
+                    onColorChange={handlePptChangeColor}
+                    strokeWidth={currentPptStrokeWidth}
+                    onStrokeWidthChange={handlePptChangeStrokeWidth}
+                    onOpenTableModal={() => {
+                      saveCurrentSelection();
+                      setShowTableModal(true);
+                    }}
+                    onOpenImagePicker={() => {
+                      imageInputRef.current?.click();
+                    }}
+                    onOpenMathModal={() => {
+                      setShowMathTypeModal(true);
+                    }}
+                    onOpenGraphModal={() => {
+                      setShowWordGraphModal(true);
+                    }}
+                    onOpenBbtModal={() => {
+                      setShowWordBBTModal(true);
+                    }}
+                    tienTrinhChuyenDe={tienTrinhChuyenDe}
+                    docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
+                    isTeacher={isTeacherOrHigher(currentRole)}
+                    onExitPpt={() => {
+                      setIsInsertSpaceMode(false);
+                      setIsPptFullScreen(false);
+                      setWordViewMode('full');
+                    }}
+                  />
+                </div>
+              </div>
             ) : wordViewMode === 'split' ? (
               <div className="bg-slate-100 p-4 sm:p-6 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner">
                 <QuestionEditorWord
@@ -8989,7 +9012,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       {/* Modal Chèn Bảng tùy chỉnh số dòng, số cột, có tiêu đề hay không */}
       {showTableModal && (
-        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[9999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 space-y-4 animate-scale-up">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2.5">
