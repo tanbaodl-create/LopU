@@ -8,7 +8,11 @@ import {
 } from 'lucide-react';
 import { PptSlideItem } from './types';
 import { getEffectLabel, getEffectIcon } from './PptMarkerRail';
-import { PptInteractiveBoard, PptWhiteboardData } from './PptInteractiveBoard';
+import {
+  PptInteractiveBoard,
+  PptWhiteboardData,
+  NoteRendererSpaceIcon,
+} from './PptInteractiveBoard';
 
 interface PptSlideViewerProps {
   slides: PptSlideItem[];
@@ -34,14 +38,14 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
   const [whiteboards, setWhiteboards] = useState<PptWhiteboardData[]>([]);
 
-  // Thêm một khối bảng viết mới sau bước chỉ định
-  const handleAddBoardAtStep = (stepIdx: number) => {
+  // Thêm một khoảng trống viết bài mới sau bước chỉ định (mặc định NoteRenderer 280px)
+  const handleAddBoardAtStep = (stepIdx: number, initialHeight: number = 280) => {
     const newBoard: PptWhiteboardData = {
-      id: `board-${activeSlideIndex}-${stepIdx}-${Date.now()}`,
+      id: `space-${activeSlideIndex}-${stepIdx}-${Date.now()}`,
       slideIndex: activeSlideIndex,
       afterStepIndex: stepIdx,
-      theme: 'green',
-      height: 320,
+      theme: 'white',
+      height: initialHeight,
       textNote: '',
       showTextEditor: false,
       strokes: [],
@@ -55,6 +59,55 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
 
   const handleDeleteBoard = (id: string) => {
     setWhiteboards((prev) => prev.filter((b) => b.id !== id));
+  };
+
+  // Kéo chuột/bút xuống để chèn khoảng trống trực tiếp (NoteRenderer drag-to-insert mechanism)
+  const handleStartCreateSpaceDrag = (stepIdx: number, e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    let createdId: string | null = null;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      const deltaY = moveEvent.clientY - startY;
+      if (deltaY > 20) {
+        if (!createdId) {
+          createdId = `space-${activeSlideIndex}-${stepIdx}-${Date.now()}`;
+          const newSpace: PptWhiteboardData = {
+            id: createdId,
+            slideIndex: activeSlideIndex,
+            afterStepIndex: stepIdx,
+            theme: 'white',
+            height: Math.max(120, Math.min(1200, deltaY)),
+            textNote: '',
+            showTextEditor: false,
+            strokes: [],
+          };
+          setWhiteboards((prev) => [...prev, newSpace]);
+        } else {
+          const h = Math.max(80, Math.min(1400, deltaY));
+          setWhiteboards((prev) =>
+            prev.map((b) => (b.id === createdId ? { ...b, height: h } : b))
+          );
+        }
+      }
+    };
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      upEvent.preventDefault();
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+      // Nếu chỉ nhấp chuột mà không kéo thì mở khoảng trống chuẩn 280px
+      if (!createdId && Math.abs(upEvent.clientY - startY) < 15) {
+        handleAddBoardAtStep(stepIdx, 280);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
   };
 
   const currentSlide = slides[Math.min(activeSlideIndex, Math.max(0, slides.length - 1))] || slides[0];
@@ -284,15 +337,16 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             </button>
           )}
 
-          {/* Nút Chèn Bảng viết lời giải tương tác dành cho Giáo viên */}
+          {/* Nút Chèn Khoảng Trống (NoteRenderer Space Tool) */}
           {isTeacher && (
             <button
               type="button"
-              onClick={() => handleAddBoardAtStep(activeStepIndex)}
-              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all transform active:scale-95 cursor-pointer flex items-center gap-1 shadow-xs border border-emerald-500"
-              title="Chèn thêm bảng viết tương tác (bảng xanh / bảng trắng) để viết bài giảng, lời giải"
+              onClick={() => handleAddBoardAtStep(activeStepIndex, 280)}
+              className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all transform active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs border border-indigo-400"
+              title="Chèn khoảng trống (như NoteRenderer): Mở khoảng trống viết bài giảng / lời giải ở giữa; nội dung tiếp theo sẽ dời xuống bên dưới"
             >
-              <span>✍️ + Bảng viết</span>
+              <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
+              <span>Chèn khoảng trống</span>
             </button>
           )}
 
@@ -425,20 +479,26 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                     />
                   ))}
 
-                  {/* Nút chèn bảng viết trực tiếp cho giáo viên (khi chưa chèn bảng ở bước này) */}
+                  {/* THANH CHÈN KHOẢNG TRỐNG TRỰC TIẾP (NOTERENDERER DRAG & CLICK TO INSERT SPACE) */}
                   {isTeacher && isNewlyRevealed && currentStepBoards.length === 0 && (
-                    <div className="pt-1 pb-1 flex justify-start">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddBoardAtStep(sIdx);
-                        }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold text-xs shadow-2xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                        title="Chèn bảng viết tại đây để viết bài giảng / lời giải trực tiếp"
+                    <div className="py-2.5">
+                      <div
+                        onPointerDown={(e) => handleStartCreateSpaceDrag(sIdx, e)}
+                        className="w-full py-2 px-3.5 rounded-xl border-2 border-dashed border-indigo-400/80 bg-indigo-50/60 hover:bg-indigo-100/80 text-indigo-900 font-bold text-xs flex items-center justify-between shadow-2xs transition-all cursor-ns-resize select-none group"
+                        title="Chèn khoảng trống: Đặt bút hoặc chuột ở đây rồi kéo xuống để tạo một khoảng trống viết bài chèn vào giữa; kéo lên để thu hẹp (như NoteRenderer)"
                       >
-                        <span>✍️ + Chèn bảng viết lời giải tại đây</span>
-                      </button>
+                        <div className="flex items-center gap-2">
+                          <span className="p-1 rounded-lg bg-indigo-600 text-white shadow-xs group-hover:scale-110 transition-transform">
+                            <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
+                          </span>
+                          <span className="text-[11px] sm:text-xs text-indigo-950 font-black">
+                            ↕️ ĐẶT BÚT KÉO XUỐNG ĐỂ CHÈN KHOẢNG TRỐNG VIẾT BÀI (HOẶC NHẤP ĐỂ MỞ)
+                          </span>
+                        </div>
+                        <span className="text-[10px] text-indigo-700 font-semibold bg-white/90 px-2 py-0.5 rounded-full border border-indigo-200">
+                          NoteRenderer Style
+                        </span>
+                      </div>
                     </div>
                   )}
                 </React.Fragment>
