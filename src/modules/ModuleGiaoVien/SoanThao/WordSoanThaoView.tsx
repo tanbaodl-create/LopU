@@ -70,6 +70,7 @@ import {
   Printer,
   FileSpreadsheet,
   Download,
+  X,
 } from 'lucide-react';
 import { InDeFileHsView } from './InDeFileHsView';
 import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker';
@@ -106,9 +107,11 @@ import {
   PptRailClickMenuData,
   PptEffectType,
   getPptEffectDef,
+  NoteRendererSpaceIcon,
+  PptWhiteboardData,
 } from '../../ModuleGiaoDien/modulePPT';
 
-export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType };
+export type { RailMarker, RailLineItem, PptSlideItem, PptRailClickMenuData, PptEffectType, PptWhiteboardData };
 
 export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ currentRole }) => {
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -393,6 +396,31 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [selectedPinMenu, setSelectedPinMenu] = useState<{ marker: RailMarker; x: number; y: number } | null>(null);
   const [pptRailClickMenu, setPptRailClickMenu] = useState<PptRailClickMenuData | null>(null);
   const draggedMarkerRef = useRef<RailMarker | null>(null);
+
+  // Danh sách khoảng trống viết bảng tương tác chèn vào các bước slide PPT (NoteRenderer style)
+  const [pptWhiteboards, setPptWhiteboards] = useState<PptWhiteboardData[]>([]);
+
+  const handleAddPptWhiteboardAtStep = (stepIdx: number, initialHeight: number = 280) => {
+    const newBoard: PptWhiteboardData = {
+      id: `space-${activePptSlideIndex}-${stepIdx}-${Date.now()}`,
+      slideIndex: activePptSlideIndex,
+      afterStepIndex: stepIdx,
+      theme: 'white',
+      height: initialHeight,
+      textNote: '',
+      showTextEditor: false,
+      strokes: [],
+    };
+    setPptWhiteboards((prev) => [...prev, newBoard]);
+  };
+
+  const handleUpdatePptWhiteboard = (updated: PptWhiteboardData) => {
+    setPptWhiteboards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+  };
+
+  const handleDeletePptWhiteboard = (id: string) => {
+    setPptWhiteboards((prev) => prev.filter((b) => b.id !== id));
+  };
 
   // Modal Chèn Bảng tùy chỉnh số dòng, số cột, có tiêu đề
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
@@ -4437,6 +4465,29 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     title || chuyenDe || 'Tài liệu Chuyên đề'
   );
 
+  const currentPptSlide = pptSlides[Math.min(activePptSlideIndex, Math.max(0, pptSlides.length - 1))] || pptSlides[0];
+  const currentPptTotalSteps = currentPptSlide?.steps?.length || 1;
+
+  const handlePptPrev = () => {
+    if (!revealAllSteps && activePptStepIndex > 0) {
+      setActivePptStepIndex((prev) => prev - 1);
+    } else if (activePptSlideIndex > 0) {
+      const prevIdx = activePptSlideIndex - 1;
+      setActivePptSlideIndex(prevIdx);
+      const prevSlide = pptSlides[prevIdx];
+      setActivePptStepIndex(prevSlide ? Math.max(0, prevSlide.steps.length - 1) : 0);
+    }
+  };
+
+  const handlePptNext = () => {
+    if (!revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1) {
+      setActivePptStepIndex((prev) => prev + 1);
+    } else if (activePptSlideIndex < pptSlides.length - 1) {
+      setActivePptSlideIndex(activePptSlideIndex + 1);
+      setActivePptStepIndex(0);
+    }
+  };
+
   // Ở 1. Kiến thức: Nút View chỉ có 2 tùy chọn là Xem PPT và Toàn bộ (tự động chuyển về Toàn bộ nếu đang ở Tách câu)
   useEffect(() => {
     if (tienTrinhChuyenDe === 'Kiến thức' && wordViewMode === 'split') {
@@ -6405,13 +6456,106 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
           {/* Cửa sổ Soạn thảo Word chiếm toàn bộ giao diện ưu tiên */}
           <div className="space-y-4">
-            {/* Menu Thanh công cụ Word - Cố định nổi lên trên cùng (dưới header) khi cuộn trang xuống dưới */}
+            {/* Menu Thanh công cụ Word - Khi ở chế độ PPT sẽ NỔI Ở TRÊN CÙNG toàn màn hình, tích hợp đầy đủ nút Trước, Chọn slide, Slide tiếp, Chèn khoảng trống & Thoát PPT */}
             <div
-              className="sticky top-16 z-40 bg-white/95 backdrop-blur-md p-2.5 rounded-t-2xl border border-slate-300 border-b shadow-lg flex flex-wrap items-center gap-1.5 transition-all"
-              style={{ top: '64px', position: 'sticky' }}
+              className={`bg-white/95 backdrop-blur-md border shadow-2xl flex flex-wrap items-center gap-1.5 transition-all ${
+                wordViewMode === 'ppt'
+                  ? 'fixed top-2 left-2 right-2 sm:left-4 sm:right-4 z-[60] p-2 rounded-2xl border-purple-300 ring-2 ring-purple-500/20 shadow-purple-900/25 max-h-[88vh] overflow-visible'
+                  : 'sticky top-16 z-40 p-2.5 rounded-t-2xl border-slate-300 border-b shadow-lg'
+              }`}
+              style={wordViewMode === 'ppt' ? { position: 'fixed', top: '8px' } : { top: '64px', position: 'sticky' }}
             >
               {isTeacherOrHigher(currentRole) ? (
                 <>
+                  {/* CỤM NÚT ĐIỀU KHIỂN TRÌNH CHIẾU PPT TÍCH HỢP TRONG MENU WORD (KHI VIEW === 'ppt') */}
+                  {wordViewMode === 'ppt' && (
+                    <div className="flex items-center gap-1.5 flex-wrap bg-purple-50/90 p-1 rounded-xl border border-purple-200 shadow-2xs">
+                      {/* Huy hiệu Slide PPT & Bước hiệu ứng */}
+                      <span className="px-2.5 py-1 rounded-lg bg-purple-700 text-white font-black text-xs tracking-wider flex items-center gap-1 shadow-xs">
+                        <Tv className="w-3.5 h-3.5" />
+                        <span>Slide {Math.min(activePptSlideIndex + 1, Math.max(1, pptSlides.length))}/{Math.max(1, pptSlides.length)}</span>
+                      </span>
+
+                      {/* Nút Trước (Lùi bước / Slide trước) */}
+                      <button
+                        type="button"
+                        disabled={activePptSlideIndex <= 0 && activePptStepIndex <= 0}
+                        onClick={handlePptPrev}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-slate-100 shadow-xs"
+                        title="Lùi bước / Slide trước (Phím ← hoặc PageUp)"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>Trước</span>
+                      </button>
+
+                      {/* Dropdown Chọn slide */}
+                      <select
+                        value={activePptSlideIndex}
+                        onChange={(e) => {
+                          const newIdx = Number(e.target.value);
+                          setActivePptSlideIndex(newIdx);
+                          setActivePptStepIndex(0);
+                        }}
+                        className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer focus:outline-none max-w-[140px] sm:max-w-[180px] truncate shadow-xs"
+                        title="Chọn slide trình chiếu"
+                      >
+                        {pptSlides.map((s, idx) => (
+                          <option key={s.id || idx} value={idx}>
+                            {s.title || `Slide ${idx + 1}`}
+                          </option>
+                        ))}
+                      </select>
+
+                      {/* Nút Slide tiếp / Hiện tiếp ⚡ */}
+                      <button
+                        type="button"
+                        disabled={
+                          activePptSlideIndex >= pptSlides.length - 1 &&
+                          (revealAllSteps || activePptStepIndex >= currentPptTotalSteps - 1)
+                        }
+                        onClick={handlePptNext}
+                        className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-white shadow-xs"
+                        title="Tiến bước / Slide tiếp theo (Phím → hoặc Phím Cách)"
+                      >
+                        <span>
+                          {!revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
+                            ? 'Hiện tiếp ⚡'
+                            : 'Slide tiếp'}
+                        </span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Nút Từng bước ⚡ / Hiện tất cả nếu slide có nhiều hiệu ứng */}
+                      {currentPptTotalSteps > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRevealAllSteps(!revealAllSteps)}
+                          className={`px-2 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
+                            revealAllSteps
+                              ? 'bg-amber-600 text-white border-amber-500'
+                              : 'bg-slate-800 text-amber-300 border-amber-700/60 hover:bg-slate-700'
+                          }`}
+                          title={revealAllSteps ? 'Bật chế độ hiển thị lần lượt từng hiệu ứng' : 'Hiện ngay toàn bộ nội dung trong slide'}
+                        >
+                          {revealAllSteps ? 'Tất cả' : 'Từng bước ⚡'}
+                        </button>
+                      )}
+
+                      {/* Nút Chèn khoảng trống (NoteRenderer Space Tool) */}
+                      <button
+                        type="button"
+                        onClick={() => handleAddPptWhiteboardAtStep(activePptStepIndex, 280)}
+                        className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all transform active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs border border-indigo-400"
+                        title="Chèn khoảng trống (như NoteRenderer): Mở khoảng trống viết bài giảng / lời giải ở giữa; nội dung tiếp theo sẽ dời xuống bên dưới"
+                      >
+                        <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
+                        <span>Chèn khoảng trống</span>
+                      </button>
+
+                      <div className="h-4 w-[1px] bg-purple-300 mx-1"></div>
+                    </div>
+                  )}
+
                   {/* Undo / Redo */}
                   <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
               <Undo className="w-4 h-4" />
@@ -6840,8 +6984,23 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               )}
             </div>
 
-                  {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) */}
+                  {/* Nút Lưu Drive góc phải Toolbar (Đóng gói bởi module con DongBoDrive) & Nút Thoát PPT */}
                   <div className="ml-auto flex items-center gap-2">
+                    {/* Nút Thoát PPT nổi bật khi đang ở chế độ xem PPT */}
+                    {wordViewMode === 'ppt' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsPptFullScreen(false);
+                          setWordViewMode('full');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-rose-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center gap-1.5 shrink-0"
+                        title="Thoát chế độ trình chiếu PPT (Esc)"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Thoát PPT</span>
+                      </button>
+                    )}
                     <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 flex items-center gap-1.5 shadow-2xs" title="Tài khoản Giáo viên có Quyền biên soạn tài liệu (Chỉnh sửa, xóa, đổi tên, đặt mốc PPT &amp; hiệu ứng)">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
                       <span>Quyền biên soạn: Đã kích hoạt ✓</span>
@@ -6858,35 +7017,99 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 /* TOOLBAR DÀNH CHO HỌC SINH: CHỈ XEM HOẶC TRÌNH CHIẾU */
                 <div className="flex items-center justify-between w-full gap-2 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {/* 1. Nút Xem tài liệu (toàn bộ) */}
-                    <button
-                      type="button"
-                      onClick={() => setWordViewMode('full')}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        wordViewMode === 'full'
-                          ? 'bg-indigo-600 text-white shadow-xs'
-                          : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                      }`}
-                      title="Chế độ đọc bài & xem tài liệu"
-                    >
-                      <FileText className="w-4 h-4" />
-                      <span>Xem tài liệu</span>
-                    </button>
+                    {wordViewMode === 'ppt' ? (
+                      /* Khi học sinh xem PPT: Nút điều hướng PPT + Cỡ chữ + Thoát PPT */
+                      <>
+                        <span className="px-2.5 py-1 rounded-lg bg-purple-700 text-white font-black text-xs tracking-wider flex items-center gap-1 shadow-xs">
+                          <Tv className="w-3.5 h-3.5" />
+                          <span>Slide {Math.min(activePptSlideIndex + 1, Math.max(1, pptSlides.length))}/{Math.max(1, pptSlides.length)}</span>
+                        </span>
 
-                    {/* 2. Nút Trình chiếu Slide (PPT) */}
-                    <button
-                      type="button"
-                      onClick={() => setWordViewMode('ppt')}
-                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                        wordViewMode === 'ppt'
-                          ? 'bg-purple-600 text-white shadow-xs ring-2 ring-purple-300'
-                          : 'bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200'
-                      }`}
-                      title="Chuyển sang chế độ Trình chiếu Slide PPT"
-                    >
-                      <Tv className="w-4 h-4" />
-                      <span>Trình chiếu Slide (PPT)</span>
-                    </button>
+                        <button
+                          type="button"
+                          disabled={activePptSlideIndex <= 0 && activePptStepIndex <= 0}
+                          onClick={handlePptPrev}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-slate-100 shadow-xs"
+                          title="Lùi bước / Slide trước"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <span>Trước</span>
+                        </button>
+
+                        <select
+                          value={activePptSlideIndex}
+                          onChange={(e) => {
+                            const newIdx = Number(e.target.value);
+                            setActivePptSlideIndex(newIdx);
+                            setActivePptStepIndex(0);
+                          }}
+                          className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer focus:outline-none max-w-[150px] truncate shadow-xs"
+                          title="Chọn slide trình chiếu"
+                        >
+                          {pptSlides.map((s, idx) => (
+                            <option key={s.id || idx} value={idx}>
+                              {s.title || `Slide ${idx + 1}`}
+                            </option>
+                          ))}
+                        </select>
+
+                        <button
+                          type="button"
+                          disabled={
+                            activePptSlideIndex >= pptSlides.length - 1 &&
+                            (revealAllSteps || activePptStepIndex >= currentPptTotalSteps - 1)
+                          }
+                          onClick={handlePptNext}
+                          className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-white shadow-xs"
+                          title="Tiến bước / Slide tiếp theo"
+                        >
+                          <span>
+                            {!revealAllSteps && activePptStepIndex < currentPptTotalSteps - 1
+                              ? 'Hiện tiếp ⚡'
+                              : 'Slide tiếp'}
+                          </span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setWordViewMode('full')}
+                          className="px-3 py-1.5 rounded-xl bg-slate-700 hover:bg-rose-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs flex items-center gap-1"
+                          title="Thoát PPT để xem tài liệu bình thường"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                          <span>Thoát PPT</span>
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        {/* 1. Nút Xem tài liệu (toàn bộ) */}
+                        <button
+                          type="button"
+                          onClick={() => setWordViewMode('full')}
+                          className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                            wordViewMode === 'full'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
+                          }`}
+                          title="Chế độ đọc bài & xem tài liệu"
+                        >
+                          <FileText className="w-4 h-4" />
+                          <span>Xem tài liệu</span>
+                        </button>
+
+                        {/* 2. Nút Trình chiếu Slide (PPT) */}
+                        <button
+                          type="button"
+                          onClick={() => setWordViewMode('ppt')}
+                          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200"
+                          title="Chuyển sang chế độ Trình chiếu Slide PPT"
+                        >
+                          <Tv className="w-4 h-4" />
+                          <span>Trình chiếu Slide (PPT)</span>
+                        </button>
+                      </>
+                    )}
 
                     <div className="h-5 w-[1px] bg-slate-300 mx-1"></div>
 
@@ -6968,6 +7191,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   setActivePptSlideIndex(newIdx);
                   setActivePptStepIndex(0);
                 }}
+                activeStepIndex={activePptStepIndex}
+                onStepChange={setActivePptStepIndex}
+                revealAllSteps={revealAllSteps}
+                onToggleRevealAll={() => setRevealAllSteps((prev) => !prev)}
+                whiteboards={pptWhiteboards}
+                onUpdateWhiteboard={handleUpdatePptWhiteboard}
+                onDeleteWhiteboard={handleDeletePptWhiteboard}
+                onAddWhiteboardAtStep={handleAddPptWhiteboardAtStep}
                 tienTrinhChuyenDe={tienTrinhChuyenDe}
                 docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
                 isTeacher={isTeacherOrHigher(currentRole)}

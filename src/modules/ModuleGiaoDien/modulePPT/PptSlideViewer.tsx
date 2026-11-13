@@ -1,13 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Tv,
-  ChevronLeft,
-  ChevronRight,
-  Maximize2,
-  Minimize2,
-} from 'lucide-react';
 import { PptSlideItem } from './types';
-import { getEffectLabel, getEffectIcon } from './PptMarkerRail';
+import { getEffectLabel } from './PptMarkerRail';
 import {
   PptInteractiveBoard,
   PptWhiteboardData,
@@ -18,6 +11,14 @@ interface PptSlideViewerProps {
   slides: PptSlideItem[];
   activeSlideIndex: number;
   onSlideChange: (index: number) => void;
+  activeStepIndex?: number;
+  onStepChange?: (stepIdx: number) => void;
+  revealAllSteps?: boolean;
+  onToggleRevealAll?: () => void;
+  whiteboards?: PptWhiteboardData[];
+  onUpdateWhiteboard?: (updated: PptWhiteboardData) => void;
+  onDeleteWhiteboard?: (id: string) => void;
+  onAddWhiteboardAtStep?: (stepIdx: number, initialHeight?: number) => void;
   tienTrinhChuyenDe?: string;
   docTitle?: string;
   onExitPpt: () => void;
@@ -28,18 +29,46 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   slides,
   activeSlideIndex,
   onSlideChange,
+  activeStepIndex: controlledStepIndex,
+  onStepChange: controlledOnStepChange,
+  revealAllSteps: controlledRevealAllSteps,
+  onToggleRevealAll,
+  whiteboards: controlledWhiteboards,
+  onUpdateWhiteboard,
+  onDeleteWhiteboard,
+  onAddWhiteboardAtStep,
   tienTrinhChuyenDe = 'Kiến thức',
   docTitle = 'Tài liệu Chuyên đề',
   onExitPpt,
   isTeacher = true,
 }) => {
-  const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
-  const [revealAllSteps, setRevealAllSteps] = useState<boolean>(false);
-  const [isFullScreen, setIsFullScreen] = useState<boolean>(false);
-  const [whiteboards, setWhiteboards] = useState<PptWhiteboardData[]>([]);
+  const [internalStepIndex, setInternalStepIndex] = useState<number>(0);
+  const [internalRevealAll, setInternalRevealAll] = useState<boolean>(false);
+  const [internalWhiteboards, setInternalWhiteboards] = useState<PptWhiteboardData[]>([]);
+
+  const activeStepIndex = controlledStepIndex !== undefined ? controlledStepIndex : internalStepIndex;
+  const setActiveStepIndex = (val: number | ((prev: number) => number)) => {
+    if (controlledOnStepChange) {
+      if (typeof val === 'function') {
+        controlledOnStepChange(val(activeStepIndex));
+      } else {
+        controlledOnStepChange(val);
+      }
+    } else {
+      setInternalStepIndex(val);
+    }
+  };
+
+  const revealAllSteps = controlledRevealAllSteps !== undefined ? controlledRevealAllSteps : internalRevealAll;
+
+  const whiteboards = controlledWhiteboards !== undefined ? controlledWhiteboards : internalWhiteboards;
 
   // Thêm một khoảng trống viết bài mới sau bước chỉ định (mặc định NoteRenderer 280px)
   const handleAddBoardAtStep = (stepIdx: number, initialHeight: number = 280) => {
+    if (onAddWhiteboardAtStep) {
+      onAddWhiteboardAtStep(stepIdx, initialHeight);
+      return;
+    }
     const newBoard: PptWhiteboardData = {
       id: `space-${activeSlideIndex}-${stepIdx}-${Date.now()}`,
       slideIndex: activeSlideIndex,
@@ -50,15 +79,23 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
       showTextEditor: false,
       strokes: [],
     };
-    setWhiteboards((prev) => [...prev, newBoard]);
+    setInternalWhiteboards((prev) => [...prev, newBoard]);
   };
 
   const handleUpdateBoard = (updated: PptWhiteboardData) => {
-    setWhiteboards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    if (onUpdateWhiteboard) {
+      onUpdateWhiteboard(updated);
+    } else {
+      setInternalWhiteboards((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
+    }
   };
 
   const handleDeleteBoard = (id: string) => {
-    setWhiteboards((prev) => prev.filter((b) => b.id !== id));
+    if (onDeleteWhiteboard) {
+      onDeleteWhiteboard(id);
+    } else {
+      setInternalWhiteboards((prev) => prev.filter((b) => b.id !== id));
+    }
   };
 
   // Kéo chuột/bút xuống để chèn khoảng trống trực tiếp (NoteRenderer drag-to-insert mechanism)
@@ -84,12 +121,23 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
             showTextEditor: false,
             strokes: [],
           };
-          setWhiteboards((prev) => [...prev, newSpace]);
+          if (onUpdateWhiteboard) {
+            onUpdateWhiteboard(newSpace);
+          } else {
+            setInternalWhiteboards((prev) => [...prev, newSpace]);
+          }
         } else {
           const h = Math.max(80, Math.min(1400, deltaY));
-          setWhiteboards((prev) =>
-            prev.map((b) => (b.id === createdId ? { ...b, height: h } : b))
-          );
+          if (onUpdateWhiteboard) {
+            const currentItem = whiteboards.find((b) => b.id === createdId);
+            if (currentItem) {
+              onUpdateWhiteboard({ ...currentItem, height: h });
+            }
+          } else {
+            setInternalWhiteboards((prev) =>
+              prev.map((b) => (b.id === createdId ? { ...b, height: h } : b))
+            );
+          }
         }
       }
     };
@@ -116,10 +164,12 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     ? currentSlide?.steps || []
     : (currentSlide?.steps || []).slice(0, activeStepIndex + 1);
 
-  // Reset bước hiệu ứng khi đổi slide
+  // Reset bước hiệu ứng khi đổi slide nếu đang dùng internal state
   useEffect(() => {
-    setActiveStepIndex(0);
-  }, [activeSlideIndex]);
+    if (controlledStepIndex === undefined) {
+      setInternalStepIndex(0);
+    }
+  }, [activeSlideIndex, controlledStepIndex]);
 
   // Điều khiển phím chuyển slide & bước hiệu ứng
   useEffect(() => {
@@ -128,7 +178,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
       if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
         e.preventDefault();
         if (!revealAllSteps && activeStepIndex < totalSteps - 1) {
-          setActiveStepIndex(prev => prev + 1);
+          setActiveStepIndex((prev) => (typeof prev === 'number' ? prev + 1 : activeStepIndex + 1));
         } else if (activeSlideIndex < slides.length - 1) {
           onSlideChange(activeSlideIndex + 1);
           setActiveStepIndex(0);
@@ -136,7 +186,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
         e.preventDefault();
         if (!revealAllSteps && activeStepIndex > 0) {
-          setActiveStepIndex(prev => prev - 1);
+          setActiveStepIndex((prev) => (typeof prev === 'number' ? prev - 1 : activeStepIndex - 1));
         } else if (activeSlideIndex > 0) {
           const prevIdx = activeSlideIndex - 1;
           onSlideChange(prevIdx);
@@ -144,25 +194,16 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
           setActiveStepIndex(prevSlide ? Math.max(0, prevSlide.steps.length - 1) : 0);
         }
       } else if (e.key === 'Escape') {
-        if (isFullScreen) {
-          setIsFullScreen(false);
-        } else {
-          onExitPpt();
-        }
+        e.preventDefault();
+        onExitPpt();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [slides, activeSlideIndex, activeStepIndex, revealAllSteps, isFullScreen, totalSteps, onSlideChange, onExitPpt]);
+  }, [slides, activeSlideIndex, activeStepIndex, revealAllSteps, totalSteps, onSlideChange, onExitPpt]);
 
   return (
-    <div
-      className={`space-y-4 ${
-        isFullScreen
-          ? 'fixed inset-0 z-50 bg-slate-950 p-4 sm:p-6 flex flex-col justify-between overflow-y-auto'
-          : 'bg-slate-950 p-4 sm:p-6 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner'
-      }`}
-    >
+    <div className="fixed inset-0 z-50 bg-slate-950 p-4 sm:p-6 flex flex-col justify-between overflow-y-auto pt-24 pb-8 space-y-4">
       {/* Định nghĩa các chuyển động CSS của 10 hiệu ứng trình chiếu PPT cơ bản */}
       <style>{`
         @keyframes pptFadeIn {
@@ -242,149 +283,20 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         }
       `}</style>
 
-      {/* Thanh điều khiển trên cùng của PPT */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900 text-white p-3 rounded-xl border border-slate-800 shadow-md">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="px-3 py-1 rounded-lg bg-purple-600 text-white font-black text-xs tracking-wider flex items-center gap-1.5 shadow-xs">
-            <Tv className="w-3.5 h-3.5" />
-            <span>TRÌNH CHIẾU PPT {tienTrinhChuyenDe === 'Kiến thức' ? 'KIẾN THỨC' : 'TÀI LIỆU'}</span>
-          </span>
-          <span className="text-xs text-slate-300 font-bold bg-slate-800 px-2.5 py-1 rounded-lg border border-slate-700">
-            Slide {Math.min(activeSlideIndex + 1, slides.length)} / {slides.length}
-          </span>
-          {totalSteps > 1 && (
-            <span className="text-xs text-amber-300 font-bold bg-amber-950/70 border border-amber-600/40 px-2.5 py-1 rounded-lg flex items-center gap-1.5">
-              <span>⚡ Hiệu ứng:</span>
-              <span>{revealAllSteps ? 'Tất cả' : `${activeStepIndex + 1}/${totalSteps}`}</span>
-              {!revealAllSteps && currentSlide?.stepItems?.[activeStepIndex]?.effectType && (
-                <span className="text-[10px] text-amber-300 bg-amber-900/90 px-1.5 py-0.5 rounded-full border border-amber-600/50 flex items-center gap-0.5">
-                  <span>{getEffectIcon(currentSlide.stepItems[activeStepIndex].effectType)}</span>
-                  <span>{getEffectLabel(currentSlide.stepItems[activeStepIndex].effectType)}</span>
-                </span>
-              )}
-            </span>
-          )}
-        </div>
-
-        {/* Điều hướng chuyển slide, bước hiệu ứng & Nút Thoát PPT */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* Nút lùi bước hiệu ứng / lùi slide */}
-          <button
-            type="button"
-            disabled={activeSlideIndex <= 0 && activeStepIndex <= 0}
-            onClick={() => {
-              if (!revealAllSteps && activeStepIndex > 0) {
-                setActiveStepIndex(prev => prev - 1);
-              } else if (activeSlideIndex > 0) {
-                const prevIdx = activeSlideIndex - 1;
-                onSlideChange(prevIdx);
-                const prevSlide = slides[prevIdx];
-                setActiveStepIndex(prevSlide ? Math.max(0, prevSlide.steps.length - 1) : 0);
-              }
-            }}
-            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-slate-200"
-            title="Lùi bước / Slide trước (Phím ← hoặc PageUp)"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            <span>Trước</span>
-          </button>
-
-          {/* Danh sách chọn nhanh Slide */}
-          <select
-            value={activeSlideIndex}
-            onChange={(e) => onSlideChange(Number(e.target.value))}
-            className="bg-slate-800 text-white text-xs font-bold px-2.5 py-1.5 rounded-lg border border-slate-700 cursor-pointer focus:outline-none max-w-[150px] truncate"
-          >
-            {slides.map((s, idx) => (
-              <option key={s.id || idx} value={idx}>
-                {s.title || `Slide ${idx + 1}`}
-              </option>
-            ))}
-          </select>
-
-          {/* Nút tiến bước hiệu ứng / sang slide kế tiếp */}
-          <button
-            type="button"
-            disabled={activeSlideIndex >= slides.length - 1 && (revealAllSteps || activeStepIndex >= totalSteps - 1)}
-            onClick={() => {
-              if (!revealAllSteps && activeStepIndex < totalSteps - 1) {
-                setActiveStepIndex(prev => prev + 1);
-              } else if (activeSlideIndex < slides.length - 1) {
-                onSlideChange(activeSlideIndex + 1);
-                setActiveStepIndex(0);
-              }
-            }}
-            className="px-2.5 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold transition-colors cursor-pointer flex items-center gap-1 text-white shadow-xs"
-            title="Tiến bước / Slide tiếp theo (Phím → hoặc Phím Cách)"
-          >
-            <span>{(!revealAllSteps && activeStepIndex < totalSteps - 1) ? 'Hiện tiếp ⚡' : 'Slide tiếp'}</span>
-            <ChevronRight className="w-3.5 h-3.5" />
-          </button>
-
-          {/* Nút Bật / Tắt Hiện toàn bộ bước hiệu ứng */}
-          {totalSteps > 1 && (
-            <button
-              type="button"
-              onClick={() => setRevealAllSteps(!revealAllSteps)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer border ${
-                revealAllSteps
-                  ? 'bg-amber-600 text-white border-amber-500'
-                  : 'bg-slate-800 text-amber-300 border-amber-800/60 hover:bg-slate-700'
-              }`}
-              title={revealAllSteps ? 'Bật chế độ hiển thị lần lượt từng hiệu ứng' : 'Hiện ngay toàn bộ nội dung trong slide'}
-            >
-              {revealAllSteps ? 'Hiện tất cả' : 'Từng bước ⚡'}
-            </button>
-          )}
-
-          {/* Nút Chèn Khoảng Trống (NoteRenderer Space Tool) */}
-          {isTeacher && (
-            <button
-              type="button"
-              onClick={() => handleAddBoardAtStep(activeStepIndex, 280)}
-              className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all transform active:scale-95 cursor-pointer flex items-center gap-1.5 shadow-xs border border-indigo-400"
-              title="Chèn khoảng trống (như NoteRenderer): Mở khoảng trống viết bài giảng / lời giải ở giữa; nội dung tiếp theo sẽ dời xuống bên dưới"
-            >
-              <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
-              <span>Chèn khoảng trống</span>
-            </button>
-          )}
-
-          <div className="h-4 w-[1px] bg-slate-700 mx-1"></div>
-
-          <button
-            type="button"
-            onClick={() => setIsFullScreen(!isFullScreen)}
-            className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors cursor-pointer"
-            title={isFullScreen ? 'Thu nhỏ (Esc)' : 'Toàn màn hình'}
-          >
-            {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
-
-          <button
-            type="button"
-            onClick={onExitPpt}
-            className="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-rose-600 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
-          >
-            Thoát PPT
-          </button>
-        </div>
-      </div>
-
-      {/* Khung Chiếu Slide Chính PPT */}
+      {/* Khung Chiếu Slide Chính PPT (Toàn màn hình, không còn thanh đen PPT riêng lẻ) */}
       <div
         onClick={(e) => {
           const target = e.target as HTMLElement;
           if (!target.closest('button, a, input, select, canvas, textarea, .no-slide-advance')) {
             if (!revealAllSteps && activeStepIndex < totalSteps - 1) {
-              setActiveStepIndex(prev => prev + 1);
+              setActiveStepIndex((prev) => (typeof prev === 'number' ? prev + 1 : activeStepIndex + 1));
             } else if (activeSlideIndex < slides.length - 1) {
               onSlideChange(activeSlideIndex + 1);
               setActiveStepIndex(0);
             }
           }
         }}
-        className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 cursor-pointer select-none transition-all relative"
+        className="bg-white rounded-2xl shadow-2xl p-6 sm:p-10 min-h-[520px] max-w-5xl mx-auto flex flex-col justify-between border border-slate-200 cursor-pointer select-none transition-all relative w-full"
         title="Nhấp chuột trái vào nền để hiện bước hiệu ứng kế tiếp hoặc chuyển slide"
       >
         <div className="space-y-4">
