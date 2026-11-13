@@ -44,110 +44,103 @@ export const PptMarkerRail: React.FC<PptMarkerRailProps> = ({
       {/* THANH MỐC PPT DỌC BÊN LỀ TRÁI (TỪ ĐẦU ĐẾN CUỐI TÀI LIỆU) */}
       <div
         onClick={onRailClick}
-        className="w-11 shrink-0 self-stretch min-h-[580px] bg-gradient-to-b from-purple-100/90 via-slate-100 to-amber-100/90 rounded-2xl border-2 border-purple-300/80 shadow-md relative cursor-pointer select-none group transition-all hover:border-purple-500 hover:shadow-lg flex flex-col items-center py-3"
-        title="Thanh Mốc PPT: Kích vào dấu + đầu dòng bất kỳ để chèn +Mốc Slide hoặc +Hiệu ứng"
+        className="w-12 shrink-0 self-stretch min-h-[580px] bg-gradient-to-b from-purple-100/90 via-slate-100 to-amber-100/90 rounded-2xl border-2 border-purple-300/80 shadow-md relative cursor-pointer select-none group transition-all hover:border-purple-500 hover:shadow-lg"
+        title="Thanh Mốc PPT: Kích vào dấu + đầu dòng bất kỳ để đặt mốc slide hoặc hiệu ứng"
       >
-        <div className="flex flex-col items-center gap-1.5 mb-2">
-          {/* Nút Phân tích mốc tự động dùng biểu tượng Wand2 ở đầu thanh mốc PPT */}
-          {onAutoAnalyze && (
+        {/* Nút hợp nhất Biểu tượng Phân tích mốc tự động và Biểu tượng Thanh mốc PPT làm 1 */}
+        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onAutoAnalyze) {
+                onAutoAnalyze();
+              }
+            }}
+            className="w-8 h-8 rounded-xl bg-gradient-to-br from-purple-600 via-indigo-600 to-amber-500 hover:from-purple-700 hover:to-amber-600 text-white shadow-md transition-all transform hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center border-2 border-white relative"
+            title="Thanh Mốc PPT: Kích vào để Tự động phân tích & đặt mốc Slide / Hiệu ứng toàn bài"
+          >
+            <span className="text-sm select-none">🎬</span>
+            <span className="absolute -bottom-1 -right-1 text-[11px] filter drop-shadow">🪄</span>
+          </button>
+        </div>
+
+        {/* Trục đường gióng đứng nối các mốc */}
+        <div className="absolute left-1/2 -translate-x-1/2 top-12 bottom-4 w-[2px] bg-purple-300/50 border-r border-dashed border-purple-400/80 pointer-events-none"></div>
+
+        {/* Dấu + tại mỗi đầu dòng và các huy hiệu mốc PPT theo tọa độ pixel dòng */}
+        {lineItems.map((line) => {
+          const lineY = Math.max(48, line.topOffset + 8);
+          if (line.marker) {
+            const marker = line.marker;
+            const effectIcon = getEffectIcon(marker.effectType);
+            const effectLabel = getEffectLabel(marker.effectType);
+            return (
+              <div
+                key={marker.id || line.elementIndex}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onMarkerClick(marker, e);
+                }}
+                className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 px-1.5 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
+                  marker.type === 'slide'
+                    ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
+                    : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
+                }`}
+                style={{ top: `${lineY}px` }}
+                title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng B${marker.stepNumber} (${effectLabel})`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
+              >
+                <span>{marker.type === 'slide' ? '🎬' : effectIcon}</span>
+                <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
+              </div>
+            );
+          }
+
+          return (
             <button
+              key={`line-plus-${line.elementIndex}`}
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                onAutoAnalyze();
+                if (onLinePlusClick) {
+                  onLinePlusClick(line, e);
+                }
               }}
-              className="p-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md transition-all transform hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center border border-purple-300 mb-0.5"
-              title="Phân tích mốc tự động: Mỗi câu hỏi (đề+lời giải), mục lý thuyết, Ví dụ (đề+lời giải) là 1 slide"
+              className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-5 h-5 rounded-full bg-purple-600 hover:bg-purple-800 text-white flex items-center justify-center font-extrabold text-xs shadow-sm transition-all transform hover:scale-125 active:scale-95 cursor-pointer border border-white"
+              style={{ top: `${lineY}px` }}
+              title={`Kích vào dấu + ở đầu dòng ${line.elementIndex + 1} ("${line.snippet}") để thêm mốc Slide hoặc Hiệu ứng`}
             >
-              <Wand2 className="w-4 h-4 text-amber-300" />
+              +
             </button>
-          )}
-          <span className="p-1 rounded-lg bg-purple-600 text-white shadow-xs text-xs font-black">🎬</span>
-        </div>
+          );
+        })}
 
-        <div className="w-full flex-1 relative min-h-[400px]">
-          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-[2px] bg-purple-300/50 border-r border-dashed border-purple-400/80"></div>
-
-          {/* Dấu + tại mỗi đầu 1 dòng mới trên thanh mốc PPT */}
-          {lineItems.map((line) => {
-            const topPercent = Math.max(2, Math.min(98, (line.topOffset / (totalScrollHeight || 1000)) * 100));
-            if (line.marker) {
-              const marker = line.marker;
-              const effectIcon = getEffectIcon(marker.effectType);
-              const effectLabel = getEffectLabel(marker.effectType);
-              return (
-                <div
-                  key={marker.id || line.elementIndex}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMarkerClick(marker, e);
-                  }}
-                  className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 px-1 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
-                    marker.type === 'slide'
-                      ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
-                      : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
-                  }`}
-                  style={{ top: `${topPercent}%` }}
-                  title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng B${marker.stepNumber} (${effectLabel})`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
-                >
-                  <span>{marker.type === 'slide' ? '🎬' : effectIcon}</span>
-                  <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
-                </div>
-              );
-            }
-
+        {/* Fallback khi lineItems rỗng */}
+        {lineItems.length === 0 &&
+          markers.map((marker, mIdx) => {
+            const effectIcon = getEffectIcon(marker.effectType);
+            const effectLabel = getEffectLabel(marker.effectType);
+            const markerY = Math.max(48, marker.topOffset + 8);
             return (
-              <button
-                key={`line-plus-${line.elementIndex}`}
-                type="button"
+              <div
+                key={marker.id || mIdx}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (onLinePlusClick) {
-                    onLinePlusClick(line, e);
-                  }
+                  onMarkerClick(marker, e);
                 }}
-                className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 w-4 h-4 rounded-full bg-purple-600 hover:bg-purple-800 text-white flex items-center justify-center font-extrabold text-[10px] shadow-sm transition-all transform hover:scale-125 active:scale-95 cursor-pointer border border-white"
-                style={{ top: `${topPercent}%` }}
-                title={`Kích vào dấu + ở đầu dòng ${line.elementIndex + 1} ("${line.snippet}") để thêm mốc Slide hoặc Hiệu ứng`}
+                className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 px-1.5 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
+                  marker.type === 'slide'
+                    ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
+                    : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
+                }`}
+                style={{ top: `${markerY}px` }}
+                title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng B${marker.stepNumber} (${effectLabel})`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
               >
-                +
-              </button>
+                <span>{marker.type === 'slide' ? '🎬' : effectIcon}</span>
+                <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
+              </div>
             );
           })}
-
-          {/* Fallback render markers if lineItems is empty */}
-          {lineItems.length === 0 &&
-            markers.map((marker, mIdx) => {
-              const effectIcon = getEffectIcon(marker.effectType);
-              const effectLabel = getEffectLabel(marker.effectType);
-              return (
-                <div
-                  key={marker.id || mIdx}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onMarkerClick(marker, e);
-                  }}
-                  className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 px-1 py-0.5 rounded-full text-[9px] font-black shadow-md flex items-center gap-0.5 transition-transform hover:scale-125 cursor-pointer border ${
-                    marker.type === 'slide'
-                      ? 'bg-purple-600 text-white border-purple-400 ring-2 ring-purple-200'
-                      : 'bg-amber-500 text-slate-950 border-amber-300 ring-2 ring-amber-200'
-                  }`}
-                  style={{
-                    top: `${Math.max(4, Math.min(96, (marker.topOffset / (totalScrollHeight || 1000)) * 100))}%`,
-                  }}
-                  title={`${marker.type === 'slide' ? `Slide ${marker.slideNumber}` : `Hiệu ứng B${marker.stepNumber} (${effectLabel})`}: ${marker.snippet} (Kích để sửa/gỡ mốc)`}
-                >
-                  <span>{marker.type === 'slide' ? '🎬' : effectIcon}</span>
-                  <span>{marker.type === 'slide' ? `S${marker.slideNumber}` : `B${marker.stepNumber}`}</span>
-                </div>
-              );
-            })}
-        </div>
-
-        <div className="mt-auto pt-2 flex flex-col items-center gap-0.5 text-purple-700 opacity-60 group-hover:opacity-100 transition-opacity">
-          <Plus className="w-3.5 h-3.5" />
-          <span className="text-[8px] font-bold">Kích chèn</span>
-        </div>
       </div>
 
       {/* POPUP CHÈN / SỬA / GỠ MỐC KHI KÍCH CHUỘT VÀO THANH MỐC PPT */}

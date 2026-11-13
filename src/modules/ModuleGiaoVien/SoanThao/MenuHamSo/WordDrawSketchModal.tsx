@@ -720,7 +720,7 @@ ${tikzPlots}
 `.trim();
 
       const graphHtml = `
-        <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-width="420" data-align="center" style="margin: 16px auto; max-width: 420px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;" ${isTeacher ? `onmouseenter="this.style.borderColor='#94a3b8';const c=this.querySelector('.word-graph-controls');if(c){c.style.setProperty('opacity','1','important');c.style.setProperty('pointer-events','auto','important');}" onmouseleave="this.style.borderColor='transparent';const c=this.querySelector('.word-graph-controls');if(c){c.style.setProperty('opacity','0','important');c.style.setProperty('pointer-events','none','important');}"` : ''}>
+        <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-width="420" data-align="center" style="margin: 16px auto; max-width: 420px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;">
           ${
             isTeacher
               ? `
@@ -817,7 +817,7 @@ ${tikzPlots}
       );
 
       const bbtHtml = `
-        <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-width="480" data-align="center" style="margin: 16px auto; max-width: 480px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;" ${isTeacher ? `onmouseenter="this.style.borderColor='#94a3b8';const c=this.querySelector('.word-bbt-controls');if(c){c.style.setProperty('opacity','1','important');c.style.setProperty('pointer-events','auto','important');}" onmouseleave="this.style.borderColor='transparent';const c=this.querySelector('.word-bbt-controls');if(c){c.style.setProperty('opacity','0','important');c.style.setProperty('pointer-events','none','important');}"` : ''}>
+        <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-width="480" data-align="center" style="margin: 16px auto; max-width: 480px; width: 100%; display: block; text-align: center; border: 1.5px dashed transparent; user-select: none; position: relative;">
           ${
             isTeacher
               ? `

@@ -90,24 +90,33 @@
   scrollbar-width: none !important;
 }
 
-/* Thanh điều khiển trên Đồ thị & Bảng biến thiên (BBT): Mặc định ẩn 100%, chỉ hiện khi đưa chuột vào khu vực */
+/* Thanh điều khiển trên Đồ thị & Bảng biến thiên (BBT): Mặc định ẩn 100% */
 .word-bbt-controls,
 .word-graph-controls {
   opacity: 0 !important;
   pointer-events: none !important;
-  transition: opacity 0.2s ease-in-out !important;
+  transition: opacity 0.15s ease-in-out !important;
 }
 
-.word-bbt-wrapper:hover .word-bbt-controls,
-.word-graph-wrapper:hover .word-graph-controls,
-.group:hover .word-bbt-controls,
-.group:hover .word-graph-controls,
-.group\/item:hover .word-bbt-controls,
-.group\/item:hover .word-graph-controls,
-[data-board-item-id]:hover .word-bbt-controls,
-[data-board-item-id]:hover .word-graph-controls {
+/* ĐỀ XUẤT 1: CHỈ HIỆN KHI ĐƯỢC KÍCH CHỌN (Click to Select / Select to show menu) */
+.word-bbt-wrapper.is-selected .word-bbt-controls,
+.word-graph-wrapper.is-selected .word-graph-controls,
+[data-board-item-id].is-selected .word-bbt-controls,
+[data-board-item-id].is-selected .word-graph-controls,
+.word-bbt-wrapper[data-selected="true"] .word-bbt-controls,
+.word-graph-wrapper[data-selected="true"] .word-graph-controls,
+[data-board-item-id][data-selected="true"] .word-bbt-controls,
+[data-board-item-id][data-selected="true"] .word-graph-controls {
   opacity: 1 !important;
   pointer-events: auto !important;
+}
+
+.word-bbt-wrapper.is-selected,
+.word-graph-wrapper.is-selected,
+[data-board-item-id].is-selected {
+  outline: 2px dashed #6366f1 !important;
+  outline-offset: 4px !important;
+  border-radius: 12px !important;
 }
 
 .word-doc-student-mode .word-bbt-controls,

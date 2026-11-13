@@ -2695,7 +2695,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
     const isTeacher = isTeacherOrHigher(currentRole);
 
     return `
-      <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-formula="${encodeURIComponent(formula)}" data-xmin="${xMinNum}" data-xmax="${xMaxNum}" data-ymin="${yMinNum}" data-ymax="${yMaxNum}" data-unitx="${unitX}" data-unity="${unitY}" data-show-axis-labels="${showAxisLabels}" data-show-origin-label="${showOriginLabel}" data-show-extrema-labels="${showExtremaLabels}" data-xlabel="${encodeURIComponent(xLabel)}" data-ylabel="${encodeURIComponent(yLabel)}" data-varname="${varName}" data-req="${encodeURIComponent(requirement)}" data-width="${initialWidth}" style="text-align: center; margin: 16px auto; background: transparent; border: 1.5px dashed transparent; position: relative; max-width: ${initialWidth}px; width: 100%; display: block; user-select: none;" ${isTeacher ? `onmouseenter="this.style.borderColor='#94a3b8';const c=this.querySelector('.word-graph-controls');if(c){c.style.setProperty('opacity','1','important');c.style.setProperty('pointer-events','auto','important');}" onmouseleave="this.style.borderColor='transparent';const c=this.querySelector('.word-graph-controls');if(c){c.style.setProperty('opacity','0','important');c.style.setProperty('pointer-events','none','important');}"` : ''}>
+      <div class="word-graph-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-graph-id="${graphId}" data-formula="${encodeURIComponent(formula)}" data-xmin="${xMinNum}" data-xmax="${xMaxNum}" data-ymin="${yMinNum}" data-ymax="${yMaxNum}" data-unitx="${unitX}" data-unity="${unitY}" data-show-axis-labels="${showAxisLabels}" data-show-origin-label="${showOriginLabel}" data-show-extrema-labels="${showExtremaLabels}" data-xlabel="${encodeURIComponent(xLabel)}" data-ylabel="${encodeURIComponent(yLabel)}" data-varname="${varName}" data-req="${encodeURIComponent(requirement)}" data-width="${initialWidth}" style="text-align: center; margin: 16px auto; background: transparent; border: 1.5px dashed transparent; position: relative; max-width: ${initialWidth}px; width: 100%; display: block; user-select: none;">
         ${isTeacher ? `
         <div class="word-graph-controls opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs" style="opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out; user-select: none;">
           <div class="flex items-center gap-1.5">
@@ -3740,7 +3740,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
     }
 
     return `
-      <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-formula="${encodeURIComponent(formulaParam || '')}" data-xpoints="${encodeURIComponent(xPointsStr)}" data-yprimesigns="${encodeURIComponent(yPrimeSignsStr)}" data-yvalues="${encodeURIComponent(yValuesStr)}" data-mode="${modeParam || 'manual'}" data-width="${initialWidth}" data-align="${align}" data-varname="${encodeURIComponent(varName)}" data-funcrow="${encodeURIComponent(funcRow)}" data-derivrow="${encodeURIComponent(derivRow)}" style="text-align: ${align}; margin: 16px auto; background: transparent; border: 1.5px dashed transparent; position: relative; max-width: ${initialWidth}px; width: 100%; display: block; user-select: none; ${marginStyle}" ${isTeacher ? `onmouseenter="this.style.borderColor='#94a3b8';const c=this.querySelector('.word-bbt-controls');if(c){c.style.setProperty('opacity','1','important');c.style.setProperty('pointer-events','auto','important');}" onmouseleave="this.style.borderColor='transparent';const c=this.querySelector('.word-bbt-controls');if(c){c.style.setProperty('opacity','0','important');c.style.setProperty('pointer-events','none','important');}"` : ''}>
+      <div class="word-bbt-wrapper relative my-3 group" contenteditable="false" draggable="${isTeacher ? 'true' : 'false'}" data-bbt-id="${bbtId}" data-formula="${encodeURIComponent(formulaParam || '')}" data-xpoints="${encodeURIComponent(xPointsStr)}" data-yprimesigns="${encodeURIComponent(yPrimeSignsStr)}" data-yvalues="${encodeURIComponent(yValuesStr)}" data-mode="${modeParam || 'manual'}" data-width="${initialWidth}" data-align="${align}" data-varname="${encodeURIComponent(varName)}" data-funcrow="${encodeURIComponent(funcRow)}" data-derivrow="${encodeURIComponent(derivRow)}" style="text-align: ${align}; margin: 16px auto; background: transparent; border: 1.5px dashed transparent; position: relative; max-width: ${initialWidth}px; width: 100%; display: block; user-select: none; ${marginStyle}">
         ${isTeacher ? `
           <div class="word-bbt-controls opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto flex items-center justify-between gap-1.5 px-2.5 py-1 mb-1 rounded-lg bg-white/95 backdrop-blur-xs border border-slate-200 shadow-sm text-xs" style="opacity: 0; pointer-events: none; transition: opacity 0.2s ease-in-out; user-select: none;">
             <div class="flex items-center gap-1.5">
@@ -4616,6 +4616,26 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }, 150);
     return () => clearTimeout(timer);
   }, [wordDocumentHtml, wordViewMode]);
+
+  // Quan sát kích thước và cấu trúc DOM của editorRef để cập nhật vị trí các dấu + đầu dòng theo thời gian thực
+  useEffect(() => {
+    if (!editorRef.current) return;
+    const el = editorRef.current;
+    const ro = new ResizeObserver(() => {
+      refreshRailMarkers();
+    });
+    ro.observe(el);
+
+    const mo = new MutationObserver(() => {
+      refreshRailMarkers();
+    });
+    mo.observe(el, { childList: true, subtree: false });
+
+    return () => {
+      ro.disconnect();
+      mo.disconnect();
+    };
+  }, [wordViewMode]);
 
   // Đặt mốc Slide mới tại vị trí con trỏ / đoạn văn đang chọn
   const handleAddSlideBreakAtCurrentSelection = () => {
@@ -8073,19 +8093,25 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   outline: none !important;
                   cursor: default !important;
                 }
-                /* Thanh điều khiển trên đồ thị / BBT chỉ hiện khi rê chuột vào */
+                /* Đề xuất 1: Thanh điều khiển trên đồ thị / BBT chỉ hiện khi được kích chọn (Click to Select) */
                 .word-graph-controls,
                 .word-bbt-controls {
                   opacity: 0;
                   pointer-events: none;
-                  transition: opacity 0.2s ease-in-out;
+                  transition: opacity 0.15s ease-in-out;
                 }
-                .word-graph-wrapper:hover .word-graph-controls,
-                .word-bbt-wrapper:hover .word-bbt-controls,
-                .group:hover .word-graph-controls,
-                .group:hover .word-bbt-controls {
+                .word-graph-wrapper.is-selected .word-graph-controls,
+                .word-bbt-wrapper.is-selected .word-bbt-controls,
+                .word-graph-wrapper[data-selected="true"] .word-graph-controls,
+                .word-bbt-wrapper[data-selected="true"] .word-bbt-controls {
                   opacity: 1 !important;
                   pointer-events: auto !important;
+                }
+                .word-graph-wrapper.is-selected,
+                .word-bbt-wrapper.is-selected {
+                  outline: 2px dashed #6366f1 !important;
+                  outline-offset: 4px !important;
+                  border-radius: 12px !important;
                 }
                 .word-doc-student-mode .graph-draggable-text {
                   cursor: default !important;
@@ -8334,6 +8360,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     if (!el) {
                       saveCurrentSelection();
                       return;
+                    }
+
+                    // Đề xuất 1: Xử lý chọn đối tượng Đồ thị / BBT (Kích chọn để hiện menu)
+                    const clickedWrapper = typeof el.closest === 'function' ? (el.closest('.word-graph-wrapper, .word-bbt-wrapper') as HTMLElement | null) : null;
+                    editorRef.current?.querySelectorAll<HTMLElement>('.word-graph-wrapper, .word-bbt-wrapper').forEach((w) => {
+                      if (w !== clickedWrapper) {
+                        w.classList.remove('is-selected');
+                        w.removeAttribute('data-selected');
+                      }
+                    });
+                    if (clickedWrapper) {
+                      clickedWrapper.classList.add('is-selected');
+                      clickedWrapper.setAttribute('data-selected', 'true');
                     }
 
                     // 1. Nút xóa ✕ đồ thị / bảng biến thiên

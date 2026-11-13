@@ -1012,9 +1012,26 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
     };
   };
 
+  useEffect(() => {
+    if (activeTool === 'pen' || activeTool === 'eraser') {
+      setSelectedHtmlItemId(null);
+    }
+  }, [activeTool]);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedHtmlItemId(null);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, []);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     e.stopPropagation();
+    setSelectedHtmlItemId(null);
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -1417,6 +1434,12 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
 
       {/* VÙNG CHỨA NỘI DUNG VÀ CANVAS CỦA KHOẢNG TRỐNG */}
       <div
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          if (!target.closest('[data-board-item-id]')) {
+            setSelectedHtmlItemId(null);
+          }
+        }}
         className={`ppt-board-inner relative w-full overflow-hidden rounded-xl border border-slate-200/90 shadow-2xs ${
           activeTool === 'pen' || activeTool === 'eraser' ? 'cursor-crosshair' : 'cursor-default'
         }`}
@@ -1449,6 +1472,7 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
               <div
                 key={item.id}
                 data-board-item-id={item.id}
+                data-selected={isSelected ? 'true' : 'false'}
                 style={{
                   position: 'absolute',
                   left: `${itemX}px`,
@@ -1467,21 +1491,11 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   transformOrigin: 'center center',
                   zIndex: isSelected ? 28 : 12,
                 }}
-                className="group/item select-none bg-transparent p-0 pointer-events-auto border-none shadow-none cursor-move"
-                onMouseEnter={(e) => {
-                  const ctrls = e.currentTarget.querySelectorAll<HTMLElement>('.word-bbt-controls, .word-graph-controls');
-                  ctrls.forEach((c) => {
-                    c.style.setProperty('opacity', '1', 'important');
-                    c.style.setProperty('pointer-events', 'auto', 'important');
-                  });
-                }}
-                onMouseLeave={(e) => {
-                  const ctrls = e.currentTarget.querySelectorAll<HTMLElement>('.word-bbt-controls, .word-graph-controls');
-                  ctrls.forEach((c) => {
-                    c.style.setProperty('opacity', '0', 'important');
-                    c.style.setProperty('pointer-events', 'none', 'important');
-                  });
-                }}
+                className={`group/item select-none bg-transparent p-0 pointer-events-auto cursor-move transition-all ${
+                  isSelected
+                    ? 'is-selected ring-2 ring-indigo-500 rounded-xl shadow-lg'
+                    : 'border-none shadow-none'
+                }`}
                 onPointerDown={(e) => {
                   const target = e.target as HTMLElement;
                   // Nếu bấm vào các nút thao tác tương tác (button, input, select, textarea, a) thì để nút xử lý
@@ -1598,10 +1612,10 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   }
                 }}
               >
-                {/* THANH ĐIỀU KHIỂN TÁC VỤ CHO HÌNH ẢNH / BẢNG / CÔNG THỨC: CHỈ HIỆN KHI RÊ CHUỘT VÀO KHU VỰC, BỎ NÚT DI CHUYỂN */}
-                {(item.type === 'image' || item.type === 'table' || item.type === 'math') && (
+                {/* THANH ĐIỀU KHIỂN TÁC VỤ CHO HÌNH ẢNH / BẢNG / CÔNG THỨC: CHỈ HIỆN KHI ĐỐI TƯỢNG ĐƯỢC KÍCH CHỌN (ĐỀ XUẤT 1) */}
+                {isSelected && (item.type === 'image' || item.type === 'table' || item.type === 'math') && (
                   <div
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 backdrop-blur-xs rounded-full shadow-md border border-slate-200 px-2.5 py-1 text-xs z-30 select-none opacity-0 group-hover/item:opacity-100 transition-opacity duration-200 pointer-events-none group-hover/item:pointer-events-auto"
+                    className="absolute -top-10 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-white/95 backdrop-blur-md rounded-full shadow-xl border border-indigo-200 px-3 py-1 text-xs z-30 select-none animate-scale-up"
                     onPointerDown={(e) => e.stopPropagation()}
                   >
                     <button
