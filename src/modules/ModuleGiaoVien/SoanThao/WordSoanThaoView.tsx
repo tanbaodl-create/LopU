@@ -2051,7 +2051,7 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
     return () => window.removeEventListener('keydown', handleGlobalGraphKeyDown);
   }, [selectedGraphElement]);
 
-  // Lắng nghe sự kiện click nút "Chỉnh sửa" từ đồ thị TikZ để mở cửa sổ chỉnh sửa thông số
+  // Lắng nghe sự kiện click nút "Chỉnh sửa" từ đồ thị TikZ & các khối trên slide PPT để mở cửa sổ chỉnh sửa thông số
   useEffect(() => {
     const handleOpenEditTikz = (e: CustomEvent<any>) => {
       if (e.detail) {
@@ -2066,9 +2066,47 @@ const parseTrueFalseItems = (rawText: string, rawHtml: string) => {
       }
     };
 
+    const handleEditPptGraph = (e: CustomEvent<any>) => {
+      const d = e.detail;
+      if (!d) return;
+      setWordGraphFormula(d.formula || 'y = x^2 - 1');
+      setWordGraphXMin(d.xmin || '-2');
+      setWordGraphXMax(d.xmax || '2');
+      setWordGraphYMin(d.ymin || '-2');
+      setWordGraphYMax(d.ymax || '4');
+      setWordGraphUnitX(d.unitx || '1');
+      setWordGraphUnitY(d.unity || '1');
+      setWordGraphShowAxisLabels(d.showAxis !== false);
+      setWordGraphShowOriginLabel(d.showOrigin !== false);
+      setWordGraphShowExtremaLabels(d.showExtrema !== false);
+      setWordGraphRequirement(d.req || '');
+      setEditingGraphId(d.graphId);
+      setWordGraphOldTikz(d.graphId);
+      setShowWordGraphModal(true);
+    };
+
+    const handleEditPptBbt = (e: CustomEvent<any>) => {
+      const d = e.detail;
+      if (!d) return;
+      setWordBbtMode(d.mode === 'function' ? 'function' : 'manual');
+      setWordBbtFormula(d.formula || '');
+      setWordBbtXPoints(d.xpoints || '-\\infty, -1, 1, +\\infty');
+      setWordBbtYPrimeSigns(d.yprimes || '+, 0, -, 0, +');
+      setWordBbtYValues(d.yvalues || '-/-\\infty, +/2, -/-2, +/+\\infty');
+      setWordBbtVarName(d.varname || 'x');
+      setWordBbtFuncRow(d.funcrow || 'y');
+      setWordBbtDerivRow(d.derivrow || "y'");
+      setEditingBbtId(d.bbtId);
+      setShowWordBBTModal(true);
+    };
+
     window.addEventListener('app-open-edit-tikz-modal', handleOpenEditTikz as EventListener);
+    window.addEventListener('app-edit-ppt-graph', handleEditPptGraph as EventListener);
+    window.addEventListener('app-edit-ppt-bbt', handleEditPptBbt as EventListener);
     return () => {
       window.removeEventListener('app-open-edit-tikz-modal', handleOpenEditTikz as EventListener);
+      window.removeEventListener('app-edit-ppt-graph', handleEditPptGraph as EventListener);
+      window.removeEventListener('app-edit-ppt-bbt', handleEditPptBbt as EventListener);
     };
   }, []);
 
@@ -3915,6 +3953,36 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       }
     }
 
+    if (editingGraphId && wordViewMode === 'ppt') {
+      let foundInPpt = false;
+      setPptWhiteboards((prev) =>
+        prev.map((b) => {
+          if (!b.htmlItems) return b;
+          const hasItem = b.htmlItems.some((it) => it.html.includes(editingGraphId) || it.id === editingGraphId);
+          if (hasItem) {
+            foundInPpt = true;
+            return {
+              ...b,
+              htmlItems: b.htmlItems.map((it) =>
+                it.html.includes(editingGraphId) || it.id === editingGraphId
+                  ? { ...it, html: customTikzGraphHtml, title: `Đồ thị ${wordGraphFormula}` }
+                  : it
+              ),
+            };
+          }
+          return b;
+        })
+      );
+      if (foundInPpt) {
+        setNotification({ text: `Đã cập nhật lại đồ thị ${wordGraphFormula} trên slide PPT!`, type: 'success' });
+        setTimeout(() => setNotification(null), 4000);
+        setWordGraphOldTikz('');
+        setEditingGraphId(null);
+        setShowWordGraphModal(false);
+        return;
+      }
+    }
+
     insertHtmlToEditor(customTikzGraphHtml);
 
     setNotification({ text: `Đã ${wordGraphOldTikz ? 'cập nhật' : 'chèn'} đồ thị ${wordGraphFormula} dạng trực quan nền trong suốt vào tài liệu!`, type: 'success' });
@@ -3982,6 +4050,35 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         setEditingBbtId(null);
         setShowWordBBTModal(false);
         saveCurrentSelection();
+        return;
+      }
+    }
+
+    if (editingBbtId && wordViewMode === 'ppt') {
+      let foundInPpt = false;
+      setPptWhiteboards((prev) =>
+        prev.map((b) => {
+          if (!b.htmlItems) return b;
+          const hasItem = b.htmlItems.some((it) => it.html.includes(editingBbtId) || it.id === editingBbtId);
+          if (hasItem) {
+            foundInPpt = true;
+            return {
+              ...b,
+              htmlItems: b.htmlItems.map((it) =>
+                it.html.includes(editingBbtId) || it.id === editingBbtId
+                  ? { ...it, html: bbtHtml, title: 'Bảng biến thiên' }
+                  : it
+              ),
+            };
+          }
+          return b;
+        })
+      );
+      if (foundInPpt) {
+        setNotification({ text: 'Đã cập nhật lại Bảng biến thiên trên slide PPT!', type: 'success' });
+        setTimeout(() => setNotification(null), 4000);
+        setEditingBbtId(null);
+        setShowWordBBTModal(false);
         return;
       }
     }

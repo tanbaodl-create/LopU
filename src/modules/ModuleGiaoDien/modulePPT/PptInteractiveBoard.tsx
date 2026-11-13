@@ -1337,146 +1337,200 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
                   transformOrigin: 'center center',
                   zIndex: isSelected ? 28 : 12,
                 }}
-                className={`group/item select-none rounded-xl border transition-shadow bg-white/95 shadow-md p-3 ${
-                  isSelected
-                    ? 'border-indigo-500 ring-2 ring-indigo-300/70 shadow-lg'
-                    : 'border-slate-300 hover:border-indigo-400'
-                }`}
+                className="group/item select-none bg-transparent p-0 transition-all pointer-events-auto border-none shadow-none"
+                onPointerDown={(e) => {
+                  const target = e.target as HTMLElement;
+                  // Nếu bấm vào nút kéo di chuyển ✥ Di chuyển (hoặc thanh điều khiển)
+                  if (
+                    target.closest('.graph-drag-handle') ||
+                    target.closest('.bbt-drag-handle') ||
+                    target.closest('.drag-handle') ||
+                    (item.type === 'math' && !target.closest('button')) ||
+                    (item.type === 'image' && !target.closest('button'))
+                  ) {
+                    handleStartDragItem(e, item);
+                    return;
+                  }
+                  // Nếu bấm vào góc kéo co giãn đồ thị
+                  if (target.closest('.graph-resize-handle, .bbt-resize-handle')) {
+                    handleStartResizeItem(e, item);
+                    return;
+                  }
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   setSelectedHtmlItemId(item.id);
+
+                  const target = e.target as HTMLElement;
+
+                  // 1. Nút Xóa đồ thị / BBT / mục (✕)
+                  if (target.closest('.delete-graph-btn, .delete-bbt-btn')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteHtmlItem(item.id);
+                    return;
+                  }
+
+                  // 2. Nút co giãn nhanh (-10% / +10%)
+                  const sizeBtn = target.closest('.graph-size-btn, .bbt-size-btn') as HTMLElement | null;
+                  if (sizeBtn) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const action = sizeBtn.getAttribute('data-size-action');
+                    const deltaScale = action === 'increase' ? 0.1 : -0.1;
+                    handleZoomItem(item.id, deltaScale);
+                    return;
+                  }
+
+                  // 3. Nút Sửa đồ thị (✏️ Sửa đồ thị / ✏️ Sửa hàm)
+                  if (target.closest('.edit-graph-btn')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const wrapper = target.closest('.word-graph-wrapper');
+                    if (wrapper) {
+                      const formula = decodeURIComponent(wrapper.getAttribute('data-formula') || 'y = x^2 - 1');
+                      const xmin = wrapper.getAttribute('data-xmin') || '-2';
+                      const xmax = wrapper.getAttribute('data-xmax') || '2';
+                      const ymin = wrapper.getAttribute('data-ymin') || '-2';
+                      const ymax = wrapper.getAttribute('data-ymax') || '4';
+                      const unitx = wrapper.getAttribute('data-unitx') || '1';
+                      const unity = wrapper.getAttribute('data-unity') || '1';
+                      const showAxis = wrapper.getAttribute('data-show-axis-labels');
+                      const showOrigin = wrapper.getAttribute('data-show-origin-label');
+                      const showExtrema = wrapper.getAttribute('data-show-extrema-labels');
+                      const req = decodeURIComponent(wrapper.getAttribute('data-req') || '');
+                      const graphId = wrapper.getAttribute('data-graph-id') || item.id;
+
+                      window.dispatchEvent(
+                        new CustomEvent('app-edit-ppt-graph', {
+                          detail: {
+                            graphId,
+                            formula,
+                            xmin,
+                            xmax,
+                            ymin,
+                            ymax,
+                            unitx,
+                            unity,
+                            showAxis: showAxis !== 'false',
+                            showOrigin: showOrigin !== 'false',
+                            showExtrema: showExtrema !== 'false',
+                            req,
+                          },
+                        })
+                      );
+                    }
+                    return;
+                  }
+
+                  // 4. Nút Sửa BBT (✏️ Sửa BBT)
+                  if (target.closest('.edit-bbt-btn')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const wrapper = target.closest('.word-bbt-wrapper');
+                    if (wrapper) {
+                      const formula = decodeURIComponent(wrapper.getAttribute('data-formula') || '');
+                      const xpoints = decodeURIComponent(wrapper.getAttribute('data-xpoints') || '');
+                      const yprimes = decodeURIComponent(wrapper.getAttribute('data-yprimesigns') || '');
+                      const yvalues = decodeURIComponent(wrapper.getAttribute('data-yvalues') || '');
+                      const mode = wrapper.getAttribute('data-mode') || 'manual';
+                      const bbtId = wrapper.getAttribute('data-bbt-id') || item.id;
+                      const varname = decodeURIComponent(wrapper.getAttribute('data-varname') || 'x');
+                      const funcrow = decodeURIComponent(wrapper.getAttribute('data-funcrow') || 'y');
+                      const derivrow = decodeURIComponent(wrapper.getAttribute('data-derivrow') || "y'");
+
+                      window.dispatchEvent(
+                        new CustomEvent('app-edit-ppt-bbt', {
+                          detail: {
+                            bbtId,
+                            formula,
+                            xpoints,
+                            yprimes,
+                            yvalues,
+                            mode,
+                            varname,
+                            funcrow,
+                            derivrow,
+                          },
+                        })
+                      );
+                    }
+                    return;
+                  }
                 }}
               >
-                {/* 1. THANH ĐIỀU KHIỂN TRÊN CÙNG CỦA KHỐI (z-30 ĐỂ LUÔN TƯƠNG TÁC ĐƯỢC NGAY CẢ KHI BÚT ĐANG BẬT) */}
-                <div
-                  onPointerDown={(e) => handleStartDragItem(e, item)}
-                  className="relative z-30 flex items-center justify-between pb-1.5 mb-2 border-b border-slate-200/80 text-xs select-none cursor-move bg-slate-100/95 -mx-3 -mt-3 px-3 py-1.5 rounded-t-xl hover:bg-slate-200/90 transition-colors"
-                  title="Nhấp giữ và kéo để thay đổi vị trí tự do trên bảng"
-                >
-                  <div className="flex items-center gap-1.5 font-bold text-slate-700 text-[11px] truncate">
-                    <GripHorizontal className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                    {item.type === 'table' && <Table className="w-3.5 h-3.5 text-indigo-600 shrink-0" />}
-                    {item.type === 'image' && <ImageIcon className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                    {item.type === 'math' && <Sigma className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
-                    {item.type === 'graph' && <TrendingUp className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
-                    {item.type === 'bbt' && <BarChart3 className="w-3.5 h-3.5 text-amber-600 shrink-0" />}
-                    <span className="truncate max-w-[110px]">
-                      {item.title ||
-                        (item.type === 'table'
-                          ? 'Bảng số liệu'
-                          : item.type === 'image'
-                          ? 'Hình ảnh'
-                          : item.type === 'graph'
-                          ? 'Đồ thị'
-                          : item.type === 'bbt'
-                          ? 'Bảng biến thiên'
-                          : 'Công thức toán')}
-                    </span>
-                  </div>
-
-                  {/* CỤM NÚT ĐIỀU KHIỂN: THU NHỎ, PHÓNG TO, XOAY 90°, LẬT NGANG, LẬT DỌC, XÓA */}
+                {/* THANH ĐIỀU KHIỂN TÁC VỤ NHẸ NHÀNG CHO HÌNH ẢNH / BẢNG (CHỈ HIỆN KHI CHỌN VÀ KHÔNG PHẢI ĐỒ THỊ/BBT VÌ ĐỒ THỊ/BBT ĐÃ CÓ THANH RIÊNG) */}
+                {isSelected && (item.type === 'image' || item.type === 'table') && (
                   <div
-                    className="flex items-center gap-0.5 shrink-0"
+                    className="absolute -top-7 left-0 flex items-center gap-1 bg-white/90 backdrop-blur-xs rounded-full shadow-sm border border-slate-200 px-2 py-0.5 text-xs z-30 select-none animate-fadeIn"
                     onPointerDown={(e) => e.stopPropagation()}
                   >
-                    {/* Thu nhỏ */}
+                    <span
+                      onPointerDown={(e) => handleStartDragItem(e, item)}
+                      className="cursor-move text-slate-500 hover:text-indigo-600 p-0.5 flex items-center gap-0.5 text-[10px] font-bold"
+                      title="Kéo di chuyển vị trí"
+                    >
+                      <GripHorizontal className="w-3 h-3" />
+                      <span>Di chuyển</span>
+                    </span>
+                    <div className="w-[1px] h-2.5 bg-slate-300"></div>
                     <button
                       type="button"
                       onClick={() => handleZoomItem(item.id, -0.15)}
-                      className="p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                      title="Thu nhỏ (-15%)"
+                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                      title="Thu nhỏ"
                     >
-                      <ZoomOut className="w-3.5 h-3.5" />
+                      <ZoomOut className="w-3 h-3" />
                     </button>
-
-                    {/* Tỉ lệ scale */}
-                    <button
-                      type="button"
-                      onClick={() => handleResetScaleItem(item.id)}
-                      className="px-1.5 py-0.5 text-[10px] font-bold text-slate-600 hover:text-indigo-600 rounded bg-slate-200/80 hover:bg-slate-300/80 cursor-pointer"
-                      title="Nhấp để đặt lại tỉ lệ chuẩn 100%"
-                    >
-                      {Math.round(scale * 100)}%
-                    </button>
-
-                    {/* Phóng to */}
                     <button
                       type="button"
                       onClick={() => handleZoomItem(item.id, 0.15)}
-                      className="p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                      title="Phóng to (+15%)"
+                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                      title="Phóng to"
                     >
-                      <ZoomIn className="w-3.5 h-3.5" />
+                      <ZoomIn className="w-3 h-3" />
                     </button>
-
-                    <div className="w-[1px] h-3 bg-slate-300 mx-0.5"></div>
-
-                    {/* Xoay hình 90° */}
                     <button
                       type="button"
                       onClick={() => handleRotateItem(item.id)}
-                      className="p-1 rounded text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                      title={`Xoay hình 90° theo chiều kim đồng hồ (Hiện tại: ${rotate}°)`}
+                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                      title="Xoay 90°"
                     >
-                      <RotateCw className="w-3.5 h-3.5" />
+                      <RotateCw className="w-3 h-3" />
                     </button>
-
-                    {/* Lật ngang */}
                     <button
                       type="button"
                       onClick={() => handleFlipHItem(item.id)}
-                      className={`p-1 rounded transition-colors cursor-pointer ${
-                        flipH
-                          ? 'bg-indigo-100 text-indigo-700 font-bold ring-1 ring-indigo-400'
-                          : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
-                      }`}
-                      title="Lật hình theo chiều ngang (Trái ↔ Phải)"
+                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                      title="Lật ngang"
                     >
-                      <FlipHorizontal className="w-3.5 h-3.5" />
+                      <FlipHorizontal className="w-3 h-3" />
                     </button>
-
-                    {/* Lật dọc */}
                     <button
                       type="button"
                       onClick={() => handleFlipVItem(item.id)}
-                      className={`p-1 rounded transition-colors cursor-pointer ${
-                        flipV
-                          ? 'bg-indigo-100 text-indigo-700 font-bold ring-1 ring-indigo-400'
-                          : 'text-slate-500 hover:text-indigo-600 hover:bg-indigo-50'
-                      }`}
-                      title="Lật hình theo chiều dọc (Trên ↕ Dưới)"
+                      className="p-0.5 text-slate-500 hover:text-indigo-600 cursor-pointer"
+                      title="Lật dọc"
                     >
-                      <FlipVertical className="w-3.5 h-3.5" />
+                      <FlipVertical className="w-3 h-3" />
                     </button>
-
-                    <div className="w-[1px] h-3 bg-slate-300 mx-0.5"></div>
-
-                    {/* Gỡ bỏ khối */}
+                    <div className="w-[1px] h-2.5 bg-slate-300"></div>
                     <button
                       type="button"
                       onClick={() => handleDeleteHtmlItem(item.id)}
-                      className="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                      title="Gỡ khối này khỏi khoảng trống"
+                      className="p-0.5 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      title="Xóa"
                     >
-                      <X className="w-3.5 h-3.5" />
+                      <X className="w-3 h-3" />
                     </button>
                   </div>
-                </div>
+                )}
 
-                {/* 2. NỘI DUNG HTML CỦA KHỐI (z-10 ĐỂ CANVAS z-20 NẰM ĐÈ LÊN CHO PHÉP VIẾT TAY TRỰC TIẾP LÊN ĐÓ) */}
+                {/* 2. NỘI DUNG HTML CỦA KHỐI (NỀN TRONG SUỐT, KHÔNG KHUNG BAO NGOÀI, CHO PHÉP VIẾT TAY TRỰC TIẾP LÊN ĐÓ) */}
                 <div
-                  className="w-full overflow-hidden select-none text-slate-900 pointer-events-auto"
+                  className="w-full overflow-hidden select-none text-slate-900 pointer-events-auto bg-transparent"
                   dangerouslySetInnerHTML={{ __html: item.html }}
                 />
-
-                {/* 3. GÓC KÉO THAY ĐỔI KÍCH THƯỚC ↘ (z-30) */}
-                <div
-                  onPointerDown={(e) => handleStartResizeItem(e, item)}
-                  className="absolute -bottom-1 -right-1 w-5 h-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-tl-lg rounded-br-xl flex items-center justify-center cursor-nwse-resize shadow-md z-30 transition-transform hover:scale-110"
-                  title="Kéo góc này để phóng to / thu nhỏ hình"
-                >
-                  <span className="text-[10px] font-black leading-none select-none">⤢</span>
-                </div>
               </div>
             );
           })}
@@ -1508,13 +1562,45 @@ export const PptInteractiveBoard: React.FC<PptInteractiveBoardProps> = ({
             return (
               <div
                 key={item.id}
-                className="absolute z-25 group/math p-2 rounded-xl bg-white/95 border border-indigo-300 shadow-md backdrop-blur-xs flex items-center gap-1.5"
+                onPointerDown={(e) => {
+                  const target = e.target as HTMLElement;
+                  if (target.closest('button')) return;
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const startX = e.clientX;
+                  const startY = e.clientY;
+                  const initialX = item.x ?? 30;
+                  const initialY = item.y ?? 30;
+                  const onPointerMove = (mv: PointerEvent) => {
+                    mv.preventDefault();
+                    const newX = Math.max(0, initialX + (mv.clientX - startX));
+                    const newY = Math.max(0, initialY + (mv.clientY - startY));
+                    onUpdate({
+                      ...board,
+                      mathItems: (board.mathItems || []).map((m) =>
+                        m.id === item.id ? { ...m, x: newX, y: newY } : m
+                      ),
+                    });
+                  };
+                  const onPointerUp = () => {
+                    window.removeEventListener('pointermove', onPointerMove);
+                    window.removeEventListener('pointerup', onPointerUp);
+                    window.removeEventListener('pointercancel', onPointerUp);
+                  };
+                  window.addEventListener('pointermove', onPointerMove);
+                  window.addEventListener('pointerup', onPointerUp);
+                  window.addEventListener('pointercancel', onPointerUp);
+                }}
+                className="absolute z-25 group/math p-1 rounded-md bg-transparent border border-transparent hover:border-indigo-400/30 cursor-move flex items-center gap-1.5 transition-colors select-none"
                 style={{ left: `${item.x}px`, top: `${item.y}px` }}
               >
                 <div dangerouslySetInnerHTML={{ __html: mathHtml }} />
                 <button
                   type="button"
-                  onClick={() => handleRemoveMathItem(item.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemoveMathItem(item.id);
+                  }}
                   className="opacity-0 group-hover/math:opacity-100 text-rose-500 hover:text-rose-700 p-0.5 rounded cursor-pointer transition-opacity"
                   title="Gỡ công thức này"
                 >
