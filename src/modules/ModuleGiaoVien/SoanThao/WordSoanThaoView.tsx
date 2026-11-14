@@ -5949,6 +5949,143 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
   }, [vanDe, bai, chuong, title]);
 
+  // Danh sách phân cấp tự động lọc và đồng bộ cho Chương, Bài, Vấn đề, Chuyên đề
+  const activeChuongList = React.useMemo(() => {
+    if (!title || title.trim() === '') return [];
+    let delList: string[] = [];
+    try {
+      delList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+    } catch {}
+    const store = getStoredHierarchy();
+    const docObj = (title && store[title]) ? store[title] : {};
+    return Array.from(new Set([
+      ...Object.keys(docObj),
+      ...chuongList,
+      ...documents.filter(d => d.title === title).map(d => d.chuong).filter((x): x is string => Boolean(x))
+    ])).filter(c => Boolean(c) && !delList.includes(c));
+  }, [title, chuongList, documents]);
+
+  const activeBaiList = React.useMemo(() => {
+    if (!title || !chuong || chuong.trim() === '') return [];
+    let delList: string[] = [];
+    try {
+      delList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+    } catch {}
+    const store = getStoredHierarchy();
+    const chuongObj = (title && chuong && store[title]?.[chuong]) ? store[title][chuong] : {};
+    return Array.from(new Set([
+      ...Object.keys(chuongObj),
+      ...baiList,
+      ...documents.filter(d => d.title === title && d.chuong === chuong).map(d => d.bai).filter((x): x is string => Boolean(x))
+    ])).filter(b => Boolean(b) && !delList.includes(b));
+  }, [title, chuong, baiList, documents]);
+
+  const activeVanDeList = React.useMemo(() => {
+    if (!title || !chuong || !bai || bai.trim() === '') return [];
+    let delList: string[] = [];
+    try {
+      delList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+    } catch {}
+    const store = getStoredHierarchy();
+    const baiObj = (title && chuong && bai && store[title]?.[chuong]?.[bai]) ? store[title][chuong][bai] : {};
+    return Array.from(new Set([
+      ...Object.keys(baiObj),
+      ...vanDeList,
+      ...documents.filter(d => d.title === title && d.chuong === chuong && d.bai === bai).map(d => d.vanDe).filter((x): x is string => Boolean(x))
+    ])).filter(v => Boolean(v) && !delList.includes(v));
+  }, [title, chuong, bai, vanDeList, documents]);
+
+  const activeChuyenDeList = React.useMemo(() => {
+    if (!title || !chuong || !bai || !vanDe || vanDe.trim() === '') return [];
+    let delList: string[] = [];
+    try {
+      delList = JSON.parse(localStorage.getItem('lopu_deleted_drive_folders_v1') || '[]');
+    } catch {}
+    const store = getStoredHierarchy();
+    const vanDeArr = (title && chuong && bai && vanDe && store[title]?.[chuong]?.[bai]?.[vanDe]) ? store[title][chuong][bai][vanDe] : [];
+    return Array.from(new Set([
+      ...(Array.isArray(vanDeArr) ? vanDeArr : []),
+      ...chuyenDeList,
+      ...documents.filter(d => d.title === title && d.chuong === chuong && d.bai === bai && d.vanDe === vanDe).map(d => d.chuyenDe).filter((x): x is string => Boolean(x))
+    ])).filter(cd => Boolean(cd) && !delList.includes(cd));
+  }, [title, chuong, bai, vanDe, chuyenDeList, documents]);
+
+  // Quy tắc tự động chọn Chương: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
+  useEffect(() => {
+    if (!title || isDanhGia(title)) {
+      if (chuong) setChuong('');
+      return;
+    }
+    if (activeChuongList.length === 1) {
+      if (chuong !== activeChuongList[0]) {
+        setChuong(activeChuongList[0]);
+      }
+    } else if (activeChuongList.length > 1) {
+      if (chuong && !activeChuongList.includes(chuong)) {
+        setChuong('');
+      }
+    } else {
+      if (chuong) setChuong('');
+    }
+  }, [title, activeChuongList]);
+
+  // Quy tắc tự động chọn Bài: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
+  useEffect(() => {
+    if (!chuong || isDanhGia(chuong)) {
+      if (bai) setBai('');
+      return;
+    }
+    if (activeBaiList.length === 1) {
+      if (bai !== activeBaiList[0]) {
+        setBai(activeBaiList[0]);
+      }
+    } else if (activeBaiList.length > 1) {
+      if (bai && !activeBaiList.includes(bai)) {
+        setBai('');
+      }
+    } else {
+      if (bai) setBai('');
+    }
+  }, [chuong, activeBaiList]);
+
+  // Quy tắc tự động chọn Vấn đề: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
+  useEffect(() => {
+    if (!bai || isDanhGia(bai)) {
+      if (vanDe) setVanDe('');
+      return;
+    }
+    if (activeVanDeList.length === 1) {
+      if (vanDe !== activeVanDeList[0]) {
+        setVanDe(activeVanDeList[0]);
+      }
+    } else if (activeVanDeList.length > 1) {
+      if (vanDe && !activeVanDeList.includes(vanDe)) {
+        setVanDe('');
+      }
+    } else {
+      if (vanDe) setVanDe('');
+    }
+  }, [bai, activeVanDeList]);
+
+  // Quy tắc tự động chọn Chuyên đề: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
+  useEffect(() => {
+    if (!vanDe || isDanhGia(vanDe)) {
+      if (chuyenDe) setChuyenDe('');
+      return;
+    }
+    if (activeChuyenDeList.length === 1) {
+      if (chuyenDe !== activeChuyenDeList[0]) {
+        setChuyenDe(activeChuyenDeList[0]);
+      }
+    } else if (activeChuyenDeList.length > 1) {
+      if (chuyenDe && !activeChuyenDeList.includes(chuyenDe)) {
+        setChuyenDe('');
+      }
+    } else {
+      if (chuyenDe) setChuyenDe('');
+    }
+  }, [vanDe, activeChuyenDeList]);
+
   const handleConfirmAddItem = async () => {
     if (!newItemText.trim() || isAddingFolder) return;
     const raw = newItemText.trim();
@@ -6449,81 +6586,44 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 <span className="text-[10px] text-slate-400 italic">Chương ➔ Bài ➔ Vấn đề ➔ Chuyên đề</span>
               </div>
 
-              {title && title.trim() !== '' ? (() => {
-                const hierarchyStore = getStoredHierarchy();
-                const currentDocObj = (title && hierarchyStore[title]) ? hierarchyStore[title] : {};
-                const activeChuongList = Array.from(new Set([
-                  ...Object.keys(currentDocObj),
-                  ...chuongList,
-                  ...documents.filter(d => d.title === title).map(d => d.chuong).filter((x): x is string => Boolean(x))
-                ]));
-
-                const currentChuongObj = (chuong && currentDocObj[chuong]) ? currentDocObj[chuong] : {};
-                const activeBaiList = (chuong)
-                  ? Array.from(new Set([
-                      ...Object.keys(currentChuongObj),
-                      ...baiList,
-                      ...documents.filter(d => d.title === title && d.chuong === chuong).map(d => d.bai).filter((x): x is string => Boolean(x))
-                    ]))
-                  : [];
-
-                const currentBaiObj = (bai && currentChuongObj[bai]) ? currentChuongObj[bai] : {};
-                const activeVanDeList = (chuong && bai)
-                  ? Array.from(new Set([
-                      ...Object.keys(currentBaiObj),
-                      ...vanDeList,
-                      ...documents.filter(d => d.title === title && d.chuong === chuong && d.bai === bai).map(d => d.vanDe).filter((x): x is string => Boolean(x))
-                    ]))
-                  : [];
-
-                const currentVanDeList = (vanDe && currentBaiObj[vanDe]) ? currentBaiObj[vanDe] : [];
-                const activeChuyenDeList = (chuong && bai && vanDe)
-                  ? Array.from(new Set([
-                      ...(Array.isArray(currentVanDeList) ? currentVanDeList : []),
-                      ...chuyenDeList,
-                      ...documents.filter(d => d.title === title && d.chuong === chuong && d.bai === bai && d.vanDe === vanDe).map(d => d.chuyenDe).filter((x): x is string => Boolean(x))
-                    ]))
-                  : [];
-
-                return (
-                  <div className="space-y-3.5">
-                    {!isDanhGia(title) ? (
-                      <>
-                        {renderCleanDropdown('chuong', 'Chương', chuong, activeChuongList)}
-                        {!isDanhGia(chuong) ? (
-                          <>
-                            {renderCleanDropdown('bai', 'Bài', bai, activeBaiList)}
-                            {!isDanhGia(bai) ? (
-                              <>
-                                {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, activeVanDeList)}
-                                {!isDanhGia(vanDe) ? (
-                                  renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, activeChuyenDeList)
-                                ) : (
-                                  <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                                    ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
-                                  </div>
-                                )}
-                              </>
-                            ) : (
-                              <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                                ℹ️ Bài là bài đánh giá — Đã ẩn Vấn đề và Chuyên đề cấp con.
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                            ℹ️ Chương là bài đánh giá — Đã ẩn Bài, Vấn đề và Chuyên đề cấp con.
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
-                        ℹ️ Tài liệu là bài đánh giá — Đã ẩn toàn bộ các cấp con bên dưới.
-                      </div>
-                    )}
-                  </div>
-                );
-              })() : (
+              {title && title.trim() !== '' ? (
+                <div className="space-y-3.5">
+                  {!isDanhGia(title) ? (
+                    <>
+                      {renderCleanDropdown('chuong', 'Chương', chuong, activeChuongList)}
+                      {!isDanhGia(chuong) ? (
+                        <>
+                          {renderCleanDropdown('bai', 'Bài', bai, activeBaiList)}
+                          {!isDanhGia(bai) ? (
+                            <>
+                              {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, activeVanDeList)}
+                              {!isDanhGia(vanDe) ? (
+                                renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, activeChuyenDeList)
+                              ) : (
+                                <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                                  ℹ️ Vấn đề là bài đánh giá — Đã ẩn Chuyên đề cấp con.
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                              ℹ️ Bài là bài đánh giá — Đã ẩn Vấn đề và Chuyên đề cấp con.
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                          ℹ️ Chương là bài đánh giá — Đã ẩn Bài, Vấn đề và Chuyên đề cấp con.
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-amber-700 bg-amber-50 p-2 rounded-xl font-medium">
+                      ℹ️ Tài liệu là bài đánh giá — Đã ẩn toàn bộ các cấp con bên dưới.
+                    </div>
+                  )}
+                </div>
+              ) : (
                 <div className="p-6 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-center text-xs text-slate-500 font-medium">
                   ℹ️ Vui lòng chọn hoặc thêm <strong>TÊN TÀI LIỆU</strong> bên trái để hiển thị <strong>NỘI DUNG DẠY HỌC</strong> (Chương, Bài, Vấn đề, Chuyên đề).
                 </div>
@@ -6580,19 +6680,6 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
               {/* Dropdown chọn tên bài luyện tập / KTDG tương ứng với tùy chọn bên dropdown tiến trình */}
               {(() => {
-                const hierarchyStore = getStoredHierarchy();
-                const currentDocObj = (title && hierarchyStore[title]) ? hierarchyStore[title] : {};
-                const currentChuongObj = (chuong && currentDocObj[chuong]) ? currentDocObj[chuong] : {};
-                const currentBaiObj = (bai && currentChuongObj[bai]) ? currentChuongObj[bai] : {};
-                const currentVanDeList = (vanDe && currentBaiObj[vanDe]) ? currentBaiObj[vanDe] : [];
-                const activeChuyenDeList: string[] = (chuong && bai && vanDe)
-                  ? Array.from(new Set([
-                      ...(Array.isArray(currentVanDeList) ? currentVanDeList : []),
-                      ...chuyenDeList,
-                      ...documents.filter(d => d.title === title && d.chuong === chuong && d.bai === bai && d.vanDe === vanDe).map(d => d.chuyenDe).filter((x): x is string => Boolean(x))
-                    ]))
-                  : [];
-
                 // Lọc danh sách bài tương ứng theo tiến trình
                 const luyenTapExercises = activeChuyenDeList.filter(item => isDanhGia(item) || /luyentap|luyện tập/i.test(item));
                 const ktdgExercises = activeChuyenDeList.filter(item => /ktdg|kiểm tra|danhgia|đánh giá/i.test(item));
@@ -6975,10 +7062,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               {/* Cột 2: NỘI DUNG DẠY HỌC (60% độ rộng) */}
               <div className="w-full md:w-[60%] bg-white p-4 rounded-xl border border-slate-200 space-y-2 flex-1">
                 <span className="text-xs font-bold text-slate-700 block border-b border-slate-100 pb-1.5 uppercase">NỘI DUNG DẠY HỌC</span>
-                {renderCleanDropdown('chuong', 'Chương', chuong, chuongList)}
-                {renderCleanDropdown('bai', 'Bài', bai, baiList)}
-                {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, vanDeList)}
-                {renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, chuyenDeList)}
+                {renderCleanDropdown('chuong', 'Chương', chuong, activeChuongList)}
+                {renderCleanDropdown('bai', 'Bài', bai, activeBaiList)}
+                {renderCleanDropdown('vanDe', 'Vấn đề', vanDe, activeVanDeList)}
+                {renderCleanDropdown('chuyenDe', 'Chuyên đề', chuyenDe, activeChuyenDeList)}
               </div>
             </div>
           )}
