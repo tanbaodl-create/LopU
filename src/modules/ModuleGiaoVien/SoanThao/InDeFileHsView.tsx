@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Printer, FileSpreadsheet, Download, ArrowLeft } from 'lucide-react';
 import { auth } from '../../../config/firebase';
 import { UserProfile } from '../../../services/storageTypes';
@@ -7,6 +7,8 @@ interface InDeFileHsViewProps {
   mode: 'inde' | 'filehs';
   html: string;
   docTitle: string;
+  chuong?: string;
+  teacherName?: string;
   onClose: () => void;
 }
 
@@ -155,20 +157,35 @@ function getTeacherName(): string {
     }
   } catch {}
 
-  return 'Giáo viên';
+  return 'Giáo viên phụ trách';
 }
 
-export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docTitle, onClose }) => {
+export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({
+  mode,
+  html,
+  docTitle,
+  chuong,
+  teacherName: propTeacherName,
+  onClose,
+}) => {
   const transformedHtml = mode === 'inde' ? transformHtmlForInDe(html) : transformHtmlForFileHS(html);
   const subTitle = 'Tài liệu..........................của ..........................................lớp.....';
-  const teacherName = getTeacherName();
-  const footerText = `tài liệu được biên soạn bởi ${teacherName}`;
+  const teacherName = propTeacherName || getTeacherName();
+  const docTitleText = (docTitle || 'Tài liệu học tập').trim();
+  const chuongText = (chuong || 'Chương học tập').trim();
+  const footerRightText = `Tài liệu được ${teacherName} biên soạn`;
+  const [previewPageType, setPreviewPageType] = useState<'odd' | 'even'>('odd');
+
+  const escapeForCss = (str: string) => {
+    if (!str) return '';
+    return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, ' ');
+  };
 
   const handleDownloadPdf = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const titleText = docTitle || 'Tai_lieu_hoc_sinh';
+    const titleText = docTitleText || 'Tai_lieu_hoc_sinh';
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -183,27 +200,48 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
               margin-bottom: 2.2cm;
               margin-left: 2.5cm;
               margin-right: 2cm;
-              @bottom-center {
-                content: "${footerText}";
-                font-family: 'Times New Roman', serif;
+              @bottom-left {
+                content: "${escapeForCss(docTitleText)}";
+                font-family: 'Times New Roman', Times, serif;
                 font-size: 10pt;
                 font-style: italic;
+                color: #333;
+              }
+              @bottom-right {
+                content: "${escapeForCss(footerRightText)}";
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 10pt;
+                font-style: italic;
+                color: #333;
+              }
+            }
+            @page :right {
+              @top-left {
+                content: "${escapeForCss(chuongText)}";
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 10pt;
+                font-style: italic;
+                color: #333;
+              }
+              @top-right {
+                content: "Trang " counter(page);
+                font-family: 'Times New Roman', Times, serif;
+                font-size: 10pt;
                 color: #333;
               }
             }
             @page :left {
               @top-left {
                 content: "Trang " counter(page);
-                font-family: 'Times New Roman', serif;
+                font-family: 'Times New Roman', Times, serif;
                 font-size: 10pt;
                 color: #333;
               }
-            }
-            @page :right {
               @top-right {
-                content: "Trang " counter(page);
-                font-family: 'Times New Roman', serif;
+                content: "${escapeForCss(chuongText)}";
+                font-family: 'Times New Roman', Times, serif;
                 font-size: 10pt;
+                font-style: italic;
                 color: #333;
               }
             }
@@ -213,6 +251,9 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
                 padding: 0;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
+              }
+              .no-print {
+                display: none !important;
               }
             }
             body {
@@ -243,12 +284,14 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
             }
             .paper-footer-screen {
               margin-top: 40px;
-              text-align: center;
               font-size: 10pt;
               font-style: italic;
               color: #555;
               border-top: 1px dashed #cbd5e1;
               padding-top: 12px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
             }
             .dotted-line {
               border-bottom: 1.5px dotted #444;
@@ -261,14 +304,15 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
         </head>
         <body>
           <div class="paper-header">
-            <h1 class="paper-title">${docTitle}</h1>
+            <h1 class="paper-title">${docTitleText}</h1>
             <p class="paper-subtitle">${subTitle}</p>
           </div>
           <div class="content-body">
             ${transformedHtml}
           </div>
-          <div class="paper-footer-screen">
-            ${footerText}
+          <div class="paper-footer-screen no-print">
+            <span>${docTitleText}</span>
+            <span>${footerRightText}</span>
           </div>
           <script>
             window.onload = function() {
@@ -287,7 +331,7 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
     <div className="bg-slate-100 p-4 sm:p-6 rounded-b-2xl border border-slate-300 border-t-0 shadow-inner space-y-4">
       {/* Action Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onClose}
@@ -309,6 +353,35 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
               </span>
             )}
           </div>
+
+          {/* Toggle xem trước Header trang chẵn / trang lẻ */}
+          <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+            <span className="text-[11px] text-slate-500 px-1.5">Xem trước Header:</span>
+            <button
+              type="button"
+              onClick={() => setPreviewPageType('odd')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                previewPageType === 'odd'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:bg-slate-200'
+              }`}
+              title="Trang lẻ: Tên chương lề trái • Số trang lề phải"
+            >
+              Trang lẻ
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewPageType('even')}
+              className={`px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                previewPageType === 'even'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:bg-slate-200'
+              }`}
+              title="Trang chẵn: Số trang lề trái • Tên chương lề phải"
+            >
+              Trang chẵn
+            </button>
+          </div>
         </div>
 
         {/* Nút Tải về PDF A4 */}
@@ -316,7 +389,7 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
           type="button"
           onClick={handleDownloadPdf}
           className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer hover:scale-102"
-          title="Tải về file PDF định dạng A4 với Lề trái 2.5cm, Lề phải/trên/dưới 2.0cm"
+          title="Tải về file PDF định dạng A4 với Lề trái 2.5cm, Lề phải/trên/dưới 2.0cm, tự động cấu hình Header & Footer theo trang chẵn lẻ"
         >
           <Download className="w-4 h-4" />
           <span>Tải về PDF (Khổ A4)</span>
@@ -326,8 +399,43 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
       {/* A4 Paper Sheet Preview Container */}
       <div className="flex justify-center py-4 overflow-x-auto">
         <div className="bg-white p-10 sm:p-14 rounded-2xl shadow-2xl border border-slate-300 min-h-[700px] w-full max-w-4xl text-slate-900 font-serif leading-relaxed text-base relative">
+          {/* Header trang in mô phỏng theo chuẩn trang chẵn / trang lẻ */}
+          <div className="border-b border-slate-300 pb-2.5 mb-6 flex items-center justify-between text-xs font-serif text-slate-700">
+            {previewPageType === 'odd' ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold italic text-slate-900">{chuongText}</span>
+                  <span className="text-[10px] not-italic bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-sans font-bold">
+                    Trang lẻ (Chương lề trái)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] not-italic bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded font-sans font-bold">
+                    Số trang lề phải
+                  </span>
+                  <span className="font-bold text-slate-900 font-sans">Trang 1</span>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-900 font-sans">Trang 2</span>
+                  <span className="text-[10px] not-italic bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-sans font-bold">
+                    Trang chẵn (Số trang lề trái)
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] not-italic bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.5 rounded font-sans font-bold">
+                    Chương lề phải
+                  </span>
+                  <span className="font-semibold italic text-slate-900">{chuongText}</span>
+                </div>
+              </>
+            )}
+          </div>
+
           <div className="text-center border-b-2 border-slate-900 pb-4 mb-6">
-            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-950">{docTitle}</h2>
+            <h2 className="text-xl font-bold uppercase tracking-wider text-slate-950">{docTitleText}</h2>
             <p className="text-xs font-semibold text-slate-700 mt-1.5">
               {subTitle}
             </p>
@@ -338,8 +446,10 @@ export const InDeFileHsView: React.FC<InDeFileHsViewProps> = ({ mode, html, docT
             dangerouslySetInnerHTML={{ __html: transformedHtml }}
           />
 
-          <div className="mt-12 text-center text-xs italic text-slate-600 border-t border-dashed border-slate-300 pt-3">
-            {footerText}
+          {/* Footer trang in: Bên trái là {Tên tài liệu}, bên phải là "Tài liệu được {Tên giáo viên phụ trách} biên soạn" */}
+          <div className="mt-12 border-t border-slate-300 pt-3 flex items-center justify-between text-xs italic text-slate-600 font-serif">
+            <span className="font-semibold not-italic text-slate-800">{docTitleText}</span>
+            <span className="text-slate-700">{footerRightText}</span>
           </div>
         </div>
       </div>

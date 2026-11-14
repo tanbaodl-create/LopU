@@ -115,6 +115,7 @@ import {
   PptEffectType,
   getPptEffectDef,
   PptWhiteboardData,
+  BoardStroke,
   BoardHtmlItem,
   BoardTool,
   PenType,
@@ -708,6 +709,70 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
       setActivePptWhiteboardId(null);
     }
   };
+
+  // Ngăn xếp hoàn tác/làm lại cho nét vẽ và đối tượng PPT
+  const pptRedoStackRef = useRef<{ boardId: string; stroke: BoardStroke }[]>([]);
+
+  // Hoàn tác đa năng (cả khi soạn thảo văn bản và khi trình chiếu PPT)
+  const handleGlobalUndo = () => {
+    if (wordViewMode === 'ppt') {
+      const slideBoards = pptWhiteboards.filter(
+        (b) => b.slideIndex === activePptSlideIndex && b.strokes && b.strokes.length > 0
+      );
+      if (slideBoards.length > 0) {
+        let targetBoard = slideBoards.find((b) => b.id === activePptWhiteboardId);
+        if (!targetBoard) {
+          targetBoard = slideBoards[slideBoards.length - 1];
+        }
+        const lastStroke = targetBoard.strokes[targetBoard.strokes.length - 1];
+        const newStrokes = targetBoard.strokes.slice(0, -1);
+        pptRedoStackRef.current.push({ boardId: targetBoard.id, stroke: lastStroke });
+        handleUpdatePptWhiteboard({
+          ...targetBoard,
+          strokes: newStrokes,
+        });
+        return;
+      }
+    }
+    execCommand('undo');
+  };
+
+  // Làm lại đa năng (cả khi soạn thảo văn bản và khi trình chiếu PPT)
+  const handleGlobalRedo = () => {
+    if (wordViewMode === 'ppt' && pptRedoStackRef.current.length > 0) {
+      const item = pptRedoStackRef.current.pop()!;
+      const targetBoard = pptWhiteboards.find((b) => b.id === item.boardId);
+      if (targetBoard) {
+        handleUpdatePptWhiteboard({
+          ...targetBoard,
+          strokes: [...(targetBoard.strokes || []), item.stroke],
+        });
+        return;
+      }
+    }
+    execCommand('redo');
+  };
+
+  // Phím tắt Ctrl+Z / Ctrl+Y khi xem PPT
+  useEffect(() => {
+    if (wordViewMode !== 'ppt') return;
+    const handlePptKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('input, textarea, [contenteditable="true"]')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        handleGlobalUndo();
+      } else if (
+        ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'z')
+      ) {
+        e.preventDefault();
+        handleGlobalRedo();
+      }
+    };
+    window.addEventListener('keydown', handlePptKeyDown);
+    return () => window.removeEventListener('keydown', handlePptKeyDown);
+  }, [wordViewMode, pptWhiteboards, activePptSlideIndex, activePptWhiteboardId]);
 
   // Modal Chèn Bảng tùy chỉnh số dòng, số cột, có tiêu đề
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
@@ -7447,18 +7512,29 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     </>
                   )}
 
+                  {/* Nhóm Hoàn tác (Undo / Redo): Luôn hiện diện cả khi soạn thảo và khi Xem PPT */}
+                  <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={handleGlobalUndo}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                      title="Hoàn tác (Undo - Ctrl+Z)"
+                    >
+                      <Undo className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleGlobalRedo}
+                      className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+                      title="Làm lại (Redo - Ctrl+Y)"
+                    >
+                      <Redo className="w-4 h-4" />
+                    </button>
+                  </div>
+
                   {/* CÁC CÔNG CỤ SOẠN THẢO VĂN BẢN (ẨN KHI Ở CHẾ ĐỘ XEM PPT, BỐ TRÍ THÀNH CÁC CỤM GỌN GÀNG KHI SOẠN THẢO) */}
                   {wordViewMode !== 'ppt' && (
                     <>
-                      {/* Nhóm 1: Hoàn tác (Undo / Redo) */}
-                      <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
-                        <button onClick={() => execCommand('undo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Hoàn tác (Undo - Ctrl+Z)">
-                          <Undo className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => execCommand('redo')} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-700 transition-colors" title="Làm lại (Redo - Ctrl+Y)">
-                          <Redo className="w-4 h-4" />
-                        </button>
-                      </div>
 
                       {/* Nhóm 2: Định dạng kiểu chữ, màu sắc & cỡ chữ gọn gàng */}
                       <div className="flex items-center gap-0.5 bg-slate-100/90 p-0.5 rounded-xl border border-slate-200/80 shadow-2xs">
@@ -8160,6 +8236,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 mode={wordViewMode}
                 html={wordDocumentHtml || editorRef.current?.innerHTML || ''}
                 docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
+                chuong={chuong}
                 onClose={() => setWordViewMode('full')}
               />
             ) : null
