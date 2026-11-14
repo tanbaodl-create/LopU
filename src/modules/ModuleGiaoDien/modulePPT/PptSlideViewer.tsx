@@ -88,13 +88,11 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
   const [internalWhiteboards, setInternalWhiteboards] = useState<PptWhiteboardData[]>([]);
 
   const slideCardRef = useRef<HTMLDivElement>(null);
-  const [hoverY, setHoverY] = useState<number | null>(null);
-  const [dragSpaceState, setDragSpaceState] = useState<{
-    startY: number;
-    currentY: number;
-    targetStepIdx: number;
-    targetBlockIdx: number;
-  } | null>(null);
+  const hoverRulerRef = useRef<HTMLDivElement>(null);
+  const dragPreviewRef = useRef<HTMLDivElement>(null);
+  const dragBadgeRef = useRef<HTMLSpanElement>(null);
+  const isDraggingSpaceRef = useRef<boolean>(false);
+  const [isDraggingSpace, setIsDraggingSpace] = useState<boolean>(false);
 
   const activeStepIndex = controlledStepIndex !== undefined ? controlledStepIndex : internalStepIndex;
   const setActiveStepIndex = (val: number | ((prev: number) => number)) => {
@@ -159,18 +157,19 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     ? currentSlide?.steps || []
     : (currentSlide?.steps || []).slice(0, activeStepIndex + 1);
 
-  // Khi di chuột trên trang ở chế độ chèn khoảng trống (NoteRenderer hover horizontal line)
+  // Khi di chuột trên trang ở chế độ chèn khoảng trống (Thước kẻ lề trên GPU siêu mượt, không giật lag)
   const handleSlidePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isInsertSpaceMode || dragSpaceState) return;
-    if (!slideCardRef.current) return;
+    if (!isInsertSpaceMode || isDraggingSpaceRef.current) return;
+    if (!slideCardRef.current || !hoverRulerRef.current) return;
     const rect = slideCardRef.current.getBoundingClientRect();
     const relY = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
-    setHoverY(relY);
+    hoverRulerRef.current.style.transform = `translate3d(0, ${relY}px, 0)`;
+    hoverRulerRef.current.style.display = 'flex';
   };
 
   const handleSlidePointerLeave = () => {
-    if (!dragSpaceState) {
-      setHoverY(null);
+    if (!isDraggingSpaceRef.current && hoverRulerRef.current) {
+      hoverRulerRef.current.style.display = 'none';
     }
   };
 
@@ -258,7 +257,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     return { targetStepIdx: stepIdx, targetBlockIdx: lastGlobalIdx };
   };
 
-  // Nhấp chuột để bắt đầu, giữ chuột kéo đến vị trí kết thúc sẽ thả chuột ra (như NoteRenderer)
+  // Kích chuột đặt lề trên, giữ chuột kéo đến lề dưới và thả chuột ra (Tối ưu hóa phần cứng 60fps/120fps siêu mượt)
   const handleSlidePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isInsertSpaceMode) return;
     const target = e.target as HTMLElement;
@@ -269,45 +268,99 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
     e.preventDefault();
     e.stopPropagation();
 
-    const startY = e.clientY;
-    const { targetStepIdx, targetBlockIdx } = findTargetPositionAtY(startY);
+    if (!slideCardRef.current || !dragPreviewRef.current) return;
 
-    setDragSpaceState({
-      startY,
-      currentY: startY,
-      targetStepIdx,
-      targetBlockIdx,
-    });
+    isDraggingSpaceRef.current = true;
+    setIsDraggingSpace(true);
+
+    const cardRect = slideCardRef.current.getBoundingClientRect();
+    const startClientY = e.clientY;
+    const startRelY = Math.max(0, Math.min(cardRect.height, startClientY - cardRect.top));
+    const { targetStepIdx, targetBlockIdx } = findTargetPositionAtY(startClientY);
+
+    // Ẩn thước hover
+    if (hoverRulerRef.current) {
+      hoverRulerRef.current.style.display = 'none';
+    }
+
+    // Hiển thị khung kéo thời gian thực
+    const previewEl = dragPreviewRef.current;
+    previewEl.style.display = 'flex';
+    previewEl.style.top = `${startRelY}px`;
+    previewEl.style.height = '0px';
+
+    if (dragBadgeRef.current) {
+      dragBadgeRef.current.textContent = '↕️ Khoảng trống: 0px — Thả chuột để hoàn tất';
+    }
+
+    const targetEl = e.currentTarget;
+    try {
+      targetEl.setPointerCapture(e.pointerId);
+    } catch {}
+
+    let rafId: number | null = null;
+    let lastClientY = startClientY;
 
     const onWindowPointerMove = (moveEvent: PointerEvent) => {
       moveEvent.preventDefault();
-      setDragSpaceState((prev) => (prev ? { ...prev, currentY: moveEvent.clientY } : null));
+      lastClientY = moveEvent.clientY;
+
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (!slideCardRef.current || !dragPreviewRef.current) return;
+        const currentCardRect = slideCardRef.current.getBoundingClientRect();
+        const currentRelY = Math.max(0, Math.min(currentCardRect.height, lastClientY - currentCardRect.top));
+
+        const topY = Math.min(startRelY, currentRelY);
+        const height = Math.abs(currentRelY - startRelY);
+
+        dragPreviewRef.current.style.top = `${topY}px`;
+        dragPreviewRef.current.style.height = `${height}px`;
+
+        if (dragBadgeRef.current) {
+          dragBadgeRef.current.textContent = `↕️ Khoảng trống: ${Math.max(40, Math.round(height))}px — Thả chuột để hoàn tất`;
+        }
+      });
     };
 
     const onWindowPointerUp = (upEvent: PointerEvent) => {
+      if (rafId) cancelAnimationFrame(rafId);
       upEvent.preventDefault();
+
+      isDraggingSpaceRef.current = false;
+      setIsDraggingSpace(false);
+
       window.removeEventListener('pointermove', onWindowPointerMove);
       window.removeEventListener('pointerup', onWindowPointerUp);
       window.removeEventListener('pointercancel', onWindowPointerUp);
 
-      const deltaY = upEvent.clientY - startY;
-      const initialHeight = Math.abs(deltaY) >= 40 ? Math.round(Math.abs(deltaY)) : 280;
+      try {
+        targetEl.releasePointerCapture(upEvent.pointerId);
+      } catch {}
+
+      if (dragPreviewRef.current) {
+        dragPreviewRef.current.style.display = 'none';
+      }
+
+      const totalDelta = Math.abs(upEvent.clientY - startClientY);
+      // Nếu chỉ nhấp chuột mà không kéo (delta < 15px) -> chèn khoảng trống mặc định 240px
+      // Nếu có kéo giữ chuột -> lấy đúng chiều cao người dùng đã kéo (tối thiểu 40px)
+      const initialHeight = totalDelta < 15 ? 240 : Math.max(40, Math.round(totalDelta));
+
       handleAddBoardAtStep(targetStepIdx, initialHeight, targetBlockIdx);
 
-      setDragSpaceState(null);
-      setHoverY(null);
       if (onExitInsertSpaceMode) {
         onExitInsertSpaceMode();
       }
     };
 
-    window.addEventListener('pointermove', onWindowPointerMove);
+    window.addEventListener('pointermove', onWindowPointerMove, { passive: false });
     window.addEventListener('pointerup', onWindowPointerUp);
     window.addEventListener('pointercancel', onWindowPointerUp);
   };
 
   const handleSlideClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isInsertSpaceMode || dragSpaceState) {
+    if (isInsertSpaceMode || isDraggingSpaceRef.current || isDraggingSpace) {
       return;
     }
     const target = e.target as HTMLElement;
@@ -353,8 +406,10 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
       } else if (e.key === 'Escape') {
         e.preventDefault();
         if (isInsertSpaceMode) {
-          setHoverY(null);
-          setDragSpaceState(null);
+          if (hoverRulerRef.current) hoverRulerRef.current.style.display = 'none';
+          if (dragPreviewRef.current) dragPreviewRef.current.style.display = 'none';
+          isDraggingSpaceRef.current = false;
+          setIsDraggingSpace(false);
           if (onExitInsertSpaceMode) {
             onExitInsertSpaceMode();
           }
@@ -465,18 +520,19 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         }
       >
         {/* 1. THANH NGANG THEO CON TRỎ CHUỘT KHI Ở CHẾ ĐỘ CHÈN KHOẢNG TRỐNG (NOTERENDERER HOVER RULER) */}
-        {isInsertSpaceMode && hoverY !== null && !dragSpaceState && (
+        {isInsertSpaceMode && (
           <div
-            style={{ top: `${hoverY}px` }}
-            className="absolute left-0 right-0 z-40 pointer-events-none -translate-y-1/2 flex items-center transition-all"
+            ref={hoverRulerRef}
+            style={{ top: 0, display: 'none', willChange: 'transform' }}
+            className="absolute left-0 right-0 z-40 pointer-events-none -translate-y-1/2 flex items-center transition-none"
           >
             <div className="w-full h-1 bg-indigo-500 shadow-md relative flex items-center justify-center">
               <span className="absolute left-4 text-white text-xs font-black drop-shadow animate-pulse">
                 ▶
               </span>
-              <div className="px-3.5 py-1 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-xl border-2 border-white flex items-center gap-1.5 transform hover:scale-105 transition-transform">
+              <div className="px-3.5 py-1 rounded-full bg-indigo-600 text-white text-xs font-bold shadow-xl border-2 border-white flex items-center gap-1.5 transform hover:scale-105">
                 <NoteRendererSpaceIcon className="w-3.5 h-3.5 text-white" />
-                <span>Nhấp chuột để bắt đầu, giữ & kéo xuống để mở khoảng trống</span>
+                <span>Kích chuột đặt lề trên, giữ chuột kéo xuống lề dưới rồi thả chuột ra</span>
               </div>
               <span className="absolute right-4 text-white text-xs font-black drop-shadow animate-pulse">
                 ◀
@@ -486,41 +542,39 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         )}
 
         {/* 2. KHU VỰC KHOẢNG TRỐNG ĐANG ĐƯỢC KÉO MỞ RỘNG (NOTERENDERER REAL-TIME DRAGGING PREVIEW) */}
-        {isInsertSpaceMode && dragSpaceState && slideCardRef.current && (
+        {isInsertSpaceMode && (
           <div
-            style={{
-              top: `${dragSpaceState.startY - slideCardRef.current.getBoundingClientRect().top}px`,
-              height: `${Math.max(16, dragSpaceState.currentY - dragSpaceState.startY)}px`,
-            }}
-            className="absolute left-0 right-0 z-40 bg-indigo-500/15 border-y-2 border-dashed border-indigo-600 flex flex-col justify-between pointer-events-none transition-all shadow-inner overflow-hidden"
+            ref={dragPreviewRef}
+            style={{ display: 'none', willChange: 'top, height' }}
+            className="absolute left-0 right-0 z-40 bg-indigo-500/15 border-y-2 border-dashed border-indigo-600 flex flex-col justify-between pointer-events-none transition-none shadow-inner overflow-hidden"
           >
-            {/* Vạch ngang trên: Điểm bắt đầu */}
+            {/* Vạch ngang trên: Lề trên */}
             <div className="w-full h-1.5 bg-indigo-600 flex items-center justify-between px-3">
               <span className="text-[10px] text-white bg-indigo-700 px-2 py-0.5 rounded font-black shadow-xs">
-                BẮT ĐẦU CHÈN
+                LỀ TRÊN
               </span>
               <span className="text-[10px] text-indigo-700 font-bold bg-white/95 px-2 py-0.5 rounded shadow-xs">
-                Vạch trên
+                Vạch bắt đầu
               </span>
             </div>
 
             {/* Thông số độ cao khoảng trống kéo theo thời gian thực */}
             <div className="flex items-center justify-center py-2">
-              <div className="px-4 py-1.5 rounded-full bg-indigo-700 text-white text-xs font-extrabold shadow-2xl border-2 border-white flex items-center gap-2 animate-bounce">
+              <div className="px-4 py-1.5 rounded-full bg-indigo-700 text-white text-xs font-extrabold shadow-2xl border-2 border-white flex items-center gap-2">
                 <NoteRendererSpaceIcon className="w-4 h-4 text-white" />
-                <span>
-                  ↕️ Khoảng trống: {Math.max(40, Math.round(dragSpaceState.currentY - dragSpaceState.startY))}px — Thả chuột để hoàn tất
+                <span ref={dragBadgeRef}>
+                  ↕️ Khoảng trống: 0px — Thả chuột để hoàn tất
                 </span>
               </div>
             </div>
 
-            {/* Vạch ngang dưới: Điểm kết thúc theo con trỏ chuột */}
+            {/* Vạch ngang dưới: Lề dưới */}
             <div className="w-full h-1.5 bg-indigo-600 flex items-center justify-between px-3">
               <span className="text-[10px] text-white bg-indigo-700 px-2 py-0.5 rounded font-black shadow-xs">
-                KẾT THÚC (THẢ CHUỘT RA)
+                LỀ DƯỚI (THẢ CHUỘT)
               </span>
               <span className="text-[10px] text-indigo-700 font-bold bg-white/95 px-2 py-0.5 rounded shadow-xs">
-                Vạch dưới
+                Vạch kết thúc
               </span>
             </div>
           </div>
