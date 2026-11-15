@@ -80,12 +80,14 @@ import {
   Eraser,
   Palette,
   BookmarkCheck,
+  Code,
 } from 'lucide-react';
 import { InDeFileHsView } from './InDeFileHsView';
 import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker';
 import { WordStyleMenu } from './WordStyleMenu';
 import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
+import { isFullHtmlDocument, prepareHtmlForWordViewer } from './htmlDocUtils';
 import { DongBoDriveButton } from './DongBoDrive';
 import {
   savePptExtraToDrive,
@@ -243,6 +245,31 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
     newName: string;
   } | null>(null);
 
+  // Trạng thái hiển thị tệp tài liệu HTML hoàn chỉnh theo chuẩn trình duyệt (E-Learning / Slide HTML)
+  const [isHtmlDocMode, setIsHtmlDocMode] = useState<boolean>(false);
+  const [htmlDocContent, setHtmlDocContent] = useState<string>('');
+  const [showHtmlSourceModal, setShowHtmlSourceModal] = useState<boolean>(false);
+  const [htmlEditorText, setHtmlEditorText] = useState<string>('');
+  const [iframeKey, setIframeKey] = useState<number>(0);
+  const htmlContainerRef = useRef<HTMLDivElement>(null);
+  const htmlIframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Helper đặt nội dung văn bản và tự động nhận diện chế độ HTML hoàn chỉnh
+  const setDocumentContentAndMode = (content: string) => {
+    setWordDocumentHtml(content);
+    if (isFullHtmlDocument(content)) {
+      setHtmlDocContent(content);
+      setIsHtmlDocMode(true);
+      setIframeKey((prev) => prev + 1);
+    } else {
+      setIsHtmlDocMode(false);
+      setHtmlDocContent('');
+      if (editorRef.current) {
+        editorRef.current.innerHTML = content;
+      }
+    }
+  };
+
   const handleConfirmItemAction = async () => {
     if (!itemActionModal) return;
     if (!hasAuthoringPermission) {
@@ -344,8 +371,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
       if (!item) {
         // Mở cửa sổ Word mới với nội dung rỗng
-        if (editorRef.current) editorRef.current.innerHTML = '<p><br></p>';
-        setWordDocumentHtml('<p><br></p>');
+        setDocumentContentAndMode('<p><br></p>');
         lastLoadedDocKeyRef.current = `${title || ''}_${chuyenDe || ''}_${bai || ''}_${tienTrinhChuyenDe}_${cleanName}_${selectedExerciseName || ''}`;
       }
 
@@ -367,8 +393,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
       if (!item) {
         // Mở cửa sổ Word mới với nội dung rỗng
-        if (editorRef.current) editorRef.current.innerHTML = '<p><br></p>';
-        setWordDocumentHtml('<p><br></p>');
+        setDocumentContentAndMode('<p><br></p>');
         lastLoadedDocKeyRef.current = `${title || ''}_${chuyenDe || ''}_${bai || ''}_${tienTrinhChuyenDe}_${selectedKienThucName || ''}_${cleanName}`;
       }
 
@@ -390,8 +415,7 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
       if (!item) {
         // Mở cửa sổ Word mới với nội dung rỗng
-        if (editorRef.current) editorRef.current.innerHTML = '<p><br></p>';
-        setWordDocumentHtml('<p><br></p>');
+        setDocumentContentAndMode('<p><br></p>');
         lastLoadedDocKeyRef.current = `${title || ''}_${chuyenDe || ''}_${bai || ''}_${tienTrinhChuyenDe}_${selectedKienThucName || ''}_${cleanName}`;
       }
 
@@ -951,6 +975,36 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
 
   const insertHtmlToEditor = (html: string) => {
     isInsertingHtmlRef.current = true;
+
+    // 0. Nếu nội dung chèn là một tệp tài liệu HTML hoàn chỉnh (<!DOCTYPE html>, <html>, E-learning presentation)
+    if (isFullHtmlDocument(html)) {
+      setHtmlDocContent(html);
+      setWordDocumentHtml(html);
+      setIsHtmlDocMode(true);
+      setIframeKey((prev) => prev + 1);
+
+      // Đồng thời cập nhật cache ngay lập tức
+      try {
+        const rawCd = chuyenDe.trim();
+        const cleanCd = rawCd.replace(/^(?:Chuyên\s*đề|Chuyen\s*de)\s*:?\s*/i, '').trim();
+        if (selectedKienThucName) {
+          localStorage.setItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${rawCd}`, html);
+          localStorage.setItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${cleanCd}`, html);
+        }
+        localStorage.setItem(`lopu_kienthuc_${rawCd}`, html);
+        localStorage.setItem(`lopu_kienthuc_${cleanCd}`, html);
+      } catch (cacheErr) {
+        console.warn('Lỗi lưu cache HTML:', cacheErr);
+      }
+
+      setNotification({
+        text: 'Đã mở bài giảng HTML thành công trong cửa sổ Word! Trình duyệt tích hợp đang hiển thị trọn vẹn tài liệu.',
+        type: 'success',
+      });
+      setTimeout(() => setNotification(null), 4000);
+      isInsertingHtmlRef.current = false;
+      return;
+    }
 
     // 1. Luôn đồng bộ phát sự kiện cho QuestionEditorWord (nếu đang ở chế độ Tách câu hoặc PPT)
     window.dispatchEvent(new CustomEvent('app-insert-word-snippet', {
@@ -4565,10 +4619,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       // 1. VỚI HỌC SINH: Không có soạn bài nên xem ngay từ cache (0ms delay) để học ngay,
       // không khóa cửa sổ Word và cập nhật nền vào sau!
       if (!isTeacher && cachedContent && cachedContent.trim()) {
-        if (editorRef.current) {
-          editorRef.current.innerHTML = cachedContent;
-        }
-        setWordDocumentHtml(cachedContent);
+        setDocumentContentAndMode(cachedContent);
         setIsLoadingFromDrive(false);
         setTimeout(() => refreshRailMarkers(), 50);
 
@@ -4593,10 +4644,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
             if (isCancelled) return;
             if (driveRes.success && driveRes.contentHtml && driveRes.contentHtml.trim()) {
               if (driveRes.contentHtml !== cachedContent) {
-                if (editorRef.current) {
-                  editorRef.current.innerHTML = driveRes.contentHtml;
-                }
-                setWordDocumentHtml(driveRes.contentHtml);
+                setDocumentContentAndMode(driveRes.contentHtml);
                 setTimeout(() => refreshRailMarkers(), 50);
               }
             }
@@ -4635,10 +4683,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           if (isCancelled) return;
 
           if (driveRes.success && driveRes.contentHtml && driveRes.contentHtml.trim()) {
-            if (editorRef.current) {
-              editorRef.current.innerHTML = driveRes.contentHtml;
-            }
-            setWordDocumentHtml(driveRes.contentHtml);
+            setDocumentContentAndMode(driveRes.contentHtml);
 
             // Đảm bảo tên bài có trong danh sách nếu vừa tải từ tệp mới
             if (driveRes.loadedFile?.name) {
@@ -4663,17 +4708,11 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           }
 
           // Nếu không có file tương ứng trên Drive Giáo viên: Mở trang trắng để giáo viên bắt đầu soạn mới
-          if (editorRef.current) {
-            editorRef.current.innerHTML = '<p><br></p>';
-          }
-          setWordDocumentHtml('<p><br></p>');
+          setDocumentContentAndMode('<p><br></p>');
           setTimeout(() => refreshRailMarkers(), 50);
         } catch (loadErr) {
           console.warn('Lỗi khi tự động tải nội dung từ Drive trong Word:', loadErr);
-          if (editorRef.current) {
-            editorRef.current.innerHTML = '<p><br></p>';
-          }
-          setWordDocumentHtml('<p><br></p>');
+          setDocumentContentAndMode('<p><br></p>');
         } finally {
           if (!isCancelled) {
             setIsLoadingFromDrive(false);
@@ -4689,10 +4728,16 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Luôn đồng bộ wordDocumentHtml vào editorRef khi editorRef được gắn vào DOM
   useEffect(() => {
-    if (editorRef.current && wordDocumentHtml) {
-      if (editorRef.current.innerHTML !== wordDocumentHtml) {
-        editorRef.current.innerHTML = wordDocumentHtml;
-        setTimeout(() => refreshRailMarkers(), 50);
+    if (wordDocumentHtml) {
+      if (isFullHtmlDocument(wordDocumentHtml)) {
+        setIsHtmlDocMode(true);
+        setHtmlDocContent(wordDocumentHtml);
+      } else {
+        setIsHtmlDocMode(false);
+        if (editorRef.current && editorRef.current.innerHTML !== wordDocumentHtml) {
+          editorRef.current.innerHTML = wordDocumentHtml;
+          setTimeout(() => refreshRailMarkers(), 50);
+        }
       }
     }
   }, [wordDocumentHtml, chuyenDe]);
@@ -4715,10 +4760,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       if (html) {
         lastLoadedDocKeyRef.current = `${doc.title || ''}_${doc.chuyenDe || ''}_${doc.bai || ''}_${tienTrinhChuyenDe}_${selectedKienThucName || ''}_${selectedExerciseName || ''}`;
-        if (editorRef.current) {
-          editorRef.current.innerHTML = html;
-        }
-        setWordDocumentHtml(html);
+        setDocumentContentAndMode(html);
         setNotification({
           text: `Đã mở tài liệu bài giảng "${doc.chuyenDe || doc.title || ''}"!`,
           type: 'success',
@@ -6631,10 +6673,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           || localStorage.getItem(`lopu_kienthuc_file_KienThuc_LyThuyetTrongTam.html_${cleanOpt}`)
                           || localStorage.getItem('lopu_drive_file_content_name_KienThuc_LyThuyetTrongTam.html');
                         if (cached && cached.trim()) {
-                          if (editorRef.current) {
-                            editorRef.current.innerHTML = cached;
-                          }
-                          setWordDocumentHtml(cached);
+                          setDocumentContentAndMode(cached);
                         }
                         if (opt) {
                           setIsSidePanelCollapsed(true);
@@ -6687,7 +6726,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     try {
       setIsSaving(true);
       setSyncStatus('saving');
-      const contentHtml = editorRef.current?.innerHTML || '';
+      const contentHtml = (isHtmlDocMode && htmlDocContent)
+        ? htmlDocContent
+        : (editorRef.current?.innerHTML || wordDocumentHtml || '');
       const res = await saveDocumentToDriveAndDatabase({
         title: title.trim(),
         subject,
@@ -6701,7 +6742,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         selectedKienThucName,
         selectedExerciseName,
         contentHtml,
-        textContent: contentHtml.replace(/<[^>]*>/g, ''),
+        textContent: isHtmlDocMode ? 'Bài giảng HTML E-Learning' : contentHtml.replace(/<[^>]*>/g, ''),
         selectedClasses: targetClasses,
         isForSale,
         priceDiamonds,
@@ -6792,7 +6833,9 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
       const rawName = selectedKienThucName || 'ly_thuyet_trong_tam';
       const cleanName = formatSafeSlug(rawName);
-      const currentHtml = wordDocumentHtml || editorRef.current?.innerHTML || '';
+      const currentHtml = (isHtmlDocMode && htmlDocContent)
+        ? htmlDocContent
+        : (wordDocumentHtml || editorRef.current?.innerHTML || '');
 
       const token = await ensureValidDriveToken();
 
@@ -8759,52 +8802,164 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 }
               `}</style>
               {/* Khung bao tài liệu kèm Thanh Mốc PPT dọc bên lề trái */}
-              <div className="relative w-full max-w-5xl flex items-stretch gap-2.5 justify-center">
-                {/* THANH MỐC PPT DỌC BÊN LỀ TRÁI (TỪ ĐẦU ĐẾN CUỐI TÀI LIỆU) DÀNH CHO GIÁO VIÊN */}
-                {/* THANH MỐC PPT DỌC BÊN LỀ TRÁI (TỪ ĐẦU ĐẾN CUỐI TÀI LIỆU) */}
-                <PptMarkerRail
-                  markers={railMarkers}
-                  lineItems={railLineItems}
-                  totalScrollHeight={editorRef.current?.scrollHeight || 1000}
-                  onRailClick={isTeacherOrHigher(currentRole) ? handlePptRailClick : () => {}}
-                  onMarkerClick={(marker, e) => {
-                    e.stopPropagation();
-                    if (!isTeacherOrHigher(currentRole)) {
-                      // Với học sinh: Kích chuột vào mốc slide cuộn mượt đến vị trí slide đó
-                      const targetEl = editorRef.current?.children[marker.elementIndex] as HTMLElement | undefined;
-                      if (targetEl) {
-                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              <div className={`relative w-full ${isHtmlDocMode ? 'max-w-6xl' : 'max-w-5xl'} flex items-stretch gap-2.5 justify-center transition-all`}>
+                {/* THANH MỐC PPT DỌC BÊN LỀ TRÁI: Chỉ hiển thị khi ở chế độ soạn thảo Word thường */}
+                {!isHtmlDocMode && (
+                  <PptMarkerRail
+                    markers={railMarkers}
+                    lineItems={railLineItems}
+                    totalScrollHeight={editorRef.current?.scrollHeight || 1000}
+                    onRailClick={isTeacherOrHigher(currentRole) ? handlePptRailClick : () => {}}
+                    onMarkerClick={(marker, e) => {
+                      e.stopPropagation();
+                      if (!isTeacherOrHigher(currentRole)) {
+                        // Với học sinh: Kích chuột vào mốc slide cuộn mượt đến vị trí slide đó
+                        const targetEl = editorRef.current?.children[marker.elementIndex] as HTMLElement | undefined;
+                        if (targetEl) {
+                          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                        return;
                       }
-                      return;
-                    }
-                    setPptRailClickMenu({
-                      elementIndex: marker.elementIndex,
-                      x: e.clientX,
-                      y: e.clientY,
-                      isSlide: marker.type === 'slide',
-                      isEffect: marker.type === 'effect',
-                      effectType: marker.effectType || 'fade',
-                      snippet: marker.snippet,
-                    });
-                  }}
-                  onLinePlusClick={isTeacherOrHigher(currentRole) ? (lineItem, e) => {
-                    e.stopPropagation();
-                    setPptRailClickMenu({
-                      elementIndex: lineItem.elementIndex,
-                      x: e.clientX,
-                      y: e.clientY,
-                      isSlide: lineItem.hasSlideMarker,
-                      isEffect: lineItem.hasEffectMarker,
-                      effectType: lineItem.effectType || 'fade',
-                      snippet: lineItem.snippet,
-                    });
-                  } : undefined}
-                  clickMenu={isTeacherOrHigher(currentRole) ? pptRailClickMenu : null}
-                  onApplyBreak={handleApplyBreakFromRail}
-                  onRemoveBreak={handleRemoveBreakFromRail}
-                  onCloseClickMenu={() => setPptRailClickMenu(null)}
-                  onAutoAnalyze={isTeacherOrHigher(currentRole) ? handleAutoAnalyzeBreaks : undefined}
-                />
+                      setPptRailClickMenu({
+                        elementIndex: marker.elementIndex,
+                        x: e.clientX,
+                        y: e.clientY,
+                        isSlide: marker.type === 'slide',
+                        isEffect: marker.type === 'effect',
+                        effectType: marker.effectType || 'fade',
+                        snippet: marker.snippet,
+                      });
+                    }}
+                    onLinePlusClick={isTeacherOrHigher(currentRole) ? (lineItem, e) => {
+                      e.stopPropagation();
+                      setPptRailClickMenu({
+                        elementIndex: lineItem.elementIndex,
+                        x: e.clientX,
+                        y: e.clientY,
+                        isSlide: lineItem.hasSlideMarker,
+                        isEffect: lineItem.hasEffectMarker,
+                        effectType: lineItem.effectType || 'fade',
+                        snippet: lineItem.snippet,
+                      });
+                    } : undefined}
+                    clickMenu={isTeacherOrHigher(currentRole) ? pptRailClickMenu : null}
+                    onApplyBreak={handleApplyBreakFromRail}
+                    onRemoveBreak={handleRemoveBreakFromRail}
+                    onCloseClickMenu={() => setPptRailClickMenu(null)}
+                    onAutoAnalyze={isTeacherOrHigher(currentRole) ? handleAutoAnalyzeBreaks : undefined}
+                  />
+                )}
+
+                {/* 1. KHUNG HIỂN THỊ TỆP BÀI GIẢNG HTML CHUẨN TRÌNH DUYỆT (E-LEARNING / SLIDE HTML) */}
+                {isHtmlDocMode && (
+                  <div className="w-full flex flex-col gap-3">
+                    {/* Thanh tiêu đề & điều khiển Trình duyệt HTML */}
+                    <div className="w-full flex items-center justify-between bg-white/95 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-300 shadow-xs flex-wrap gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex items-center justify-center w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 font-bold text-base shadow-2xs">
+                          🌐
+                        </span>
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                            <span>Tệp bài giảng HTML ({selectedKienThucName || chuyenDe || 'Nội dung bài'})</span>
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-300 text-emerald-800 text-[10px] font-bold">
+                              Chuẩn Trình duyệt
+                            </span>
+                          </div>
+                          <div className="text-[11px] text-slate-500">
+                            Hiển thị trọn vẹn trong cửa sổ Word, tự động kích hoạt hiệu ứng tương tác, hoạt ảnh và công thức Toán
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Nút Toàn màn hình */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (htmlContainerRef.current) {
+                              if (!document.fullscreenElement) {
+                                htmlContainerRef.current.requestFullscreen().catch(() => {});
+                              } else {
+                                document.exitFullscreen().catch(() => {});
+                              }
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                          title="Trình chiếu toàn màn hình"
+                        >
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>Toàn màn hình</span>
+                        </button>
+
+                        {/* Nút Tải lại */}
+                        <button
+                          type="button"
+                          onClick={() => setIframeKey((prev) => prev + 1)}
+                          className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Tải lại tài liệu HTML"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>Tải lại</span>
+                        </button>
+
+                        {/* Nút Sửa mã HTML */}
+                        {isTeacherOrHigher(currentRole) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHtmlEditorText(htmlDocContent);
+                              setShowHtmlSourceModal(true);
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Xem và chỉnh sửa trực tiếp mã nguồn HTML"
+                          >
+                            <Code className="w-3.5 h-3.5" />
+                            <span>Sửa mã HTML</span>
+                          </button>
+                        )}
+
+                        {/* Nút Chuyển sang soạn thảo Word */}
+                        {isTeacherOrHigher(currentRole) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('Bạn có chắc muốn chuyển sang chế độ soạn thảo Word thông thường?')) {
+                                setIsHtmlDocMode(false);
+                                if (editorRef.current) {
+                                  editorRef.current.innerHTML = '<p><br></p>';
+                                }
+                                setWordDocumentHtml('<p><br></p>');
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-rose-200"
+                            title="Chuyển về khung soạn thảo Word chuẩn"
+                          >
+                            <FileText className="w-3.5 h-3.5" />
+                            <span>Soạn thảo Word</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Khung iframe hiển thị tệp HTML */}
+                    <div
+                      ref={htmlContainerRef}
+                      className="w-full bg-white rounded-2xl shadow-xl border border-slate-300 overflow-hidden relative"
+                      style={{ minHeight: '740px', height: 'calc(100vh - 200px)' }}
+                    >
+                      <iframe
+                        ref={htmlIframeRef}
+                        key={iframeKey}
+                        srcDoc={prepareHtmlForWordViewer(htmlDocContent)}
+                        title="Tài liệu HTML"
+                        className="w-full h-full border-0 block"
+                        allow="fullscreen; autoplay; clipboard-write; encrypted-media"
+                        sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-downloads"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div
                   ref={editorRef}
@@ -9221,7 +9376,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 className={`w-full max-w-4xl bg-white p-8 sm:p-14 rounded-2xl shadow-xl border border-slate-300 min-h-[580px] focus:outline-none focus:ring-2 focus:ring-indigo-400 overflow-y-auto prose max-w-none text-slate-800 word-editor-canvas transition-all ${
                   !isTeacherOrHigher(currentRole) ? 'word-doc-student-mode select-text' : ''
                 }`}
-                style={{ fontSize: fontSize, lineHeight: '1.6' }}
+                style={{ display: isHtmlDocMode ? 'none' : 'block', fontSize: fontSize, lineHeight: '1.6' }}
               />
               <style>{`
                 .word-editor-canvas h1 { font-size: 22px; font-weight: 700; margin-top: 14px; margin-bottom: 6px; line-height: 1.3; color: #0f172a; }
@@ -10624,6 +10779,69 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         slides={pptSlides}
         whiteboards={pptWhiteboards}
       />
+
+      {/* Modal Xem / Chỉnh sửa trực tiếp mã nguồn HTML */}
+      {showHtmlSourceModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col border border-slate-300 overflow-hidden animate-scale-up">
+            <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Code className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-base">Xem & Chỉnh sửa mã nguồn HTML bài giảng</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowHtmlSourceModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-hidden flex flex-col bg-slate-950">
+              <textarea
+                value={htmlEditorText}
+                onChange={(e) => setHtmlEditorText(e.target.value)}
+                className="w-full flex-1 min-h-[460px] bg-slate-900 text-slate-100 font-mono text-xs p-4 rounded-xl border border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 overflow-auto resize-none leading-relaxed"
+                placeholder="Dán hoặc chỉnh sửa mã nguồn HTML tại đây..."
+                spellCheck={false}
+              />
+            </div>
+
+            <div className="px-6 py-3.5 bg-slate-100 border-t border-slate-200 flex items-center justify-between">
+              <div className="text-xs text-slate-500">
+                Lưu ý: Mọi chỉnh sửa sẽ được áp dụng ngay vào khung hiển thị tài liệu HTML.
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowHtmlSourceModal(false)}
+                  className="px-4 py-2 rounded-xl bg-white hover:bg-slate-200 text-slate-700 text-xs font-semibold border border-slate-300 transition-colors cursor-pointer"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHtmlDocContent(htmlEditorText);
+                    setWordDocumentHtml(htmlEditorText);
+                    setIframeKey((prev) => prev + 1);
+                    setShowHtmlSourceModal(false);
+                    setNotification({
+                      text: 'Đã cập nhật mã HTML thành công! Tài liệu đã được làm mới.',
+                      type: 'success',
+                    });
+                    setTimeout(() => setNotification(null), 3000);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-md transition-colors cursor-pointer"
+                >
+                  Lưu & Áp dụng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -15,6 +15,7 @@ import {
 import { MenuChenProps } from './types';
 import { TableInsertModal } from './TableInsertModal';
 import { renderLatexInHtml } from '../latexUtils';
+import { isFullHtmlDocument } from '../htmlDocUtils';
 
 /**
  * Trợ giúp trích xuất nội dung văn bản từ tệp (Docx, TXT, HTML, MD, JSON, CSV...) đưa trực tiếp vào cửa sổ Word
@@ -55,8 +56,11 @@ const extractFileContentToHtml = async (file: File): Promise<string> => {
         return `<p><em>(Nội dung tệp "${fileName}" rỗng)</em></p>`;
       }
 
-      // Nếu tệp đã ở định dạng HTML
-      if (ext === 'html' || ext === 'htm' || /<[a-z][\s\S]*>/i.test(text)) {
+      // Nếu tệp là định dạng HTML hoàn chỉnh hoặc có đuôi .html / .htm
+      if (ext === 'html' || ext === 'htm' || isFullHtmlDocument(text)) {
+        // Trả về nguyên vẹn mã nguồn HTML, tuyệt đối không qua KaTeX để tránh làm hỏng script và style
+        return text;
+      } else if (/<[a-z][\s\S]*>/i.test(text)) {
         rawHtml = text;
       } else {
         // Nếu là tệp văn bản thuần / JSON / MD: chuyển đổi các dòng văn bản thành thẻ <p>
@@ -189,8 +193,11 @@ export const MenuChen: React.FC<MenuChenProps> = ({
       const extractedHtml = await extractFileContentToHtml(file);
       insertHtmlToEditor(extractedHtml);
 
+      const isHtml = isFullHtmlDocument(extractedHtml);
       setNotification?.({
-        text: `Đã trích xuất và đưa nội dung tệp "${file.name}" vào cửa sổ Word thành công!`,
+        text: isHtml
+          ? `Đã nạp bài giảng HTML "${file.name}" thành công! Cửa sổ Word đang hiển thị trọn vẹn theo chuẩn trình duyệt.`
+          : `Đã trích xuất và đưa nội dung tệp "${file.name}" vào cửa sổ Word thành công!`,
         type: 'success',
       });
       setTimeout(() => setNotification?.(null), 3500);
