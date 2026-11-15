@@ -78,6 +78,7 @@ import {
   Paintbrush,
   Eraser,
   Palette,
+  BookmarkCheck,
 } from 'lucide-react';
 import { InDeFileHsView } from './InDeFileHsView';
 import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker';
@@ -86,6 +87,12 @@ import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
 import { DongBoDriveButton } from './DongBoDrive';
 import {
+  savePptExtraToDrive,
+  loadPptExtraFromDriveOrCache,
+  deletePptExtraEverywhere,
+} from './DongBoDrive/pptExtraService';
+import { ModalGuiBaiChoGiaoVien } from './ModalGuiBaiChoGiaoVien';
+import {
   createByPath,
   deleteByPath,
   getNestedDriveTree,
@@ -93,6 +100,11 @@ import {
   formatSafeSlug,
 } from '../index';
 import { getClasses, getTeacherDocuments, saveTeacherDocument } from '../../ConnectData/ConnectFirestore';
+import { auth } from '../../../config/firebase';
+import {
+  saveOrUpdateDriveFile,
+  getOrCreateFolderPathOnDrive,
+} from '../../ConnectData/ConnectDrive/googleDriveService';
 import {
   saveTeachingMaterialHierarchyToDrive,
   getDriveConnectionState,
@@ -412,6 +424,16 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const [pptWhiteboards, setPptWhiteboards] = useState<PptWhiteboardData[]>([]);
   const [activePptWhiteboardId, setActivePptWhiteboardId] = useState<string | null>(null);
   const [isInsertSpaceMode, setIsInsertSpaceMode] = useState<boolean>(false);
+  const [isSavingPpt, setIsSavingPpt] = useState<boolean>(false);
+  const [syncStatusPpt, setSyncStatusPpt] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showStudentSendModal, setShowStudentSendModal] = useState<boolean>(false);
+
+  // Xác định giáo viên phụ trách để gửi bài hoặc ghi thông tin tác giả biên soạn
+  const matchedClass = classes.find((c) => targetClasses.includes(c.id)) || classes[0];
+  const teacherNameResolved =
+    matchedClass?.teacherName || (auth?.currentUser?.displayName) || 'Giáo viên phụ trách';
+  const teacherEmailResolved =
+    (matchedClass as any)?.teacherEmail || 'tanbaodl@gmail.com';
 
   // Cấu hình độc lập (loại bút, màu sắc, nét vẽ) cho 5 ngòi bút tùy chỉnh (Bút 1 -> Bút 5)
   const [pptActiveTool, setPptActiveTool] = useState<BoardTool>('pen');
@@ -6545,6 +6567,26 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
           text: res.message || `Đã lưu Drive thành công! (${timeStr})`,
           type: 'success',
         });
+
+        // Nếu nội dung gốc vừa được giáo viên thay đổi và lưu lại -> tự động xóa file pptExtra cũ
+        try {
+          const cleanTitle = (formatDocumentTitle(subject, grade, title) || title || 'TaiLieu').trim().replace(/[\\/:*?"<>|]+/g, ' ').trim();
+          const physicalFolders = [
+            'myApp',
+            'LopU',
+            'TaiLieu',
+            cleanTitle,
+            (chuong || 'Chương 1').trim(),
+            (bai || 'Bài 1').trim(),
+            (vanDe || 'Vấn đề 1').trim(),
+            (chuyenDe || 'Chuyên đề 1').trim(),
+          ];
+          const cleanName = formatSafeSlug(selectedKienThucName || 'ly_thuyet_trong_tam');
+          const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+          deletePptExtraEverywhere(token, physicalFolders, cleanName).catch(() => {});
+          setPptWhiteboards([]);
+        } catch {}
+
         setTimeout(() => {
           setSyncStatus('idle');
         }, 1500);
@@ -6566,6 +6608,140 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
       setTimeout(() => setNotification(null), 5000);
     }
   };
+
+  // Lưu bài giảng PPT: Lưu bài vào đúng thư mục của nội dung gốc và lưu thêm 1 file gồm những nội dung chèn thêm
+  const handleSavePptLesson = async () => {
+    if (!hasAuthoringPermission) {
+      setNotification({ text: '⚠️ Bạn không có Quyền biên soạn bài giảng PPT!', type: 'warning' });
+      return;
+    }
+    if (!title.trim()) {
+      setNotification({ text: 'Vui lòng chọn Tên tài liệu trước khi lưu bài giảng PPT!', type: 'error' });
+      return;
+    }
+
+    try {
+      setIsSavingPpt(true);
+      setSyncStatusPpt('saving');
+
+      const formattedTitle = formatDocumentTitle(subject, grade, title);
+      const cleanTitle = (formattedTitle || title || 'TaiLieu').trim().replace(/[\\/:*?"<>|]+/g, ' ').trim();
+      const safeChuong = (chuong || 'Chương 1').trim();
+      const safeBai = (bai || 'Bài 1').trim();
+      const safeVanDe = (vanDe || 'Vấn đề 1').trim();
+      const safeChuyenDe = (chuyenDe || 'Chuyên đề 1').trim();
+
+      const physicalFolders = [
+        'myApp',
+        'LopU',
+        'TaiLieu',
+        cleanTitle,
+        safeChuong,
+        safeBai,
+        safeVanDe,
+        safeChuyenDe,
+      ];
+
+      const rawName = selectedKienThucName || 'ly_thuyet_trong_tam';
+      const cleanName = formatSafeSlug(rawName);
+      const currentHtml = wordDocumentHtml || editorRef.current?.innerHTML || '';
+
+      const token = await ensureValidDriveToken();
+
+      // 1. Đảm bảo file nội dung gốc cũng được lưu trong đúng thư mục trên Drive
+      if (token) {
+        const folderId = await getOrCreateFolderPathOnDrive(token, physicalFolders);
+        await saveOrUpdateDriveFile(
+          token,
+          folderId,
+          `KienThuc_${cleanName}.html`,
+          currentHtml,
+          'text/html'
+        );
+      }
+
+      // 2. Lưu thêm 1 file gồm những nội dung chèn thêm vào nội dung gốc (whiteboards, nét vẽ, hình, đồ thị)
+      const res = await savePptExtraToDrive(token, physicalFolders, cleanName, {
+        title,
+        chuong: safeChuong,
+        bai: safeBai,
+        vanDe: safeVanDe,
+        chuyenDe: safeChuyenDe,
+        originalContentHtml: currentHtml,
+        whiteboards: pptWhiteboards,
+      });
+
+      if (res.success) {
+        setSyncStatusPpt('saved');
+        setNotification({
+          text: '✅ Đã lưu bài giảng PPT và nội dung chèn thêm vào đúng thư mục Drive!',
+          type: 'success',
+        });
+        setTimeout(() => setSyncStatusPpt('idle'), 2500);
+      } else {
+        throw new Error(res.error || 'Lỗi khi lưu file chèn thêm PPT');
+      }
+    } catch (err: any) {
+      console.error('Lỗi khi lưu bài giảng PPT:', err);
+      setSyncStatusPpt('idle');
+      setNotification({
+        text: `Lưu bài giảng PPT thất bại: ${err?.message || 'Có lỗi xảy ra'}`,
+        type: 'error',
+      });
+    } finally {
+      setIsSavingPpt(false);
+      setTimeout(() => setNotification(null), 5000);
+    }
+  };
+
+  // Khi chuyển sang Xem PPT: Tự động nạp file nội dung chèn thêm vào chung với file nội dung gốc
+  // (Nếu nội dung gốc đã bị giáo viên thay đổi hoặc xóa thì file này tự động bị xóa)
+  useEffect(() => {
+    if (wordViewMode !== 'ppt') return;
+    let isCancelled = false;
+
+    const loadExtraPpt = async () => {
+      try {
+        const formattedTitle = formatDocumentTitle(subject, grade, title);
+        const cleanTitle = (formattedTitle || title || 'TaiLieu').trim().replace(/[\\/:*?"<>|]+/g, ' ').trim();
+        const safeChuong = (chuong || 'Chương 1').trim();
+        const safeBai = (bai || 'Bài 1').trim();
+        const safeVanDe = (vanDe || 'Vấn đề 1').trim();
+        const safeChuyenDe = (chuyenDe || 'Chuyên đề 1').trim();
+
+        const physicalFolders = [
+          'myApp',
+          'LopU',
+          'TaiLieu',
+          cleanTitle,
+          safeChuong,
+          safeBai,
+          safeVanDe,
+          safeChuyenDe,
+        ];
+
+        const rawName = selectedKienThucName || 'ly_thuyet_trong_tam';
+        const cleanName = formatSafeSlug(rawName);
+        const currentHtml = wordDocumentHtml || editorRef.current?.innerHTML || '';
+        const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+
+        const result = await loadPptExtraFromDriveOrCache(token, physicalFolders, cleanName, currentHtml);
+        if (isCancelled) return;
+
+        if (result && result.whiteboards && result.whiteboards.length > 0) {
+          setPptWhiteboards(result.whiteboards);
+          console.log(`Đã nạp ${result.whiteboards.length} khoảng trống/nội dung chèn thêm vào bài giảng PPT.`);
+        }
+      } catch (err) {
+        console.warn('Không thể nạp nội dung chèn thêm PPT:', err);
+      }
+    };
+
+    loadExtraPpt();
+    return () => {
+      isCancelled = true;
+    };
+  }, [wordViewMode, title, chuong, bai, vanDe, chuyenDe, selectedKienThucName]);
 
   return (
     <div className="space-y-5 animate-fade-in max-w-7xl mx-auto pb-12">
@@ -7991,15 +8167,31 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
               </button>
             )}
 
-                  {/* Chế độ xem PPT: Nút Lưu Drive hiện ở cuối menu word (góc trên bên phải) */}
+                  {/* Chế độ xem PPT: Không có nút Lưu Drive. Thay bằng nút Lưu bài (lưu bài giảng vào đúng thư mục của nội dung gốc và lưu thêm 1 file gồm những nội dung chèn thêm) */}
                   {wordViewMode === 'ppt' && isTeacherOrHigher(currentRole) && (
                     <div className="ml-auto flex items-center gap-2 shrink-0">
-                      <DongBoDriveButton
-                        isSaving={isSaving}
-                        syncStatus={syncStatus}
-                        lastSavedTime={lastSavedTime}
-                        onClick={handleSaveToDrive}
-                      />
+                      <button
+                        type="button"
+                        onClick={handleSavePptLesson}
+                        disabled={isSavingPpt}
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-md cursor-pointer ${
+                          syncStatusPpt === 'saving'
+                            ? 'bg-amber-500 text-white animate-pulse'
+                            : syncStatusPpt === 'saved'
+                            ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95'
+                        }`}
+                        title="Lưu bài giảng PPT: Lưu bài vào đúng thư mục của nội dung gốc trên Drive và lưu file nội dung chèn thêm (khoảng trống, bảng vẽ, đồ thị)"
+                      >
+                        {syncStatusPpt === 'saving' ? (
+                          <RotateCcw className="w-3.5 h-3.5 animate-spin" />
+                        ) : syncStatusPpt === 'saved' ? (
+                          <Check className="w-3.5 h-3.5" />
+                        ) : (
+                          <BookmarkCheck className="w-3.5 h-3.5" />
+                        )}
+                        <span>{syncStatusPpt === 'saving' ? 'Đang lưu...' : syncStatusPpt === 'saved' ? 'Đã lưu bài' : 'Lưu bài'}</span>
+                      </button>
                     </div>
                   )}
                 </>
@@ -8119,6 +8311,19 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                       <span>Chế độ: Xem tài liệu (Không có quyền biên soạn)</span>
                     </span>
 
+                    {/* Nút Gửi bài cho giáo viên dành cho học sinh khi ở chế độ Xem PPT */}
+                    {wordViewMode === 'ppt' && (
+                      <button
+                        type="button"
+                        onClick={() => setShowStudentSendModal(true)}
+                        className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-1.5 hover:scale-102"
+                        title="Gửi bài cho giáo viên: Gửi bài học (tạo PDF từ đầu đến hiện tại) hoặc Gửi bài làm (chụp ảnh/chọn file đính kèm gửi Gmail)"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Gửi bài cho giáo viên</span>
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
@@ -8237,6 +8442,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                 html={wordDocumentHtml || editorRef.current?.innerHTML || ''}
                 docTitle={title || chuyenDe || 'Tài liệu Chuyên đề'}
                 chuong={chuong}
+                teacherName={teacherNameResolved}
                 onClose={() => setWordViewMode('full')}
               />
             ) : null
@@ -8326,37 +8532,45 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
                 /* Kiểu dáng hiển thị Thẻ mốc Slide & Điểm dừng Hiệu ứng trong khung soạn thảo Word:
                    Không hiện chữ/nhãn vào bài viết gây khó đọc (đã có trên Thanh mốc PPT lề trái).
-                   Chỉ hiển thị đường kẻ ngang nét đứt thưa nét, mờ nhẹ tinh tế phân tách nội dung. */
-                .slide-break-point {
+                   Chỉ hiển thị đường kẻ ngang nét đứt thưa nét hơn nữa, mờ nhẹ tinh tế phân tách nội dung. */
+                .slide-break-point,
+                [data-slide-break="true"],
+                .slide-break {
                   position: relative;
                   border-top: none !important;
-                  background-image: repeating-linear-gradient(to right, rgba(147, 51, 234, 0.35) 0px, rgba(147, 51, 234, 0.35) 6px, transparent 6px, transparent 16px) !important;
+                  background-image: repeating-linear-gradient(to right, rgba(147, 51, 234, 0.22) 0px, rgba(147, 51, 234, 0.22) 4px, transparent 4px, transparent 20px) !important;
                   background-repeat: repeat-x !important;
                   background-position: top left !important;
                   background-size: 100% 1px !important;
-                  padding-top: 4px !important;
-                  margin-top: 6px !important;
+                  padding-top: 3px !important;
+                  margin-top: 4px !important;
                   background-color: transparent !important;
                   border-radius: 0 !important;
                 }
-                .slide-break-point::before {
+                .slide-break-point::before,
+                [data-slide-break="true"]::before,
+                .slide-break::before {
                   content: none !important;
                   display: none !important;
                 }
 
-                .effect-break-point {
+                .effect-break-point,
+                [data-effect-break="true"],
+                [data-effect-type] {
                   position: relative;
                   border-top: none !important;
-                  background-image: repeating-linear-gradient(to right, rgba(217, 119, 6, 0.35) 0px, rgba(217, 119, 6, 0.35) 6px, transparent 6px, transparent 16px) !important;
+                  background-image: repeating-linear-gradient(to right, rgba(217, 119, 6, 0.22) 0px, rgba(217, 119, 6, 0.22) 4px, transparent 4px, transparent 20px) !important;
                   background-repeat: repeat-x !important;
                   background-position: top left !important;
                   background-size: 100% 1px !important;
-                  padding-top: 4px !important;
-                  margin-top: 6px !important;
+                  padding-top: 3px !important;
+                  margin-top: 4px !important;
                   background-color: transparent !important;
                   border-radius: 0 !important;
                 }
-                .effect-break-point::before {
+                .effect-break-point::before,
+                [data-effect-break="true"]::before,
+                [data-effect-type]::before {
                   content: none !important;
                   display: none !important;
                 }
@@ -10212,6 +10426,21 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         </div>,
         document.body
       )}
+
+      {/* Modal gửi bài cho giáo viên dành cho tài khoản học sinh */}
+      <ModalGuiBaiChoGiaoVien
+        isOpen={showStudentSendModal}
+        onClose={() => setShowStudentSendModal(false)}
+        docTitle={title || chuyenDe || 'Tài liệu học tập'}
+        chuong={chuong}
+        defaultTeacherName={teacherNameResolved}
+        defaultTeacherEmail={teacherEmailResolved}
+        activeSlideIndex={activePptSlideIndex}
+        activeStepIndex={activePptStepIndex}
+        totalSlides={pptSlides.length}
+        slides={pptSlides}
+        whiteboards={pptWhiteboards}
+      />
     </div>
   );
 };
