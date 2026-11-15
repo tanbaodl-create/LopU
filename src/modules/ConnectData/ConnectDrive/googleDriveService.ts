@@ -1097,7 +1097,8 @@ export async function fetchWithTimeout(url: string, options: RequestInit = {}, t
  */
 export async function ensureValidDriveToken(
   onProgress?: (step: string) => void,
-  allowInteractivePopup: boolean = true
+  allowInteractivePopup: boolean = true,
+  customHintEmail?: string
 ): Promise<string | null> {
   let token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
   
@@ -1135,7 +1136,7 @@ export async function ensureValidDriveToken(
     }
 
     // Timeout cho popup đăng nhập (45s), giải quyết êm ái tránh unhandled exception
-    const connectPromise = connectGoogleDrive();
+    const connectPromise = connectGoogleDrive(customHintEmail);
     const timeoutPromise = new Promise<{ success: boolean; email: string; message: string }>((resolve) => {
       setTimeout(
         () =>

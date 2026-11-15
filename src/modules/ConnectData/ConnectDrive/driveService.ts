@@ -97,7 +97,17 @@ export function getDriveConnectionState(): {
 }
 
 // Connect to Google Drive using Google Identity Services or Firebase Auth popup
-export async function connectGoogleDrive(): Promise<{ success: boolean; email: string; message: string }> {
+export async function connectGoogleDrive(customHintEmail?: string): Promise<{ success: boolean; email: string; message: string }> {
+  // Lấy email mặc định của tài khoản đang đăng nhập vào app
+  const defaultEmail = (
+    customHintEmail ||
+    auth?.currentUser?.email ||
+    localStorage.getItem('lopu_auth_email') ||
+    localStorage.getItem('lopu_drive_email') ||
+    localStorage.getItem('currentUserEmail') ||
+    ''
+  ).toLowerCase().trim();
+
   // 1. Try Firebase Auth popup first
   if (auth && isFirebaseConfigured) {
     try {
@@ -105,15 +115,26 @@ export async function connectGoogleDrive(): Promise<{ success: boolean; email: s
       provider.addScope('https://www.googleapis.com/auth/drive.file');
       provider.addScope('https://www.googleapis.com/auth/drive');
       
+      // Chọn tài khoản mặc định để đăng nhập là tài khoản đang đăng nhập vào app
+      if (defaultEmail && defaultEmail.includes('@')) {
+        provider.setCustomParameters({
+          login_hint: defaultEmail,
+        });
+      }
+      
       const result = await signInWithPopup(auth, provider);
       const credential = GoogleAuthProvider.credentialFromResult(result);
       if (credential?.accessToken) {
         currentAccessToken = credential.accessToken;
         localStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, currentAccessToken);
         isDriveConnected = true;
-        currentDriveEmail = result.user.email || 'tanbaodl@gmail.com';
+        currentDriveEmail = result.user.email || defaultEmail || 'tanbaodl@gmail.com';
         localStorage.setItem('lopu_drive_email', currentDriveEmail);
+        localStorage.setItem('lopu_auth_email', currentDriveEmail);
         notifyStatusChanged();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('lopu_auth_session_changed', { detail: { email: currentDriveEmail, connected: true } }));
+        }
         return {
           success: true,
           email: currentDriveEmail,
@@ -144,9 +165,13 @@ export async function connectGoogleDrive(): Promise<{ success: boolean; email: s
             currentAccessToken = tokenResponse.access_token;
             localStorage.setItem(DRIVE_TOKEN_STORAGE_KEY, currentAccessToken);
             isDriveConnected = true;
-            currentDriveEmail = 'teacher.google@lopu.edu.vn';
+            currentDriveEmail = defaultEmail || 'teacher.google@lopu.edu.vn';
             localStorage.setItem('lopu_drive_email', currentDriveEmail);
+            localStorage.setItem('lopu_auth_email', currentDriveEmail);
             notifyStatusChanged();
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('lopu_auth_session_changed', { detail: { email: currentDriveEmail, connected: true } }));
+            }
             resolve({
               success: true,
               email: currentDriveEmail,
@@ -154,7 +179,7 @@ export async function connectGoogleDrive(): Promise<{ success: boolean; email: s
             });
           },
         });
-        client.requestAccessToken();
+        client.requestAccessToken(defaultEmail && defaultEmail.includes('@') ? { hint: defaultEmail } : undefined);
       } catch (err) {
         console.warn('GSI Token request error:', err);
         resolve({

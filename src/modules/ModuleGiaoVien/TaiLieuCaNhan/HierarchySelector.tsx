@@ -312,7 +312,14 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
     lastAutoTitleRef.current = '';
   }, [subject, grade]);
 
+  const isSessionValid = Boolean(
+    isRealGoogleOAuthToken(
+      localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token')
+    )
+  );
+
   useEffect(() => {
+    if (!isSessionValid) return;
     if (subject && grade && docTitles.length === 1) {
       const singleTitle = docTitles[0];
       if (title !== singleTitle && lastAutoTitleRef.current !== singleTitle) {
@@ -320,48 +327,52 @@ export const HierarchySelector: React.FC<HierarchySelectorProps> = ({
         handleSelectLevel('title', singleTitle);
       }
     }
-  }, [subject, grade, docTitles.length, title]);
+  }, [subject, grade, docTitles.length, title, isSessionValid]);
 
   // TỰ ĐỘNG CHỌN NỐI TIẾP NẾU BẤT KỲ CẤP NÀO CHỈ CÓ DUY NHẤT 1 TÙY CHỌN (Tài liệu, Chương, Bài, Vấn đề, Chuyên đề)
   // 1. Tự động chọn Chương nếu chỉ có 1 Chương
   useEffect(() => {
+    if (!isSessionValid) return;
     if (title && chuongList.length === 1) {
       const singleChuong = chuongList[0];
       if (chuong !== singleChuong) {
         onChangeChuong(singleChuong);
       }
     }
-  }, [title, chuongList, chuong, onChangeChuong]);
+  }, [title, chuongList, chuong, onChangeChuong, isSessionValid]);
 
   // 2. Tự động chọn Bài nếu chỉ có 1 Bài
   useEffect(() => {
+    if (!isSessionValid) return;
     if (title && chuong && baiList.length === 1) {
       const singleBai = baiList[0];
       if (bai !== singleBai) {
         onChangeBai(singleBai);
       }
     }
-  }, [title, chuong, baiList, bai, onChangeBai]);
+  }, [title, chuong, baiList, bai, onChangeBai, isSessionValid]);
 
   // 3. Tự động chọn Vấn đề nếu chỉ có 1 Vấn đề
   useEffect(() => {
+    if (!isSessionValid) return;
     if (title && chuong && bai && vanDeList.length === 1) {
       const singleVanDe = vanDeList[0];
       if (vanDe !== singleVanDe) {
         onChangeVanDe(singleVanDe);
       }
     }
-  }, [title, chuong, bai, vanDeList, vanDe, onChangeVanDe]);
+  }, [title, chuong, bai, vanDeList, vanDe, onChangeVanDe, isSessionValid]);
 
   // 4. Tự động chọn Chuyên đề nếu chỉ có 1 Chuyên đề
   useEffect(() => {
+    if (!isSessionValid) return;
     if (title && chuong && bai && vanDe && chuyenDeList.length === 1) {
       const singleChuyenDe = chuyenDeList[0];
       if (chuyenDe !== singleChuyenDe) {
         onChangeChuyenDe(singleChuyenDe);
       }
     }
-  }, [title, chuong, bai, vanDe, chuyenDeList, chuyenDe, onChangeChuyenDe]);
+  }, [title, chuong, bai, vanDe, chuyenDeList, chuyenDe, onChangeChuyenDe, isSessionValid]);
 
   // Quét Drive nền khi Môn và Lớp được chọn (tự động kiểm tra Token hết hạn để đồng bộ phiên làm việc)
   useEffect(() => {

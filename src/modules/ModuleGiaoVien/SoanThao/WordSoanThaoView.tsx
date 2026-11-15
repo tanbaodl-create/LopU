@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import katex from 'katex';
 import { ViewId, getViewMeta } from '../../ModuleGiaoDien/Navigation/menuConfig';
@@ -24,6 +24,7 @@ import {
   ArrowLeft,
   ArrowUpDown,
   Lock,
+  LogIn,
   Bold,
   Italic,
   Underline,
@@ -434,6 +435,132 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
     matchedClass?.teacherName || (auth?.currentUser?.displayName) || 'Giáo viên phụ trách';
   const teacherEmailResolved =
     (matchedClass as any)?.teacherEmail || 'tanbaodl@gmail.com';
+
+  // Trạng thái kiểm tra phiên đăng nhập và token Drive khi vào Tài liệu
+  const [isAuthenticatedSession, setIsAuthenticatedSession] = useState<boolean>(() => {
+    const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+    return Boolean(isRealGoogleOAuthToken(token));
+  });
+  const [isCheckingAuthSession, setIsCheckingAuthSession] = useState<boolean>(true);
+  const [authSessionPrompt, setAuthSessionPrompt] = useState<{
+    show: boolean;
+    reason: 'not_logged_in' | 'token_expired';
+    email: string;
+  } | null>(null);
+
+  // Khi vào tài liệu: Kiểm tra phiên đăng nhập và token Drive
+  // Nếu chưa đăng nhập hoặc token hết hạn -> hiện cửa sổ đăng nhập trước, chọn tài khoản mặc định là tài khoản đang đăng nhập app
+  const verifyAuthSessionOnEnter = useCallback(async (allowPopup = true) => {
+    setIsCheckingAuthSession(true);
+
+    const appEmail = (
+      auth?.currentUser?.email ||
+      localStorage.getItem('lopu_auth_email') ||
+      localStorage.getItem('lopu_drive_email') ||
+      localStorage.getItem('currentUserEmail') ||
+      ''
+    ).toLowerCase().trim();
+
+    const token = localStorage.getItem('lopu_google_drive_token_v1') || localStorage.getItem('lopu_gdrive_token');
+    const hasTokenFormat = isRealGoogleOAuthToken(token);
+
+    // 1. Hoàn toàn chưa đăng nhập tài khoản nào vào app hoặc chưa có token Drive
+    if (!appEmail || !token || !hasTokenFormat) {
+      setIsAuthenticatedSession(false);
+      setIsCheckingAuthSession(false);
+      setAuthSessionPrompt({
+        show: true,
+        reason: 'not_logged_in',
+        email: appEmail,
+      });
+
+      if (allowPopup) {
+        try {
+          const res = await connectGoogleDrive(appEmail);
+          if (res.success) {
+            setIsAuthenticatedSession(true);
+            setAuthSessionPrompt(null);
+            setNotification({
+              text: `✅ Đã đăng nhập và kết nối Google Drive thành công (${res.email || appEmail})!`,
+              type: 'success',
+            });
+            setTimeout(() => setNotification(null), 3500);
+            return true;
+          }
+        } catch (err) {
+          console.warn('Lỗi mở popup đăng nhập:', err);
+        }
+      }
+      return false;
+    }
+
+    // 2. Đã có tài khoản: kiểm tra token còn hạn hay đã hết hạn (401/403)
+    try {
+      const validToken = await ensureValidDriveToken(undefined, false, appEmail);
+      if (validToken && isRealGoogleOAuthToken(validToken)) {
+        setIsAuthenticatedSession(true);
+        setIsCheckingAuthSession(false);
+        setAuthSessionPrompt(null);
+        return true;
+      }
+
+      // Token đã hết hạn
+      setIsAuthenticatedSession(false);
+      setIsCheckingAuthSession(false);
+      setAuthSessionPrompt({
+        show: true,
+        reason: 'token_expired',
+        email: appEmail,
+      });
+
+      if (allowPopup) {
+        try {
+          const res = await connectGoogleDrive(appEmail);
+          if (res.success) {
+            setIsAuthenticatedSession(true);
+            setAuthSessionPrompt(null);
+            setNotification({
+              text: `✅ Đã làm mới phiên đăng nhập Google Drive thành công!`,
+              type: 'success',
+            });
+            setTimeout(() => setNotification(null), 3500);
+            return true;
+          }
+        } catch (err) {
+          console.warn('Lỗi mở popup làm mới token Drive:', err);
+        }
+      }
+      return false;
+    } catch (err) {
+      setIsAuthenticatedSession(false);
+      setIsCheckingAuthSession(false);
+      setAuthSessionPrompt({
+        show: true,
+        reason: 'token_expired',
+        email: appEmail,
+      });
+      return false;
+    }
+  }, []);
+
+  // Kích hoạt kiểm tra phiên đăng nhập ngay khi vào Tài liệu
+  useEffect(() => {
+    verifyAuthSessionOnEnter(true);
+  }, [verifyAuthSessionOnEnter]);
+
+  // Lắng nghe sự kiện đăng nhập thành công từ hệ thống
+  useEffect(() => {
+    const handleAuthChange = (e: any) => {
+      if (e.detail?.connected) {
+        setIsAuthenticatedSession(true);
+        setAuthSessionPrompt(null);
+      }
+    };
+    window.addEventListener('lopu_auth_session_changed', handleAuthChange);
+    return () => {
+      window.removeEventListener('lopu_auth_session_changed', handleAuthChange);
+    };
+  }, []);
 
   // Cấu hình độc lập (loại bút, màu sắc, nét vẽ) cho 5 ngòi bút tùy chỉnh (Bút 1 -> Bút 5)
   const [pptActiveTool, setPptActiveTool] = useState<BoardTool>('pen');
@@ -5712,7 +5839,12 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
   }, [subject, grade]);
 
   // Quy tắc tự động chọn Tên tài liệu: Nếu có duy nhất 1 tùy chọn thì tự động chọn; nếu > 1 tùy chọn thì rỗng
+  // BẮT BUỘC: Chỉ tự động chọn khi đã kiểm tra phiên đăng nhập và token Drive hợp lệ
   useEffect(() => {
+    if (!isAuthenticatedSession) {
+      if (title) setTitle('');
+      return;
+    }
     if (filteredTitleList.length === 1) {
       if (title !== filteredTitleList[0]) {
         setTitle(filteredTitleList[0]);
@@ -5724,7 +5856,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     } else {
       if (title) setTitle('');
     }
-  }, [filteredTitleList]);
+  }, [filteredTitleList, isAuthenticatedSession]);
 
   // Khi chọn Tên tài liệu: 
   // - Nếu đã có dữ liệu lưu tại máy (localStorage/Firestore): LẬP TỨC đưa vào dropdown Chương
@@ -6099,6 +6231,10 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
 
   // Quy tắc tự động chọn Chương: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
   useEffect(() => {
+    if (!isAuthenticatedSession) {
+      if (chuong) setChuong('');
+      return;
+    }
     if (!title || isDanhGia(title)) {
       if (chuong) setChuong('');
       return;
@@ -6114,10 +6250,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     } else {
       if (chuong) setChuong('');
     }
-  }, [title, activeChuongList]);
+  }, [title, activeChuongList, isAuthenticatedSession]);
 
   // Quy tắc tự động chọn Bài: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
   useEffect(() => {
+    if (!isAuthenticatedSession) {
+      if (bai) setBai('');
+      return;
+    }
     if (!chuong || isDanhGia(chuong)) {
       if (bai) setBai('');
       return;
@@ -6133,10 +6273,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     } else {
       if (bai) setBai('');
     }
-  }, [chuong, activeBaiList]);
+  }, [chuong, activeBaiList, isAuthenticatedSession]);
 
   // Quy tắc tự động chọn Vấn đề: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
   useEffect(() => {
+    if (!isAuthenticatedSession) {
+      if (vanDe) setVanDe('');
+      return;
+    }
     if (!bai || isDanhGia(bai)) {
       if (vanDe) setVanDe('');
       return;
@@ -6152,10 +6296,14 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     } else {
       if (vanDe) setVanDe('');
     }
-  }, [bai, activeVanDeList]);
+  }, [bai, activeVanDeList, isAuthenticatedSession]);
 
   // Quy tắc tự động chọn Chuyên đề: Nếu dropdown chỉ có 1 tùy chọn thì tự động chọn luôn; nếu > 1 tùy chọn thì rỗng
   useEffect(() => {
+    if (!isAuthenticatedSession) {
+      if (chuyenDe) setChuyenDe('');
+      return;
+    }
     if (!vanDe || isDanhGia(vanDe)) {
       if (chuyenDe) setChuyenDe('');
       return;
@@ -6171,7 +6319,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     } else {
       if (chuyenDe) setChuyenDe('');
     }
-  }, [vanDe, activeChuyenDeList]);
+  }, [vanDe, activeChuyenDeList, isAuthenticatedSession]);
 
   const handleConfirmAddItem = async () => {
     if (!newItemText.trim() || isAddingFolder) return;
@@ -6758,6 +6906,41 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         }`}>
           <span>{notification.text}</span>
           <button onClick={() => setNotification(null)} className="text-slate-400 hover:text-slate-600">✕</button>
+        </div>
+      )}
+
+      {/* Banner / Hộp thoại Đăng nhập khi chưa đăng nhập hoặc token Drive hết hạn */}
+      {!isAuthenticatedSession && !isCheckingAuthSession && (
+        <div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 sm:p-5 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in my-2">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-md">
+              <Lock className="w-6 h-6" />
+            </div>
+            <div>
+              <h4 className="text-sm font-black text-amber-900">
+                {authSessionPrompt?.reason === 'not_logged_in'
+                  ? 'Vui lòng đăng nhập Google Drive để vào Tài liệu'
+                  : 'Phiên kết nối Google Drive đã hết hạn'}
+              </h4>
+              <p className="text-xs text-amber-700 mt-0.5">
+                {authSessionPrompt?.email
+                  ? `Tài khoản mặc định: ${authSessionPrompt.email}. Vui lòng xác thực để đồng bộ và mở bài giảng.`
+                  : 'Vui lòng đăng nhập tài khoản Google Drive để tải danh mục và biên soạn tài liệu.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => verifyAuthSessionOnEnter(true)}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-700 hover:to-indigo-700 text-white text-xs font-black shadow-md transition-all cursor-pointer flex items-center gap-2 hover:scale-102 shrink-0"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>
+              {authSessionPrompt?.email
+                ? `Đăng nhập (${authSessionPrompt.email})`
+                : 'Đăng nhập Google Drive ngay'}
+            </span>
+          </button>
         </div>
       )}
 
