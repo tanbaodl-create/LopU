@@ -321,17 +321,17 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
    + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
    + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
    + DỪNG LẠI và hỏi ý kiến tôi xem cần chỉnh sửa, thêm bớt hay điều chỉnh gì về tiến trình này không.
-- BƯỚC 2: XUẤT MÃ NGUỒN HOÀN CHỈNH:
-   + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận với tiến trình dạy học ở Bước 1, bạn mới bắt đầu tạo và XUẤT TRỰC TIẾP TOÀN BỘ MÃ NGUỒN thành 02 KHỐI MÃ RIÊNG BIỆT:
-     * Khối 1: File "index.html" (Master Player giao diện & công cụ dạy học đa lớp).
-     * Khối 2: File "{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html" (Toàn bộ nội dung bài học).
-   + Tuyệt đối không xuất dưới dạng file đính kèm để tôi chỉ cần bấm nút Copy lưu lại.
+- BƯỚC 2: XUẤT 02 FILE TẢI VỀ HOÀN CHỈNH:
+   + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận với tiến trình dạy học ở Bước 1, bạn mới bắt đầu tạo và XUẤT TRỰC TIẾP CẢ 02 FILE DƯỚI DẠNG TỆP TẢI VỀ (DOWNLOADABLE FILES) ĐỂ TÔI BẤM TẢI VỀ MÁY TÍNH:
+     * File 1: "index.html" (Master Player giao diện tinh gọn & công cụ dạy học đa lớp).
+     * File 2: "{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html" (Toàn bộ nội dung bài học).
+   + ĐỒNG THỜI xuất mã nguồn trong 02 khối code markdown riêng biệt kèm tên file rõ ràng để tôi có thể sao chép hoặc tải về linh hoạt.
 
 ---------------------------------------------------
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Dán nội dung lý thuyết, ví dụ và bài tập của bài học mới vào đây]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT tạo đồng thời 2 file chuẩn mực: File master index.html dùng chung quản lý danh sách đa lớp (10A1, 10A2...), tích hợp Canvas vẽ & Highlight chống đè mực; và File bài học {TenBaiHoc}.html tải lên App LopU chuẩn đẹp không vỡ khung.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Xuất trực tiếp 02 file tải về index.html (Master Player đa lớp, Canvas Highlight chống đè mực) và {TenBaiHoc}.html (Nội dung bài học) để tải về máy tính và đưa lên App LopU chuẩn đẹp không vỡ khung.'
       }
     ]
   },
