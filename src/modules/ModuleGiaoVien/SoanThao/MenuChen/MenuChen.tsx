@@ -251,7 +251,7 @@ export const MenuChen: React.FC<MenuChenProps> = ({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt"
+        accept=".html,.htm,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.txt"
         className="hidden"
         onChange={handleFileChange}
       />
