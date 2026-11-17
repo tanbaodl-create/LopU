@@ -241,10 +241,10 @@ QUY TẮC ĐẦU RA:
 
 ### 1. KIẾN TRÚC TẠO ĐỒNG THỜI 2 FILE (MASTER PLAYER & LESSON DECK):
 * **File 1: \`index.html\` (Master Player / Khung vỏ quy định giao diện & công cụ dạy học):**
-  - Chứa toàn bộ khung giao diện, CDN (MathJax 3, TikZJax, Canvas Confetti, Audio).
-  - Quản lý danh sách học sinh theo **nhiều lớp** (Lớp 10A1, 10A2, 11B1...): Giáo viên chọn lớp dạy từ menu thả xuống, hệ thống tự động nạp sĩ số và danh sách học sinh của lớp đó để quay ngẫu nhiên (tối đa 4/5 tức 80% sĩ số, quay 4s tuần tự async/await, nổ Confetti/Heart, âm thanh Tada).
+  - Dãy công cụ siêu tinh gọn dùng biểu tượng (icon) thanh lịch ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]): Ưu tiên tối đa 98% diện tích hiển thị nội dung bài học.
+  - Quản lý **ĐA LỚP TOÀN DIỆN**: Cho phép Thêm / Xóa / Đổi tên Lớp (Lớp 10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán nhiều dòng từ Excel, lưu LocalStorage). Khi dạy chỉ cần bấm chọn lớp là tự động nạp sĩ số để quay ngẫu nhiên (tối đa 4/5 tức 80% sĩ số, quay 4s tuần tự async/await, nổ Confetti/Heart, âm thanh Tada).
   - Tích hợp lớp Canvas vẽ & Highlight chống đè mực (\`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`, bảng màu phong phú 6 màu Pen + 5 màu Highlight + ô chọn màu tự do, 3 nấc độ dày).
-  - Tự động nạp và trình chiếu tương tác file \`{TenBaiHoc}.html\`, kèm nút chọn lớp và đổi bài học.
+  - Tự động nạp và trình chiếu tương tác file \`{TenBaiHoc}.html\`, kèm nút [📂] đổi bài học bất kỳ.
 * **File 2: \`{TenBaiHoc}.html\` (ví dụ: \`Bai8TongVaHieuCuaHaiVecto.html\` - Toàn bộ nội dung bài học):**
   - Quy tắc đặt tên: \`{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html\` (PascalCase).
   - Chứa toàn bộ nội dung bài học: Lý thuyết, Hình minh họa SVG/TikZ trực quan 2 cột, Ví dụ minh họa, Hệ thống câu hỏi trắc nghiệm TNLC/TNDS/TLN và Lời giải chi tiết.
@@ -257,28 +257,30 @@ QUY TẮC ĐẦU RA:
 \`\`\`markdown
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, hãy tạo TRỌN BỘ 02 FILE HTML RIÊNG BIỆT:
-1. File "index.html": File master quy định toàn bộ giao diện trình chiếu, bộ công cụ tương tác, và quản lý danh sách học sinh đa lớp (10A1, 10A2...).
+1. File "index.html": File master quy định toàn bộ giao diện trình chiếu, bộ công cụ tương tác, và quản lý danh sách học sinh đa lớp (Thêm/Xóa/Sửa tên lớp; Thêm/Xóa/Sửa danh sách học sinh từng lớp).
 2. File "{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html": File chứa toàn bộ nội dung bài học (Lý thuyết, hình vẽ, ví dụ, trắc nghiệm), vừa chạy trên index.html vừa tải trực tiếp lên App LopU (phần Tài liệu) mà không vỡ giao diện.
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER DẠY HỌC ĐA LỚP)
 =========================================================================
-1. CỤM CÔNG CỤ QUẢN LÝ ĐA LỚP VÀ GỌI HỌC SINH NỔI GÓC TRÊN BÊN PHẢI:
-   - Menu thả xuống chọn lớp học (Dropdown: Lớp 10A1, Lớp 10A2, Lớp 11B1...). Khi giáo viên chọn lớp nào, hệ thống tự động nạp danh sách và sĩ số lớp đó.
-   - Nút "⚙ Sửa DS Lớp": Mở popup cho phép thêm/sửa danh sách từng lớp (lưu LocalStorage).
-   - Nút quay xúc xắc 🎲, bộ chọn số lượng học sinh [-] [+] (giới hạn tối đa 4/5 tức 80% sĩ số lớp đang chọn).
-   - Chu trình quay tuần tự từng học sinh bằng async/await Promise: Mỗi em quay 4 giây (2.5s đầu chạy cực nhanh, 1.5s cuối giảm tốc), khi dừng phát âm thanh Tada, nổ pháo hoa Confetti hoặc bung nở hình trái tim đúng vị trí hàng tên.
-2. BỘ CÔNG CỤ VẼ & DẠ QUANG HIGHLIGHT CHỐNG ĐÈ MỰC (CANVAS):
+1. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
+   - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị nội dung bài học. Toàn bộ thanh điều khiển chỉ là một thanh nổi thanh mảnh ở góc trên (Pill bar), dùng biểu tượng trực quan, nền kính mờ hiện đại (backdrop-blur):
+     [🏫 10A1 ▾] [⚙️] [📂] | [🎲] [- 1 +] [✏️]
+   - Nút chọn Lớp [🏫 Tên Lớp ▾]: Dropdown bấm nhanh chuyển lớp dạy (10A1, 10A2, 11B1...). Tự động cập nhật sĩ số và nạp danh sách lớp đó ngay lập tức.
+   - Nút Cài đặt [⚙️]: Mở Modal Quản Lý Đa Lớp & Học Sinh toàn diện:
+     + Quản lý Lớp: Thêm lớp mới, Xóa lớp, Đổi tên lớp (Lưu LocalStorage).
+     + Quản lý Học sinh theo từng lớp: Với mỗi lớp đang chọn, cho phép Thêm / Xóa / Sửa danh sách học sinh (có khung Textarea dán danh sách nhiều dòng từ Excel hoặc gõ trực tiếp). Tự động cập nhật giới hạn quay 80% sĩ số ngay khi lưu.
+     + Nút "Xuất file HS" (📄): In PDF phiếu học tập gồm Tóm tắt lý thuyết và Đề bài (không kèm lời giải).
+   - Nút Mở bài học [📂]: Mở tệp {Tenbaihoc}.html bất kỳ để chuyển bài nhanh. Mặc định tự động nạp file "{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html" cùng thư mục.
+2. CỤM GỌI HỌC SINH NỔI (TOP-RIGHT QUICK CALL):
+   - Nút quay xúc xắc [🎲], bộ chọn số lượng học sinh [-] [+] (giới hạn tối đa 4/5 tức 80% sĩ số lớp đang chọn).
+   - Chu trình quay tuần tự từng học sinh bằng async/await Promise: Mỗi em quay trong đúng 4 giây (2.5s đầu chạy cực nhanh, 1.5s cuối giảm tốc), khi dừng phát âm thanh Tada, nổ pháo hoa Confetti hoặc bung nở hình trái tim đúng vị trí hàng tên.
+3. BỘ CÔNG CỤ VẼ & DẠ QUANG HIGHLIGHT CHỐNG ĐÈ MỰC (CANVAS):
    - Thẻ Canvas phủ toàn màn hình (position: fixed; inset: 0; z-index: 9000; pointer-events: none; mix-blend-mode: multiply;).
    - Kỹ thuật chống đè đậm mực Highlight: Khi vẽ bút dạ quang, thiết lập ctx.globalCompositeOperation = 'multiply' (hoặc dùng Offscreen Canvas đệm) để các điểm trùng lặp trong 1 nét vẽ KHÔNG BỊ CỘNG DỒN ALPHA, luôn trong suốt 100% thấy rõ chữ và công thức Toán bên dưới.
-   - Bảng màu:
-     + Bút viết (✏️): Đỏ, Xanh dương, Xanh lá, Đen, Vàng cam, Tím (+ ô input chọn màu tự do).
-     + Highlight (🖍️): Vàng dạ quang, Xanh lá neon, Cam pastel, Hồng neon, Xanh ngọc dạ quang (+ ô input chọn màu tự do).
-   - Điều chỉnh nét vẽ: 3 nấc nhanh (Mảnh: 2px/12px; Vừa: 5px/20px; Dày: 9px/30px). Nút Xóa nét vẽ (🗑️) và Đóng vẽ (❌).
-3. ĐIỀU KHIỂN & KẾT NỐI BÀI HỌC:
-   - Mặc định tự động nạp file "{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html" vào khung trình chiếu trung tâm.
-   - Có nút "📂 Chọn bài khác" để nạp file HTML bài học bất kỳ khi cần đổi bài giảng.
-   - Thanh điều hướng slide sát đáy: [◀ Slide trước]  [ X / Y ]  [Slide tiếp ▶], hỗ trợ phím Space / Mũi tên (← / →).
+   - Bảng màu: Bút viết (✏️: Đỏ, Xanh dương, Xanh lá, Đen, Vàng cam, Tím + ô chọn màu); Highlight (🖍️: Vàng dạ quang, Xanh lá neon, Cam pastel, Hồng neon, Xanh ngọc dạ quang + ô chọn màu). 3 nấc nét (Mảnh / Vừa / Dày). Nút Xóa nét vẽ (🗑️) và Đóng vẽ (❌).
+4. ĐIỀU HƯỚNG SLIDE GỌN NHẸ SÁT ĐÁY:
+   - Thanh điều hướng nhỏ gọn sát đáy màn hình: [◀] [ X / Y ] [▶], hỗ trợ phím Space / Mũi tên (← / →).
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 2: "{Tenbaihoc không dấu không cách viết hoa chữ cái đầu}.html" (NỘI DUNG BÀI HỌC)
