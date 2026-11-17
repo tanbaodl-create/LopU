@@ -237,16 +237,18 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung bài học** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung bài học** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
 ### 1. NGUYÊN TẮC TÙY CHỌN XUẤT FILE (THEO NHU CẦU DẠY HỌC):
 * **TÙY CHỌN 1: CÓ TẠO \`index.html\` (XUẤT ĐỦ 02 FILE RIÊNG BIỆT — DÙNG DẠY HỌC ĐỘC LẬP TRÊN WEB):**
   - **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
     + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học.
+    + **Màn hình chào mừng mở đầu:** Khi file \`index.html\` vừa mở lên, hiển thị Lời chào mừng + hiệu ứng chào mừng rực rỡ (Confetti, chuyển động fade-up). Cho phép giáo viên cài đặt 02 câu chào mừng tùy ý (lưu LocalStorage, chỉnh sửa dễ dàng trong Modal Cài đặt \`[⚙️]\`). Có nút lớn \`[▶ Bắt đầu tiết học]\` để vào bài giảng.
     + Thanh công cụ siêu tinh gọn ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]) ưu tiên 98% diện tích màn hình.
     + Quản lý **ĐA LỚP**: Thêm / Xóa / Đổi tên Lớp (10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán từ Excel, lưu LocalStorage). Chọn lớp để quay ngẫu nhiên (tối đa 80% sĩ số, quay 4s async/await, nổ Confetti/Heart, âm thanh Tada).
     + Tích hợp Canvas vẽ & Highlight chống đè mực (\`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`, 6 màu Pen + 5 màu Highlight + ô chọn màu tự do, 3 nấc độ dày).
     + **Cơ chế chọn bài học linh hoạt mỗi khi chạy:** Có nút [📂 Mở bài học] tích hợp hộp thoại chọn file HTML từ máy tính (qua \`<input type="file" accept=".html,.htm">\` và gán \`iframe.src = URL.createObjectURL(file)\`), cho phép mở bất kỳ bài dạy nào. Khởi chạy mặc định nạp file \`{TenBaiHocVietLienKhongDau}.html\` nếu ở cùng thư mục, kèm ghi nhớ bài học gần nhất vào LocalStorage.
+    + **XỬ LÝ TRIỆT ĐỂ LỖI PHÍM SPACE MỞ HỘP THOẠI CHỌN FILE:** Sau khi chọn file hoặc bấm [📂], bắt buộc gỡ tiêu điểm (\`blur()\`). Trong sự kiện \`keydown\`, khi nhấn phím Space (\`e.code === 'Space'\`), gọi \`e.preventDefault()\` và \`document.activeElement?.blur()\` nếu không ở trong ô nhập liệu. Đảm bảo phím Space CHỈ chuyển hiệu ứng/slide sang iframe, TUYỆT ĐỐI KHÔNG mở lại hộp thoại chọn tệp!
     + **LƯU Ý:** File này KHÔNG CHỨA bất kỳ nội dung bài học cụ thể nào.
   - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (THỂ HIỆN NỘI DUNG TỪNG BÀI DẠY CỤ THỂ):**
     + **Quy tắc đặt tên:** Tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase, ví dụ: Bài 8 "Tổng và hiệu của hai vectơ" $\\rightarrow$ tên file là \`TongVaHieuCuaHaiVecto.html\`; bài "Hàm số bậc hai" $\\rightarrow$ \`HamSoBacHai.html\`). Tuyệt đối KHÔNG dùng tên chung chung \`NoiDungBaiHoc.html\`.
@@ -265,7 +267,7 @@ QUY TẮC ĐẦU RA:
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn sẽ thiết kế bài giảng E-learning HTML theo TÙY CHỌN XUẤT FILE của tôi:
 - TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
-  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; mỗi khi chạy cho phép chọn file bài học cụ thể để chạy).
+  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; có màn hình chào mừng 2 câu cài đặt tùy ý, mỗi khi chạy cho phép chọn file bài học cụ thể để chạy và chặn triệt để lỗi phím Space mở hộp thoại chọn file).
   + File 2: "{TenBaiHocVietLienKhongDau}.html" (File thể hiện toàn bộ nội dung của bài học được yêu cầu, tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc tải trực tiếp lên App LopU).
 - TÙY CHỌN 2 — KHÔNG TẠO "index.html" (Khi chỉ cần nạp trực tiếp lên App LopU hoặc đã có sẵn index.html): CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG:
   + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ nội dung bài giảng để tải trực tiếp lên App LopU, hiển thị hoàn hảo ở chế độ Toàn bộ, Xem PPT không bị trắng màn hình, In đề và File HS).
@@ -273,28 +275,60 @@ Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạ
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI BÀI)
 =========================================================================
-1. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
+1. MÀN HÌNH CHÀO MỪNG MỞ ĐẦU (WELCOME SCREEN & HIỆU ỨNG RỰC RỠ):
+   - Khi vừa mở file "index.html", hiển thị ngay một màn hình chào mừng (Welcome Overlay) sang trọng với hoạt ảnh mềm mại và hiệu ứng pháo hoa Confetti/bung nở rực rỡ đón chào tiết học.
+   - Cho phép giáo viên cài đặt 02 câu chào mừng tùy chỉnh:
+     + Câu 1 (mặc định): "Chào mừng quý thầy cô và các em học sinh đến với tiết học!"
+     + Câu 2 (mặc định): "Chúc các em có một tiết học tràn đầy năng lượng, tích cực và sáng tạo!"
+     + Trong Modal Cài đặt [⚙️], bổ sung 2 ô nhập liệu để giáo viên sửa 2 câu chào mừng này (lưu vĩnh viễn vào LocalStorage: lopu_welcome_line1, lopu_welcome_line2).
+   - Nút lớn nổi bật [▶ Bắt đầu tiết học]: Nhấp vào sẽ ẩn màn hình chào mừng (hiệu ứng fade out) để chuyển vào khung bài giảng.
+2. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
    - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị nội dung bài học. Toàn bộ thanh điều khiển chỉ là một thanh nổi thanh mảnh ở góc trên (Pill bar), dùng biểu tượng trực quan, nền kính mờ hiện đại (backdrop-blur):
      [🏫 10A1 ▾] [⚙️] [📂] | [🎲] [- 1 +] [✏️]
    - Nút chọn Lớp [🏫 Tên Lớp ▾]: Dropdown bấm nhanh chuyển lớp dạy (10A1, 10A2, 11B1...). Tự động cập nhật sĩ số và nạp danh sách lớp đó ngay lập tức.
-   - Nút Cài đặt [⚙️]: Mở Modal Quản Lý Đa Lớp & Học Sinh toàn diện:
+   - Nút Cài đặt [⚙️]: Mở Modal Quản Lý Đa Lớp & Học Sinh & Lời Chào Mừng toàn diện:
      + Quản lý Lớp: Thêm lớp mới, Xóa lớp, Đổi tên lớp (Lưu LocalStorage).
      + Quản lý Học sinh theo từng lớp: Với mỗi lớp đang chọn, cho phép Thêm / Xóa / Sửa danh sách học sinh (có khung Textarea dán danh sách nhiều dòng từ Excel hoặc gõ trực tiếp). Tự động cập nhật giới hạn quay 80% sĩ số ngay khi lưu.
+     + Cài đặt 2 câu chào mừng: 2 ô input để sửa Lời chào dòng 1 & dòng 2.
      + Nút "Xuất file HS" (📄): In PDF phiếu học tập gồm Tóm tắt lý thuyết và Đề bài (không kèm lời giải).
    - Nút Mở bài học [📂]: Kèm thẻ input ẩn (<input type="file" id="lessonFileInput" accept=".html,.htm" style="display:none;" />). Khi bấm [📂], kích hoạt chọn tệp HTML từ máy tính; sau khi chọn file sẽ tự động nạp vào iframe qua URL.createObjectURL(file) và lưu tên file gần nhất vào LocalStorage.
-2. KHUNG NHÚNG BÀI HỌC VÀ CƠ CHẾ CHỌN BÀI MỖI KHI CHẠY:
+   - BẮT BUỘC GỠ FOCUS: Ngay khi bấm [📂] hoặc sau khi chọn xong file trong sự kiện change, BẮT BUỘC gọi ngay:
+     btnOpenFile.blur(); lessonFileInput.blur(); if (document.activeElement) document.activeElement.blur();
+3. KHUNG NHÚNG BÀI HỌC VÀ CƠ CHẾ CHỌN BÀI MỖI KHI CHẠY:
    - Thẻ iframe chiếm trọn màn hình:
      <iframe id="lessonFrame" src="{TenBaiHocVietLienKhongDau}.html" style="width:100%; height:100vh; border:none; display:block;"></iframe>
    - Cơ chế chọn bài: Mỗi khi chạy, nếu đã có bài học lưu trong LocalStorage hoặc có file cùng thư mục thì nạp trực tiếp; nếu file chưa tìm thấy hoặc người dùng muốn đổi bài chỉ cần nhấp nút [📂] để chọn file bài học cụ thể dạng "{TenBaiHoc}.html" từ máy tính để chạy ngay lập tức mà không cần tải lại trang.
-3. CỤM GỌI HỌC SINH NỔI (TOP-RIGHT QUICK CALL):
+4. CỤM GỌI HỌC SINH NỔI (TOP-RIGHT QUICK CALL):
    - Nút quay xúc xắc [🎲], bộ chọn số lượng học sinh [-] [+] (giới hạn tối đa 4/5 tức 80% sĩ số lớp đang chọn).
    - Chu trình quay tuần tự từng học sinh bằng async/await Promise: Mỗi em quay trong đúng 4 giây (2.5s đầu chạy cực nhanh, 1.5s cuối giảm tốc), khi dừng phát âm thanh Tada, nổ pháo hoa Confetti hoặc bung nở hình trái tim đúng vị trí hàng tên.
-4. BỘ CÔNG CỤ VẼ & DẠ QUANG HIGHLIGHT CHỐNG ĐÈ MỰC (CANVAS):
+5. BỘ CÔNG CỤ VẼ & DẠ QUANG HIGHLIGHT CHỐNG ĐÈ MỰC (CANVAS):
    - Thẻ Canvas phủ toàn màn hình (position: fixed; inset: 0; z-index: 9000; pointer-events: none; mix-blend-mode: multiply;).
    - Kỹ thuật chống đè đậm mực Highlight: Khi vẽ bút dạ quang, thiết lập ctx.globalCompositeOperation = 'multiply' (hoặc dùng Offscreen Canvas đệm) để các điểm trùng lặp trong 1 nét vẽ KHÔNG BỊ CỘNG DỒN ALPHA, luôn trong suốt 100% thấy rõ chữ và công thức Toán bên dưới.
    - Bảng màu: Bút viết (✏️: Đỏ, Xanh dương, Xanh lá, Đen, Vàng cam, Tím + ô chọn màu); Highlight (🖍️: Vàng dạ quang, Xanh lá neon, Cam pastel, Hồng neon, Xanh ngọc dạ quang + ô chọn màu). 3 nấc nét (Mảnh / Vừa / Dày). Nút Xóa nét vẽ (🗑️) và Đóng vẽ (❌).
-5. ĐIỀU HƯỚNG SLIDE:
-   - Hỗ trợ phím Space / Mũi tên (← / →) để gửi tín hiệu chuyển slide sang iframe nội dung.
+6. ĐIỀU HƯỚNG SLIDE & XỬ LÝ TRIỆT ĐỂ LỖI PHÍM SPACE MỞ HỘP THOẠI CHỌN FILE (SPACEBAR FOCUS GUARD):
+   - Lắng nghe sự kiện keydown toàn cục trên window:
+     \`\`\`javascript
+     window.addEventListener('keydown', function(e) {
+       const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+       if (isInput) return;
+       if (e.code === 'Space' || e.key === ' ') {
+         e.preventDefault(); // CHẶN TRIỆT ĐỂ hành vi mặc định của trình duyệt tự kích hoạt click vào button đang focus!
+         if (document.activeElement instanceof HTMLElement) {
+           document.activeElement.blur(); // Hủy focus khỏi nút [📂] hoặc bất kỳ nút nào
+         }
+         // Gửi tín hiệu chuyển bước hiệu ứng / slide sang iframe nội dung bài học:
+         const iframe = document.getElementById('lessonFrame');
+         iframe?.contentWindow?.postMessage({ type: 'NEXT_STEP_OR_SLIDE' }, '*');
+       } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+         const iframe = document.getElementById('lessonFrame');
+         iframe?.contentWindow?.postMessage({ type: 'NEXT_SLIDE' }, '*');
+       } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+         const iframe = document.getElementById('lessonFrame');
+         iframe?.contentWindow?.postMessage({ type: 'PREV_SLIDE' }, '*');
+       }
+     });
+     \`\`\`
+   - Tuyệt đối không để phím Space kích hoạt mở hộp thoại chọn file.
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE NỘI DUNG: "{TenBaiHocVietLienKhongDau}.html"
@@ -312,6 +346,7 @@ YÊU CẦU CHI TIẾT FILE NỘI DUNG: "{TenBaiHocVietLienKhongDau}.html"
    - Cấu trúc lưu trữ nội dung kép (Semantic Deck & JavaScript Data):
      + Đặt toàn bộ các slide dưới dạng thẻ Semantic HTML: <section class="slide-deck-item" data-slide-index="0" data-slide-type="cover|theory|example|quiz" data-title="..."> chứa toàn bộ nội dung, hình vẽ, công thức. Nhờ đó, App LopU có thể đọc hiểu trực tiếp để hiển thị ở chế độ "Xem PPT" (không bị trắng màn hình) và "In đề / File HS".
      + Đồng thời nạp vào biến mảng window.LESSON_SLIDES = [...] để trình chiếu slide mượt mà.
+     + Hỗ trợ bộ nhận tín hiệu postMessage từ index.html: Khi nhận { type: 'NEXT_STEP_OR_SLIDE' } thì kích hoạt hiệu ứng tiếp theo hoặc chuyển slide; nhận { type: 'NEXT_SLIDE' } hoặc { type: 'PREV_SLIDE' } thì chuyển slide tương ứng.
 2. NỘI DUNG VÀ CẤU TRÚC SƯ PHẠM (TUYỆT ĐỐI TUÂN THỦ):
    - Giữ nguyên 100% nội dung gốc: Chỉ lấy đúng nội dung trong văn bản được cung cấp, không tự ý thêm bớt ngoài tài liệu.
    - Trật tự: Sau mỗi đơn vị kiến thức/định lí/công thức sẽ là các Ví dụ áp dụng trực tiếp cho phần kiến thức đó.
@@ -339,7 +374,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
    + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
    + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
    + Xác định tên file nội dung bài học theo tên bài học viết liền không dấu (Ví dụ: "TongVaHieuCuaHaiVecto.html").
-   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, chọn file bài học) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file nội dung '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
+   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, chọn file bài học, màn hình chào mừng 2 câu) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file nội dung '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
    + DỪNG LẠI và chờ tôi phản hồi duyệt tiến trình cũng như xác nhận tùy chọn xuất file.
 - BƯỚC 2: XUẤT FILE HOÀN CHỈNH THEO TÙY CHỌN ĐÃ DUYỆT:
    + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận ở Bước 1, bạn mới bắt đầu tạo và xuất file:
@@ -351,7 +386,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: File nội dung đặt tên theo tên bài học viết liền không dấu ({TenBaiHoc}.html), file index.html Master Player cho phép chọn file bài học cụ thể để chạy; linh hoạt tùy chọn xuất đủ 2 file hoặc chỉ 1 file nội dung để nạp lên App LopU.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Màn hình chào mừng 2 câu cài đặt tùy ý kèm hiệu ứng, xử lý triệt để lỗi phím Space mở hộp thoại chọn file, file nội dung đặt theo tên bài học ({TenBaiHoc}.html) và Master Player index.html linh hoạt.'
       }
     ]
   },
