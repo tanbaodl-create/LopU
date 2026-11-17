@@ -335,7 +335,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 
 ---------------------------------------------------
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
-[Dán nội dung lý thuyết, ví dụ và bài tập của bài học mới vào đây]
+[Nội dung lấy từ file đính kèm]
 \`\`\``,
         description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT bắt buộc xuất đủ 2 file riêng biệt: index.html (Master Player đa lớp dùng chung) và NoiDungBaiHoc.html (Nội dung từng bài nạp lên App LopU).'
       }
