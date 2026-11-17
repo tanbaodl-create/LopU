@@ -58,6 +58,10 @@ export function prepareHtmlForWordViewer(html: string): string {
         padding: 24px 20px 20px 20px !important;
       }
     }
+    /* Khi xem trên App LopU: Tự động ẩn thanh công cụ riêng của file HTML cũ để tránh đè hình vẽ hoặc trùng lặp menu */
+    #topRightCluster, #drawToolbar, .draw-toolbar, #activeStrokeCanvas, #drawCanvas {
+      display: none !important;
+    }
   </style>
   `;
 

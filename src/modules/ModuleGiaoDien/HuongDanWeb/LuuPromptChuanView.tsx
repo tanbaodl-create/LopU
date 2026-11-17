@@ -237,33 +237,40 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, kiến trúc bắt buộc xuất đủ 2 file riêng biệt \`index.html\` (Master Player cố định) & \`NoiDungBaiHoc.html\` (Nội dung từng bài) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`NoiDungBaiHoc.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung** (\`NoiDungBaiHoc.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
-### 1. NGUYÊN TẮC BẮT BUỘC TÁCH BIỆT 02 FILE (TUYỆT ĐỐI KHÔNG GỘP CHUNG):
-* **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
-  - Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học.
-  - Thanh công cụ siêu tinh gọn ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]) ưu tiên 98% diện tích màn hình.
-  - Quản lý **ĐA LỚP**: Thêm / Xóa / Đổi tên Lớp (10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán từ Excel, lưu LocalStorage). Chọn lớp để quay ngẫu nhiên (tối đa 80% sĩ số, quay 4s async/await, nổ Confetti/Heart, âm thanh Tada).
-  - Tích hợp Canvas vẽ & Highlight chống đè mực (\`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`, 6 màu Pen + 5 màu Highlight + ô chọn màu tự do, 3 nấc độ dày).
-  - Tự động nhúng nội dung bài học qua \`<iframe id="lessonFrame" src="NoiDungBaiHoc.html"></iframe>\`, kèm nút [📂] đổi bài học.
-  - **LƯU Ý:** File này KHÔNG CHỨA bất kỳ nội dung bài học cụ thể nào.
-* **File 2: \`NoiDungBaiHoc.html\` (THỂ HIỆN NỘI DUNG TỪNG BÀI DẠY CỤ THỂ):**
-  - Chứa toàn bộ nội dung bài học: Lý thuyết, Hình minh họa SVG/TikZ trực quan 2 cột, Ví dụ minh họa, Hệ thống câu hỏi trắc nghiệm TNLC/TNDS/TLN và Lời giải chi tiết.
-  - Thiết kế Responsive co giãn 100% không tràn viền, không chứa thanh công cụ master bar.
-  - **Đưa lên App LopU vào phần Tài liệu:** Hiển thị trọn vẹn, chuẩn đẹp như Word, xem được toàn bộ các slide trong chế độ "Xem PPT" (không bị trắng màn hình) và hỗ trợ chế độ "In đề / File HS".
+### 1. NGUYÊN TẮC TÙY CHỌN XUẤT FILE (THEO NHU CẦU DẠY HỌC):
+* **TÙY CHỌN 1: CÓ TẠO \`index.html\` (XUẤT ĐỦ 02 FILE RIÊNG BIỆT — DÙNG DẠY HỌC ĐỘC LẬP TRÊN WEB):**
+  - **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
+    + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học.
+    + Thanh công cụ siêu tinh gọn ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]) ưu tiên 98% diện tích màn hình.
+    + Quản lý **ĐA LỚP**: Thêm / Xóa / Đổi tên Lớp (10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán từ Excel, lưu LocalStorage). Chọn lớp để quay ngẫu nhiên (tối đa 80% sĩ số, quay 4s async/await, nổ Confetti/Heart, âm thanh Tada).
+    + Tích hợp Canvas vẽ & Highlight chống đè mực (\`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`, 6 màu Pen + 5 màu Highlight + ô chọn màu tự do, 3 nấc độ dày).
+    + Tự động nhúng nội dung bài học qua \`<iframe id="lessonFrame" src="NoiDungBaiHoc.html"></iframe>\`, kèm nút [📂] đổi bài học.
+    + **LƯU Ý:** File này KHÔNG CHỨA bất kỳ nội dung bài học cụ thể nào.
+  - **File 2: \`NoiDungBaiHoc.html\` (THỂ HIỆN NỘI DUNG TỪNG BÀI DẠY CỤ THỂ):**
+    + Chứa toàn bộ nội dung bài học: Lý thuyết, Hình minh họa SVG/TikZ trực quan 2 cột, Ví dụ minh họa, Hệ thống câu hỏi trắc nghiệm TNLC/TNDS/TLN và Lời giải chi tiết.
+    + Thiết kế Responsive co giãn 100% không tràn viền, không chứa thanh công cụ master bar.
+    + **Đưa lên App LopU vào phần Tài liệu:** Hiển thị trọn vẹn, chuẩn đẹp như Word, xem được toàn bộ các slide trong chế độ "Xem PPT" (không bị trắng màn hình) và hỗ trợ chế độ "In đề / File HS".
+* **TÙY CHỌN 2: KHÔNG TẠO \`index.html\` (CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG \`NoiDungBaiHoc.html\`):**
+  - Áp dụng khi bạn đã có sẵn file \`index.html\` dùng chung từ trước, hoặc **chỉ có nhu cầu nạp tài liệu trực tiếp vào App LopU**.
+  - Gemini chỉ tạo và xuất duy nhất file **\`NoiDungBaiHoc.html\`** chứa đầy đủ nội dung bài giảng, lý thuyết, hình vẽ và hệ thống câu hỏi trắc nghiệm. Không xuất file \`index.html\` thừa thãi, giúp tiết kiệm tối đa thời gian và dung lượng.
 
 ---
 
-### 2. BẢN PROMPT YÊU CẦU GEMINI XUẤT ĐỦ 2 FILE:
+### 2. BẢN PROMPT TÍCH HỢP TÙY CHỌN TẠO FILE CHO GEMINI:
 
 \`\`\`markdown
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
-Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn BẮT BUỘC PHẢI TẠO VÀ XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
-- File 1: "index.html" (File master quy định giao diện & công cụ dạy học dùng chung cho mọi bài học — mọi bài đều xuất giống hệt nhau).
-- File 2: "NoiDungBaiHoc.html" (File thể hiện toàn bộ nội dung của bài học được yêu cầu, dùng để nhúng vào index.html hoặc tải trực tiếp lên App LopU).
+Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn sẽ thiết kế bài giảng E-learning HTML theo TÙY CHỌN XUẤT FILE của tôi:
+- TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
+  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học).
+  + File 2: "NoiDungBaiHoc.html" (File thể hiện toàn bộ nội dung của bài học được yêu cầu, dùng để nhúng vào index.html hoặc tải trực tiếp lên App LopU).
+- TÙY CHỌN 2 — KHÔNG TẠO "index.html" (Khi chỉ cần nạp trực tiếp lên App LopU hoặc đã có sẵn index.html): CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG:
+  + File duy nhất: "NoiDungBaiHoc.html" (Chứa toàn bộ nội dung bài giảng để tải trực tiếp lên App LopU, hiển thị hoàn hảo ở chế độ Toàn bộ, Xem PPT không bị trắng màn hình, In đề và File HS).
 
 =========================================================================
-YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI BÀI)
+YÊU CẦU CHI TIẾT FILE 1: "index.html" (ÁP DỤNG KHI CHỌN TÙY CHỌN 1)
 =========================================================================
 1. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
    - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị nội dung bài học. Toàn bộ thanh điều khiển chỉ là một thanh nổi thanh mảnh ở góc trên (Pill bar), dùng biểu tượng trực quan, nền kính mờ hiện đại (backdrop-blur):
@@ -288,11 +295,11 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI 
    - Hỗ trợ phím Space / Mũi tên (← / →) để gửi tín hiệu chuyển slide sang iframe nội dung.
 
 =========================================================================
-YÊU CẦU CHI TIẾT FILE 2: "NoiDungBaiHoc.html" (NỘI DUNG BÀI HỌC TỪNG BÀI)
+YÊU CẦU CHI TIẾT FILE: "NoiDungBaiHoc.html" (BẮT BUỘC TRONG MỌI TÙY CHỌN)
 =========================================================================
 1. ĐỊNH DẠNG TƯƠNG THÍCH KÉP (VỪA CHẠY INDEX.HTML, VỪA NẠP LÊN APP LOPU):
    - Tên file bắt buộc: "NoiDungBaiHoc.html".
-   - Tuyệt đối KHÔNG chứa thanh điều khiển chọn lớp, nút xúc xắc hay bộ quản lý học sinh (vì phần này do index.html đảm nhiệm).
+   - Tuyệt đối KHÔNG chứa thanh điều khiển chọn lớp, nút xúc xắc hay bộ quản lý học sinh (vì phần này do index.html hoặc App LopU đảm nhiệm).
    - Thiết kế Responsive Co Giãn Linh Hoạt (Fluid & Embedded Guard):
      + Tuyệt đối KHÔNG gán cứng kích thước px cố định lớn (như width: 1020px; min-width: 820px).
      + Khung bài giảng co giãn tự động: max-width: 1040px; width: 100%; min-height: 580px; margin: 0 auto; box-sizing: border-box;.
@@ -314,7 +321,7 @@ YÊU CẦU CHI TIẾT FILE 2: "NoiDungBaiHoc.html" (NỘI DUNG BÀI HỌC TỪNG
    - Bộ đếm ngược thời gian (45s, 60s, 90s). Hết giờ đổi màu "HẾT GIỜ!" và gửi tín hiệu kích hoạt quay học sinh của lớp đang chọn.
    - Nút "Kiểm tra đáp án": Đúng (viền xanh, Confetti, âm thanh Success), Sai (viền đỏ, rung lắc, âm thanh Error) và tự động mở Lời giải chi tiết bên dưới.
 
-CDN BẮT BUỘC DÙNG CHO CẢ 2 FILE:
+CDN BẮT BUỘC DÙNG CHO CÁC FILE:
 - Success Audio: https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3
 - Error Audio: https://assets.mixkit.co/active_storage/sfx/2997/2997-preview.mp3
 - Tada Audio: https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3
@@ -326,18 +333,19 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 - BƯỚC 1: TIẾP NHẬN, ĐỀ XUẤT VÀ CHỜ DUYỆT (TUYỆT ĐỐI CHƯA ĐƯỢC XUẤT CODE Ở BƯỚC NÀY):
    + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
    + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
-   + DỪNG LẠI và hỏi ý kiến tôi xem cần chỉnh sửa, thêm bớt hay điều chỉnh gì về tiến trình này không.
-- BƯỚC 2: XUẤT ĐỦ 02 FILE TẢI VỀ HOÀN CHỈNH (CẤM GỘP 1 FILE):
-   + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận với tiến trình dạy học ở Bước 1, bạn mới bắt đầu tạo và XUẤT CẢ 02 FILE DƯỚI DẠNG TỆP TẢI VỀ (HOẶC 02 KHỐI MÃ MARKDOWN RIÊNG BIỆT):
-     * File 1: "index.html" (Master Player giao diện tinh gọn, quản lý học sinh đa lớp, dùng chung cho mọi bài).
-     * File 2: "NoiDungBaiHoc.html" (Nội dung bài học cụ thể, tải lên App LopU chuẩn đẹp).
-   + Tuyệt đối không gộp 2 file thành 1 file duy nhất.
+   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file 'NoiDungBaiHoc.html' để nạp vào App LopU?"
+   + DỪNG LẠI và chờ tôi phản hồi duyệt tiến trình cũng như xác nhận tùy chọn xuất file.
+- BƯỚC 2: XUẤT FILE HOÀN CHỈNH THEO TÙY CHỌN ĐÃ DUYỆT:
+   + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận ở Bước 1, bạn mới bắt đầu tạo và xuất file:
+     * Nếu tôi chọn CÓ tạo index.html: Xuất đủ 02 file riêng biệt ("index.html" và "NoiDungBaiHoc.html").
+     * Nếu tôi chọn KHÔNG tạo index.html: Chỉ xuất DUY NHẤT 01 file ("NoiDungBaiHoc.html").
+   + Tuyệt đối không gộp 2 file thành 1 file duy nhất nếu chọn Tùy chọn 1.
 
 ---------------------------------------------------
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT bắt buộc xuất đủ 2 file riêng biệt: index.html (Master Player đa lớp dùng chung) và NoiDungBaiHoc.html (Nội dung từng bài nạp lên App LopU).'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Linh hoạt tùy chọn xuất đủ 2 file (index.html Master Player + NoiDungBaiHoc.html) hoặc chỉ 1 file NoiDungBaiHoc.html để nạp trực tiếp lên App LopU.'
       }
     ]
   },
