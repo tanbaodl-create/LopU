@@ -237,24 +237,25 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`NoiDungBaiHoc.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung** (\`NoiDungBaiHoc.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung bài học** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
 ### 1. NGUYÊN TẮC TÙY CHỌN XUẤT FILE (THEO NHU CẦU DẠY HỌC):
 * **TÙY CHỌN 1: CÓ TẠO \`index.html\` (XUẤT ĐỦ 02 FILE RIÊNG BIỆT — DÙNG DẠY HỌC ĐỘC LẬP TRÊN WEB):**
   - **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
-    + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học.
+    + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học.
     + Thanh công cụ siêu tinh gọn ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]) ưu tiên 98% diện tích màn hình.
     + Quản lý **ĐA LỚP**: Thêm / Xóa / Đổi tên Lớp (10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán từ Excel, lưu LocalStorage). Chọn lớp để quay ngẫu nhiên (tối đa 80% sĩ số, quay 4s async/await, nổ Confetti/Heart, âm thanh Tada).
     + Tích hợp Canvas vẽ & Highlight chống đè mực (\`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`, 6 màu Pen + 5 màu Highlight + ô chọn màu tự do, 3 nấc độ dày).
-    + Tự động nhúng nội dung bài học qua \`<iframe id="lessonFrame" src="NoiDungBaiHoc.html"></iframe>\`, kèm nút [📂] đổi bài học.
+    + **Cơ chế chọn bài học linh hoạt mỗi khi chạy:** Có nút [📂 Mở bài học] tích hợp hộp thoại chọn file HTML từ máy tính (qua \`<input type="file" accept=".html,.htm">\` và gán \`iframe.src = URL.createObjectURL(file)\`), cho phép mở bất kỳ bài dạy nào. Khởi chạy mặc định nạp file \`{TenBaiHocVietLienKhongDau}.html\` nếu ở cùng thư mục, kèm ghi nhớ bài học gần nhất vào LocalStorage.
     + **LƯU Ý:** File này KHÔNG CHỨA bất kỳ nội dung bài học cụ thể nào.
-  - **File 2: \`NoiDungBaiHoc.html\` (THỂ HIỆN NỘI DUNG TỪNG BÀI DẠY CỤ THỂ):**
+  - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (THỂ HIỆN NỘI DUNG TỪNG BÀI DẠY CỤ THỂ):**
+    + **Quy tắc đặt tên:** Tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase, ví dụ: Bài 8 "Tổng và hiệu của hai vectơ" $\\rightarrow$ tên file là \`TongVaHieuCuaHaiVecto.html\`; bài "Hàm số bậc hai" $\\rightarrow$ \`HamSoBacHai.html\`). Tuyệt đối KHÔNG dùng tên chung chung \`NoiDungBaiHoc.html\`.
     + Chứa toàn bộ nội dung bài học: Lý thuyết, Hình minh họa SVG/TikZ trực quan 2 cột, Ví dụ minh họa, Hệ thống câu hỏi trắc nghiệm TNLC/TNDS/TLN và Lời giải chi tiết.
     + Thiết kế Responsive co giãn 100% không tràn viền, không chứa thanh công cụ master bar.
     + **Đưa lên App LopU vào phần Tài liệu:** Hiển thị trọn vẹn, chuẩn đẹp như Word, xem được toàn bộ các slide trong chế độ "Xem PPT" (không bị trắng màn hình) và hỗ trợ chế độ "In đề / File HS".
-* **TÙY CHỌN 2: KHÔNG TẠO \`index.html\` (CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG \`NoiDungBaiHoc.html\`):**
+* **TÙY CHỌN 2: KHÔNG TẠO \`index.html\` (CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG \`{TenBaiHocVietLienKhongDau}.html\`):**
   - Áp dụng khi bạn đã có sẵn file \`index.html\` dùng chung từ trước, hoặc **chỉ có nhu cầu nạp tài liệu trực tiếp vào App LopU**.
-  - Gemini chỉ tạo và xuất duy nhất file **\`NoiDungBaiHoc.html\`** chứa đầy đủ nội dung bài giảng, lý thuyết, hình vẽ và hệ thống câu hỏi trắc nghiệm. Không xuất file \`index.html\` thừa thãi, giúp tiết kiệm tối đa thời gian và dung lượng.
+  - Gemini chỉ tạo và xuất duy nhất 01 file **\`{TenBaiHocVietLienKhongDau}.html\`** chứa đầy đủ nội dung bài giảng, lý thuyết, hình vẽ và hệ thống câu hỏi trắc nghiệm. Không xuất file \`index.html\` thừa thãi, giúp tiết kiệm tối đa thời gian và dung lượng.
 
 ---
 
@@ -264,13 +265,13 @@ QUY TẮC ĐẦU RA:
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn sẽ thiết kế bài giảng E-learning HTML theo TÙY CHỌN XUẤT FILE của tôi:
 - TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
-  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học).
-  + File 2: "NoiDungBaiHoc.html" (File thể hiện toàn bộ nội dung của bài học được yêu cầu, dùng để nhúng vào index.html hoặc tải trực tiếp lên App LopU).
+  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; mỗi khi chạy cho phép chọn file bài học cụ thể để chạy).
+  + File 2: "{TenBaiHocVietLienKhongDau}.html" (File thể hiện toàn bộ nội dung của bài học được yêu cầu, tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc tải trực tiếp lên App LopU).
 - TÙY CHỌN 2 — KHÔNG TẠO "index.html" (Khi chỉ cần nạp trực tiếp lên App LopU hoặc đã có sẵn index.html): CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG:
-  + File duy nhất: "NoiDungBaiHoc.html" (Chứa toàn bộ nội dung bài giảng để tải trực tiếp lên App LopU, hiển thị hoàn hảo ở chế độ Toàn bộ, Xem PPT không bị trắng màn hình, In đề và File HS).
+  + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ nội dung bài giảng để tải trực tiếp lên App LopU, hiển thị hoàn hảo ở chế độ Toàn bộ, Xem PPT không bị trắng màn hình, In đề và File HS).
 
 =========================================================================
-YÊU CẦU CHI TIẾT FILE 1: "index.html" (ÁP DỤNG KHI CHỌN TÙY CHỌN 1)
+YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI BÀI)
 =========================================================================
 1. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
    - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị nội dung bài học. Toàn bộ thanh điều khiển chỉ là một thanh nổi thanh mảnh ở góc trên (Pill bar), dùng biểu tượng trực quan, nền kính mờ hiện đại (backdrop-blur):
@@ -280,10 +281,11 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (ÁP DỤNG KHI CHỌN TÙY CHỌN 1)
      + Quản lý Lớp: Thêm lớp mới, Xóa lớp, Đổi tên lớp (Lưu LocalStorage).
      + Quản lý Học sinh theo từng lớp: Với mỗi lớp đang chọn, cho phép Thêm / Xóa / Sửa danh sách học sinh (có khung Textarea dán danh sách nhiều dòng từ Excel hoặc gõ trực tiếp). Tự động cập nhật giới hạn quay 80% sĩ số ngay khi lưu.
      + Nút "Xuất file HS" (📄): In PDF phiếu học tập gồm Tóm tắt lý thuyết và Đề bài (không kèm lời giải).
-   - Nút Mở bài học [📂]: Mở tệp HTML bất kỳ để chuyển bài nhanh.
-2. KHUNG NHÚNG BÀI HỌC TỰ ĐỘNG:
-   - Mặc định nhúng trực tiếp file "NoiDungBaiHoc.html" qua thẻ:
-     <iframe id="lessonFrame" src="NoiDungBaiHoc.html" style="width:100%; height:100vh; border:none; display:block;"></iframe>
+   - Nút Mở bài học [📂]: Kèm thẻ input ẩn (<input type="file" id="lessonFileInput" accept=".html,.htm" style="display:none;" />). Khi bấm [📂], kích hoạt chọn tệp HTML từ máy tính; sau khi chọn file sẽ tự động nạp vào iframe qua URL.createObjectURL(file) và lưu tên file gần nhất vào LocalStorage.
+2. KHUNG NHÚNG BÀI HỌC VÀ CƠ CHẾ CHỌN BÀI MỖI KHI CHẠY:
+   - Thẻ iframe chiếm trọn màn hình:
+     <iframe id="lessonFrame" src="{TenBaiHocVietLienKhongDau}.html" style="width:100%; height:100vh; border:none; display:block;"></iframe>
+   - Cơ chế chọn bài: Mỗi khi chạy, nếu đã có bài học lưu trong LocalStorage hoặc có file cùng thư mục thì nạp trực tiếp; nếu file chưa tìm thấy hoặc người dùng muốn đổi bài chỉ cần nhấp nút [📂] để chọn file bài học cụ thể dạng "{TenBaiHoc}.html" từ máy tính để chạy ngay lập tức mà không cần tải lại trang.
 3. CỤM GỌI HỌC SINH NỔI (TOP-RIGHT QUICK CALL):
    - Nút quay xúc xắc [🎲], bộ chọn số lượng học sinh [-] [+] (giới hạn tối đa 4/5 tức 80% sĩ số lớp đang chọn).
    - Chu trình quay tuần tự từng học sinh bằng async/await Promise: Mỗi em quay trong đúng 4 giây (2.5s đầu chạy cực nhanh, 1.5s cuối giảm tốc), khi dừng phát âm thanh Tada, nổ pháo hoa Confetti hoặc bung nở hình trái tim đúng vị trí hàng tên.
@@ -295,10 +297,13 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (ÁP DỤNG KHI CHỌN TÙY CHỌN 1)
    - Hỗ trợ phím Space / Mũi tên (← / →) để gửi tín hiệu chuyển slide sang iframe nội dung.
 
 =========================================================================
-YÊU CẦU CHI TIẾT FILE: "NoiDungBaiHoc.html" (BẮT BUỘC TRONG MỌI TÙY CHỌN)
+YÊU CẦU CHI TIẾT FILE NỘI DUNG: "{TenBaiHocVietLienKhongDau}.html"
 =========================================================================
 1. ĐỊNH DẠNG TƯƠNG THÍCH KÉP (VỪA CHẠY INDEX.HTML, VỪA NẠP LÊN APP LOPU):
-   - Tên file bắt buộc: "NoiDungBaiHoc.html".
+   - QUY TẮC ĐẶT TÊN FILE: BẮT BUỘC đặt tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase), ví dụ:
+     + Bài 8 "Tổng và hiệu của hai vectơ" -> "TongVaHieuCuaHaiVecto.html"
+     + Bài "Hàm số bậc hai và đồ thị" -> "HamSoBacHaiVaDoThi.html"
+     + TUYỆT ĐỐI KHÔNG đặt tên là "NoiDungBaiHoc.html".
    - Tuyệt đối KHÔNG chứa thanh điều khiển chọn lớp, nút xúc xắc hay bộ quản lý học sinh (vì phần này do index.html hoặc App LopU đảm nhiệm).
    - Thiết kế Responsive Co Giãn Linh Hoạt (Fluid & Embedded Guard):
      + Tuyệt đối KHÔNG gán cứng kích thước px cố định lớn (như width: 1020px; min-width: 820px).
@@ -333,19 +338,20 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 - BƯỚC 1: TIẾP NHẬN, ĐỀ XUẤT VÀ CHỜ DUYỆT (TUYỆT ĐỐI CHƯA ĐƯỢC XUẤT CODE Ở BƯỚC NÀY):
    + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
    + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
-   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file 'NoiDungBaiHoc.html' để nạp vào App LopU?"
+   + Xác định tên file nội dung bài học theo tên bài học viết liền không dấu (Ví dụ: "TongVaHieuCuaHaiVecto.html").
+   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, chọn file bài học) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file nội dung '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
    + DỪNG LẠI và chờ tôi phản hồi duyệt tiến trình cũng như xác nhận tùy chọn xuất file.
 - BƯỚC 2: XUẤT FILE HOÀN CHỈNH THEO TÙY CHỌN ĐÃ DUYỆT:
    + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận ở Bước 1, bạn mới bắt đầu tạo và xuất file:
-     * Nếu tôi chọn CÓ tạo index.html: Xuất đủ 02 file riêng biệt ("index.html" và "NoiDungBaiHoc.html").
-     * Nếu tôi chọn KHÔNG tạo index.html: Chỉ xuất DUY NHẤT 01 file ("NoiDungBaiHoc.html").
+     * Nếu tôi chọn CÓ tạo index.html: Xuất đủ 02 file riêng biệt ("index.html" và "{TenBaiHocVietLienKhongDau}.html").
+     * Nếu tôi chọn KHÔNG tạo index.html: Chỉ xuất DUY NHẤT 01 file nội dung ("{TenBaiHocVietLienKhongDau}.html").
    + Tuyệt đối không gộp 2 file thành 1 file duy nhất nếu chọn Tùy chọn 1.
 
 ---------------------------------------------------
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Linh hoạt tùy chọn xuất đủ 2 file (index.html Master Player + NoiDungBaiHoc.html) hoặc chỉ 1 file NoiDungBaiHoc.html để nạp trực tiếp lên App LopU.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: File nội dung đặt tên theo tên bài học viết liền không dấu ({TenBaiHoc}.html), file index.html Master Player cho phép chọn file bài học cụ thể để chạy; linh hoạt tùy chọn xuất đủ 2 file hoặc chỉ 1 file nội dung để nạp lên App LopU.'
       }
     ]
   },
