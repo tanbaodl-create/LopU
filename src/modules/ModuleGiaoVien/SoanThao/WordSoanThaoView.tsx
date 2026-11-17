@@ -88,6 +88,7 @@ import { WordStyleMenu } from './WordStyleMenu';
 import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
 import { isFullHtmlDocument, prepareHtmlForWordViewer } from './htmlDocUtils';
+import { renderLatexInHtml } from './latexUtils';
 import { DongBoDriveButton } from './DongBoDrive';
 import {
   savePptExtraToDrive,
@@ -254,20 +255,36 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const htmlContainerRef = useRef<HTMLDivElement>(null);
   const htmlIframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Helper đặt nội dung văn bản và tự động nhận diện chế độ HTML hoàn chỉnh
+  // Helper làm sạch tài liệu HTML thành nội dung Word thuần túy (giữ nguyên giao diện chuẩn như trang Lý thuyết trọng tâm)
+  const sanitizeHtmlToWordContent = (html: string): string => {
+    if (!html || typeof html !== 'string') return '<p><br></p>';
+    let clean = html;
+    const bodyMatch = clean.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+    if (bodyMatch) clean = bodyMatch[1];
+    clean = clean
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+      .replace(/<audio\b[^<]*(?:(?!<\/audio>)<[^<]*)*<\/audio>/gi, '')
+      .replace(/<canvas\b[^<]*(?:(?!<\/canvas>)<[^<]*)*<\/canvas>/gi, '')
+      .replace(/<meta\b[^>]*>/gi, '')
+      .replace(/<link\b[^>]*>/gi, '')
+      .replace(/<div[^>]*class="[^"]*(?:viewport-wrapper|slide-stage|slide-card)[^"]*"[^>]*>/gi, '')
+      .replace(/<div[^>]*id="slideCard"[^>]*>/gi, '')
+      .replace(/<div[^>]*id="topRightCluster"[^>]*>[\s\S]*?<\/div>\s*<\/div>/gi, '')
+      .replace(/<div[^>]*class="nav-pill"[^>]*>[\s\S]*?<\/div>/gi, '');
+    return renderLatexInHtml(clean.trim() || '<p><br></p>');
+  };
+
+  // Helper đặt nội dung văn bản luôn ưu tiên chế độ soạn thảo Word với thanh mốc PPT bên trái (như trang Lý thuyết trọng tâm)
   const setDocumentContentAndMode = (content: string) => {
-    setWordDocumentHtml(content);
-    if (isFullHtmlDocument(content)) {
-      setHtmlDocContent(content);
-      setIsHtmlDocMode(true);
-      setIframeKey((prev) => prev + 1);
-    } else {
-      setIsHtmlDocMode(false);
-      setHtmlDocContent('');
-      if (editorRef.current) {
-        editorRef.current.innerHTML = content;
-      }
+    const cleanContent = isFullHtmlDocument(content) ? sanitizeHtmlToWordContent(content) : (content || '<p><br></p>');
+    setWordDocumentHtml(cleanContent);
+    setIsHtmlDocMode(false);
+    setHtmlDocContent('');
+    if (editorRef.current) {
+      editorRef.current.innerHTML = cleanContent;
     }
+    setTimeout(() => refreshRailMarkers(), 50);
   };
 
   const handleConfirmItemAction = async () => {
@@ -976,32 +993,44 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const insertHtmlToEditor = (html: string) => {
     isInsertingHtmlRef.current = true;
 
-    // 0. Nếu nội dung chèn là một tệp tài liệu HTML hoàn chỉnh (<!DOCTYPE html>, <html>, E-learning presentation)
-    if (isFullHtmlDocument(html)) {
-      setHtmlDocContent(html);
-      setWordDocumentHtml(html);
-      setIsHtmlDocMode(true);
-      setIframeKey((prev) => prev + 1);
+    // 0. Nếu nội dung chèn là một tệp tài liệu HTML: làm sạch để đưa trực tiếp vào khung soạn thảo Word chuẩn (giữ nguyên giao diện như trang Lý thuyết trọng tâm)
+    let processedHtml = html;
+    if (isFullHtmlDocument(processedHtml)) {
+      processedHtml = sanitizeHtmlToWordContent(processedHtml);
+      setIsHtmlDocMode(false);
+      setHtmlDocContent('');
+
+      if (editorRef.current) {
+        const cur = editorRef.current.innerHTML.trim();
+        if (!cur || cur === '<p><br></p>' || cur === '<p></p>') {
+          editorRef.current.innerHTML = processedHtml;
+        } else {
+          editorRef.current.innerHTML += `<div style="margin-top: 16px;">${processedHtml}</div>`;
+        }
+        setWordDocumentHtml(editorRef.current.innerHTML);
+        setTimeout(() => refreshRailMarkers(), 50);
+      }
 
       // Đồng thời cập nhật cache ngay lập tức
       try {
         const rawCd = chuyenDe.trim();
         const cleanCd = rawCd.replace(/^(?:Chuyên\s*đề|Chuyen\s*de)\s*:?\s*/i, '').trim();
+        const toSave = editorRef.current?.innerHTML || processedHtml;
         if (selectedKienThucName) {
-          localStorage.setItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${rawCd}`, html);
-          localStorage.setItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${cleanCd}`, html);
+          localStorage.setItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${rawCd}`, toSave);
+          localStorage.setItem(`lopu_kienthuc_file_KienThuc_${selectedKienThucName}.html_${cleanCd}`, toSave);
         }
-        localStorage.setItem(`lopu_kienthuc_${rawCd}`, html);
-        localStorage.setItem(`lopu_kienthuc_${cleanCd}`, html);
+        localStorage.setItem(`lopu_kienthuc_${rawCd}`, toSave);
+        localStorage.setItem(`lopu_kienthuc_${cleanCd}`, toSave);
       } catch (cacheErr) {
         console.warn('Lỗi lưu cache HTML:', cacheErr);
       }
 
       setNotification({
-        text: 'Đã mở bài giảng HTML thành công trong cửa sổ Word! Trình duyệt tích hợp đang hiển thị trọn vẹn tài liệu.',
+        text: 'Đã nạp nội dung bài học vào khung soạn thảo Word chuẩn thành công (kèm thanh mốc PPT bên trái)!',
         type: 'success',
       });
-      setTimeout(() => setNotification(null), 4000);
+      setTimeout(() => setNotification(null), 3500);
       isInsertingHtmlRef.current = false;
       return;
     }
@@ -4726,12 +4755,18 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
     }
   }, [title, subject, grade, chuong, bai, vanDe, chuyenDe, tienTrinhChuyenDe, selectedKienThucName, selectedExerciseName, documents, currentRole]);
 
-  // Luôn đồng bộ wordDocumentHtml vào editorRef khi editorRef được gắn vào DOM
+  // Luôn đồng bộ wordDocumentHtml vào editorRef khi editorRef được gắn vào DOM (đảm bảo luôn giữ giao diện Word chuẩn như trang Lý thuyết trọng tâm)
   useEffect(() => {
     if (wordDocumentHtml) {
       if (isFullHtmlDocument(wordDocumentHtml)) {
-        setIsHtmlDocMode(true);
-        setHtmlDocContent(wordDocumentHtml);
+        const clean = sanitizeHtmlToWordContent(wordDocumentHtml);
+        setWordDocumentHtml(clean);
+        setIsHtmlDocMode(false);
+        setHtmlDocContent('');
+        if (editorRef.current) {
+          editorRef.current.innerHTML = clean;
+          setTimeout(() => refreshRailMarkers(), 50);
+        }
       } else {
         setIsHtmlDocMode(false);
         if (editorRef.current && editorRef.current.innerHTML !== wordDocumentHtml) {
@@ -8924,19 +8959,32 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                           <button
                             type="button"
                             onClick={() => {
-                              if (window.confirm('Bạn có chắc muốn chuyển sang chế độ soạn thảo Word thông thường?')) {
-                                setIsHtmlDocMode(false);
-                                if (editorRef.current) {
-                                  editorRef.current.innerHTML = '<p><br></p>';
-                                }
-                                setWordDocumentHtml('<p><br></p>');
+                              setIsHtmlDocMode(false);
+                              let cleanContent = htmlDocContent || '';
+                              const bodyMatch = cleanContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+                              if (bodyMatch) cleanContent = bodyMatch[1];
+                              cleanContent = cleanContent
+                                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+                                .replace(/<audio\b[^<]*(?:(?!<\/audio>)<[^<]*)*<\/audio>/gi, '')
+                                .replace(/<canvas\b[^<]*(?:(?!<\/canvas>)<[^<]*)*<\/canvas>/gi, '');
+                              const finalHtml = cleanContent.trim() || '<p><br></p>';
+                              setWordDocumentHtml(finalHtml);
+                              if (editorRef.current) {
+                                editorRef.current.innerHTML = finalHtml;
                               }
+                              setTimeout(() => refreshRailMarkers(), 100);
+                              setNotification({
+                                text: 'Đã chuyển sang khung soạn thảo Word chuẩn (kèm thanh mốc PPT bên trái)!',
+                                type: 'success',
+                              });
+                              setTimeout(() => setNotification(null), 3000);
                             }}
-                            className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-rose-200"
-                            title="Chuyển về khung soạn thảo Word chuẩn"
+                            className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition-colors flex items-center gap-1 cursor-pointer border border-indigo-200"
+                            title="Chuyển về khung soạn thảo Word chuẩn (kèm thanh mốc PPT bên trái như trang Lý thuyết trọng tâm)"
                           >
                             <FileText className="w-3.5 h-3.5" />
-                            <span>Soạn thảo Word</span>
+                            <span>Soạn thảo Word (Chuẩn)</span>
                           </button>
                         )}
                       </div>

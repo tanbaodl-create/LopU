@@ -56,10 +56,30 @@ const extractFileContentToHtml = async (file: File): Promise<string> => {
         return `<p><em>(Nội dung tệp "${fileName}" rỗng)</em></p>`;
       }
 
-      // Nếu tệp là định dạng HTML hoàn chỉnh hoặc có đuôi .html / .htm
-      if (ext === 'html' || ext === 'htm' || isFullHtmlDocument(text)) {
-        // Trả về nguyên vẹn mã nguồn HTML, tuyệt đối không qua KaTeX để tránh làm hỏng script và style
-        return text;
+      // 2. Tệp HTML (.html, .htm): Trích xuất phần thân nội dung bài học đưa trực tiếp vào cửa sổ Word (như trang Lý thuyết trọng tâm)
+      if (ext === 'html' || ext === 'htm') {
+        let content = text;
+        const bodyMatch = content.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        if (bodyMatch) {
+          content = bodyMatch[1];
+        }
+        // Loại bỏ các thẻ script, style, audio, canvas thừa của web
+        content = content
+          .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+          .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+          .replace(/<audio\b[^<]*(?:(?!<\/audio>)<[^<]*)*<\/audio>/gi, '')
+          .replace(/<canvas\b[^<]*(?:(?!<\/canvas>)<[^<]*)*<\/canvas>/gi, '')
+          .replace(/<meta\b[^>]*>/gi, '')
+          .replace(/<link\b[^>]*>/gi, '');
+
+        // Bỏ qua các container slide cũ nếu có (để giữ nguyên giao diện Word chuẩn như trang Lý thuyết trọng tâm)
+        content = content
+          .replace(/<div[^>]*class="[^"]*(?:viewport-wrapper|slide-stage|slide-card)[^"]*"[^>]*>/gi, '')
+          .replace(/<div[^>]*id="slideCard"[^>]*>/gi, '')
+          .replace(/<div[^>]*id="topRightCluster"[^>]*>[\s\S]*?<\/div>\s*<\/div>/gi, '')
+          .replace(/<div[^>]*class="nav-pill"[^>]*>[\s\S]*?<\/div>/gi, '');
+
+        rawHtml = content.trim() || text;
       } else if (/<[a-z][\s\S]*>/i.test(text)) {
         rawHtml = text;
       } else {
@@ -193,11 +213,8 @@ export const MenuChen: React.FC<MenuChenProps> = ({
       const extractedHtml = await extractFileContentToHtml(file);
       insertHtmlToEditor(extractedHtml);
 
-      const isHtml = isFullHtmlDocument(extractedHtml);
       setNotification?.({
-        text: isHtml
-          ? `Đã nạp bài giảng HTML "${file.name}" thành công! Cửa sổ Word đang hiển thị trọn vẹn theo chuẩn trình duyệt.`
-          : `Đã trích xuất và đưa nội dung tệp "${file.name}" vào cửa sổ Word thành công!`,
+        text: `Đã đưa nội dung bài học "${file.name}" vào cửa sổ Word thành công!`,
         type: 'success',
       });
       setTimeout(() => setNotification?.(null), 3500);

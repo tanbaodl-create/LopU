@@ -237,12 +237,12 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung bài học** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn bắt buộc file nội dung bài học \`{TenBaiHocVietLienKhongDau}.html\` là Semantic HTML thuần túy dành cho cửa sổ Word của App LopU (đảm bảo giao diện App LopU giữ nguyên 100% như trang 'Lý thuyết trọng tâm' kèm thanh mốc PPT bên trái), cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file nội dung bài học** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
 ### 1. NGUYÊN TẮC TÙY CHỌN XUẤT FILE (THEO NHU CẦU DẠY HỌC):
 * **TÙY CHỌN 1: CÓ TẠO \`index.html\` (XUẤT ĐỦ 02 FILE RIÊNG BIỆT — DÙNG DẠY HỌC ĐỘC LẬP TRÊN WEB):**
   - **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
-    + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học.
+    + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học khi trình chiếu ngoài trình duyệt độc lập.
     + **Màn hình chào mừng mở đầu:** Khi file \`index.html\` vừa mở lên, hiển thị Lời chào mừng + hiệu ứng chào mừng rực rỡ (Confetti, chuyển động fade-up). Cho phép giáo viên cài đặt 02 câu chào mừng tùy ý (lưu LocalStorage, chỉnh sửa dễ dàng trong Modal Cài đặt \`[⚙️]\`). Có nút lớn \`[▶ Bắt đầu tiết học]\` để vào bài giảng.
     + Thanh công cụ siêu tinh gọn ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]) ưu tiên 98% diện tích màn hình.
     + Quản lý **ĐA LỚP**: Thêm / Xóa / Đổi tên Lớp (10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán từ Excel, lưu LocalStorage). Chọn lớp để quay ngẫu nhiên (tối đa 80% sĩ số, quay 4s async/await, nổ Confetti/Heart, âm thanh Tada).
@@ -250,14 +250,14 @@ QUY TẮC ĐẦU RA:
     + **Cơ chế chọn bài học linh hoạt mỗi khi chạy:** Có nút [📂 Mở bài học] tích hợp hộp thoại chọn file HTML từ máy tính (qua \`<input type="file" accept=".html,.htm">\` và gán \`iframe.src = URL.createObjectURL(file)\`), cho phép mở bất kỳ bài dạy nào. Khởi chạy mặc định nạp file \`{TenBaiHocVietLienKhongDau}.html\` nếu ở cùng thư mục, kèm ghi nhớ bài học gần nhất vào LocalStorage.
     + **XỬ LÝ TRIỆT ĐỂ LỖI PHÍM SPACE MỞ HỘP THOẠI CHỌN FILE:** Sau khi chọn file hoặc bấm [📂], bắt buộc gỡ tiêu điểm (\`blur()\`). Trong sự kiện \`keydown\`, khi nhấn phím Space (\`e.code === 'Space'\`), gọi \`e.preventDefault()\` và \`document.activeElement?.blur()\` nếu không ở trong ô nhập liệu. Đảm bảo phím Space CHỈ chuyển hiệu ứng/slide sang iframe, TUYỆT ĐỐI KHÔNG mở lại hộp thoại chọn tệp!
     + **LƯU Ý:** File này KHÔNG CHỨA bất kỳ nội dung bài học cụ thể nào.
-  - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (THỂ HIỆN NỘI DUNG TỪNG BÀI DẠY CỤ THỂ):**
+  - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (CHỈ CHỨA NỘI DUNG BÀI HỌC — NẠP VÀO APP LOPU GIỮ NGUYÊN GIAO DIỆN NHƯ TRANG 'LÝ THUYẾT TRỌNG TÂM'):**
     + **Quy tắc đặt tên:** Tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase, ví dụ: Bài 8 "Tổng và hiệu của hai vectơ" $\\rightarrow$ tên file là \`TongVaHieuCuaHaiVecto.html\`; bài "Hàm số bậc hai" $\\rightarrow$ \`HamSoBacHai.html\`). Tuyệt đối KHÔNG dùng tên chung chung \`NoiDungBaiHoc.html\`.
-    + Chứa toàn bộ nội dung bài học: Lý thuyết, Hình minh họa SVG/TikZ trực quan 2 cột, Ví dụ minh họa, Hệ thống câu hỏi trắc nghiệm TNLC/TNDS/TLN và Lời giải chi tiết.
-    + Thiết kế Responsive co giãn 100% không tràn viền, không chứa thanh công cụ master bar.
-    + **Đưa lên App LopU vào phần Tài liệu:** Hiển thị trọn vẹn, chuẩn đẹp như Word, xem được toàn bộ các slide trong chế độ "Xem PPT" (không bị trắng màn hình) và hỗ trợ chế độ "In đề / File HS".
+    + **BẢN CHẤT LÀ SEMANTIC WORD HTML THUẦN TÚY (NỘI DUNG BÀI HỌC):** TUYỆT ĐỐI KHÔNG chứa thẻ \`<!DOCTYPE html>\`, \`<html>\`, \`<head>\`, \`<body>\`, \`<script>\`, \`<style>\`, \`<audio>\`, \`<canvas>\`, và KHÔNG chứa các khung trình chiếu slide như \`viewport-wrapper\`, \`slide-card\`, \`Slide 1 / 11\`.
+    + Chứa toàn bộ nội dung bài học có cấu trúc chuẩn Word: Tiêu đề \`<h1>\`, các mục kiến thức \`<h2>\`, \`<h3>\`, Bố cục 2 cột trực quan (1 bên chữ/công thức, 1 bên hình vẽ inline SVG vector sắc nét), Ví dụ minh họa áp dụng ngay sau lý thuyết (\`<div class="vi-du">\`), Hệ thống câu hỏi trắc nghiệm 3 dạng TNLC/TNDS/TLN (\`<div class="cau-hoi">\`) và Lời giải chi tiết (\`<div class="loi-giai">\`).
+    + **Nạp lên App LopU:** Giao diện của App LopU GIỮ NGUYÊN 100% NHƯ TRANG 'LÝ THUYẾT TRỌNG TÂM': Cửa sổ Word soạn thảo trực tiếp ở giữa, thanh mốc PPT màu tím (\`PptMarkerRail\`) chạy dọc lề trái, thanh công cụ Word đầy đủ ở trên cùng; chuyển sang "Xem PPT", "In đề", "File HS" bằng chính tính năng sẵn có của LopU!
 * **TÙY CHỌN 2: KHÔNG TẠO \`index.html\` (CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG \`{TenBaiHocVietLienKhongDau}.html\`):**
   - Áp dụng khi bạn đã có sẵn file \`index.html\` dùng chung từ trước, hoặc **chỉ có nhu cầu nạp tài liệu trực tiếp vào App LopU**.
-  - Gemini chỉ tạo và xuất duy nhất 01 file **\`{TenBaiHocVietLienKhongDau}.html\`** chứa đầy đủ nội dung bài giảng, lý thuyết, hình vẽ và hệ thống câu hỏi trắc nghiệm. Không xuất file \`index.html\` thừa thãi, giúp tiết kiệm tối đa thời gian và dung lượng.
+  - Gemini chỉ tạo và xuất duy nhất 01 file **\`{TenBaiHocVietLienKhongDau}.html\`** chứa đầy đủ nội dung bài giảng dưới dạng Semantic Word HTML. Không xuất file \`index.html\` thừa thãi, giúp tiết kiệm tối đa thời gian và dung lượng.
 
 ---
 
@@ -266,11 +266,11 @@ QUY TẮC ĐẦU RA:
 \`\`\`markdown
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn sẽ thiết kế bài giảng E-learning HTML theo TÙY CHỌN XUẤT FILE của tôi:
-- TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
+- TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập trên Web): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
   + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; có màn hình chào mừng 2 câu cài đặt tùy ý, mỗi khi chạy cho phép chọn file bài học cụ thể để chạy và chặn triệt để lỗi phím Space mở hộp thoại chọn file).
-  + File 2: "{TenBaiHocVietLienKhongDau}.html" (File thể hiện toàn bộ nội dung của bài học được yêu cầu, tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc tải trực tiếp lên App LopU).
+  + File 2: "{TenBaiHocVietLienKhongDau}.html" (File CHỈ CHỨA NỘI DUNG BÀI HỌC dưới dạng Semantic HTML dùng cho cửa sổ Word của App LopU, tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc nạp trực tiếp lên App LopU).
 - TÙY CHỌN 2 — KHÔNG TẠO "index.html" (Khi chỉ cần nạp trực tiếp lên App LopU hoặc đã có sẵn index.html): CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG:
-  + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ nội dung bài giảng để tải trực tiếp lên App LopU, hiển thị hoàn hảo ở chế độ Toàn bộ, Xem PPT không bị trắng màn hình, In đề và File HS).
+  + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ nội dung bài giảng dạng Semantic Word HTML để tải trực tiếp lên App LopU, giữ nguyên giao diện cửa sổ Word và thanh mốc PPT bên trái như trang "Lý thuyết trọng tâm", xem PPT, In đề và File HS hoàn hảo).
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI BÀI)
@@ -316,7 +316,7 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI 
          if (document.activeElement instanceof HTMLElement) {
            document.activeElement.blur(); // Hủy focus khỏi nút [📂] hoặc bất kỳ nút nào
          }
-         // Gửi tín hiệu chuyển bước hiệu ứng / slide sang iframe nội dung bài học:
+         // Gửi tín hiệu chuyển bước hiệu ứng / cuộn sang iframe nội dung bài học:
          const iframe = document.getElementById('lessonFrame');
          iframe?.contentWindow?.postMessage({ type: 'NEXT_STEP_OR_SLIDE' }, '*');
        } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
@@ -332,47 +332,120 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI 
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE NỘI DUNG: "{TenBaiHocVietLienKhongDau}.html"
+(CHỈ CHỨA NỘI DUNG BÀI HỌC — GIAO DIỆN APP LOPU GIỮ NGUYÊN NHƯ TRANG LÝ THUYẾT TRỌNG TÂM)
 =========================================================================
-1. ĐỊNH DẠNG TƯƠNG THÍCH KÉP (VỪA CHẠY INDEX.HTML, VỪA NẠP LÊN APP LOPU):
+1. BẢN CHẤT CỦA FILE: ĐÂY LÀ FILE NỘI DUNG BÀI HỌC (SEMANTIC WORD HTML DÀNH CHO CỬA SỔ WORD SOẠN THẢO CỦA APP LOPU):
    - QUY TẮC ĐẶT TÊN FILE: BẮT BUỘC đặt tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase), ví dụ:
      + Bài 8 "Tổng và hiệu của hai vectơ" -> "TongVaHieuCuaHaiVecto.html"
      + Bài "Hàm số bậc hai và đồ thị" -> "HamSoBacHaiVaDoThi.html"
      + TUYỆT ĐỐI KHÔNG đặt tên là "NoiDungBaiHoc.html".
-   - Tuyệt đối KHÔNG chứa thanh điều khiển chọn lớp, nút xúc xắc hay bộ quản lý học sinh (vì phần này do index.html hoặc App LopU đảm nhiệm).
-   - Thiết kế Responsive Co Giãn Linh Hoạt (Fluid & Embedded Guard):
-     + Tuyệt đối KHÔNG gán cứng kích thước px cố định lớn (như width: 1020px; min-width: 820px).
-     + Khung bài giảng co giãn tự động: max-width: 1040px; width: 100%; min-height: 580px; margin: 0 auto; box-sizing: border-box;.
-     + Cơ chế tự nhận diện nhúng: const isEmbedded = (window.self !== window.top); nếu đang chạy trong App/Iframe thì tự động tối ưu khoảng cách lề (padding: 12px 10px 60px 10px;), chống tràn mép và chống sinh thanh cuộn thừa.
-   - Cấu trúc lưu trữ nội dung kép (Semantic Deck & JavaScript Data):
-     + Đặt toàn bộ các slide dưới dạng thẻ Semantic HTML: <section class="slide-deck-item" data-slide-index="0" data-slide-type="cover|theory|example|quiz" data-title="..."> chứa toàn bộ nội dung, hình vẽ, công thức. Nhờ đó, App LopU có thể đọc hiểu trực tiếp để hiển thị ở chế độ "Xem PPT" (không bị trắng màn hình) và "In đề / File HS".
-     + Đồng thời nạp vào biến mảng window.LESSON_SLIDES = [...] để trình chiếu slide mượt mà.
-     + Hỗ trợ bộ nhận tín hiệu postMessage từ index.html: Khi nhận { type: 'NEXT_STEP_OR_SLIDE' } thì kích hoạt hiệu ứng tiếp theo hoặc chuyển slide; nhận { type: 'NEXT_SLIDE' } hoặc { type: 'PREV_SLIDE' } thì chuyển slide tương ứng.
-2. NỘI DUNG VÀ CẤU TRÚC SƯ PHẠM (TUYỆT ĐỐI TUÂN THỦ):
-   - Giữ nguyên 100% nội dung gốc: Chỉ lấy đúng nội dung trong văn bản được cung cấp, không tự ý thêm bớt ngoài tài liệu.
-   - Trật tự: Sau mỗi đơn vị kiến thức/định lí/công thức sẽ là các Ví dụ áp dụng trực tiếp cho phần kiến thức đó.
-   - Trực quan hóa hình vẽ: Mọi định nghĩa, định lý, tính chất hình học BẮT BUỘC dựng hình minh họa (chia bố cục 2 cột: 1 bên chữ/công thức, 1 bên hình vẽ). Dùng inline SVG vector sắc nét hoặc TikZJax.
-   - Slide 1 (Bìa): Ghi đầy đủ thông tin: "Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia". Chân trang các slide hiển thị duy nhất dòng tác quyền: "Được tạo bởi Đỗ Tấn Bảo".
+   - TUYỆT ĐỐI KHÔNG PHẢI LÀ MỘT TRANG WEB TRÌNH CHIẾU / SLIDE CARD RIÊNG BIỆT:
+     + TUYỆT ĐỐI CẤM chứa các thẻ cấu trúc toàn trang web: <!DOCTYPE html>, <html>, <head>, <body>, <meta>, <title>.
+     + TUYỆT ĐỐI CẤM chứa mã script JavaScript (<script>, biến window.LESSON_SLIDES, postMessage), thẻ âm thanh <audio>, thẻ vẽ <canvas>, hay các thư viện ngoài.
+     + TUYỆT ĐỐI CẤM các khung bao giao diện trình chiếu slide: class="viewport-wrapper", class="slide-card", id="slideCard", text "Slide 1 / 11", nút lùi/tiến slide, v.v.
+     + File này CHỈ LÀ ĐOẠN MÃ NỘI DUNG THUẦN (Semantic HTML Snippet) để nạp thẳng vào khung soạn thảo Word của App LopU.
+   - KHI NẠP VÀO APP LOPU:
+     + Giao diện của App LopU PHẢI GIỮ NGUYÊN 100% NHƯ TRANG "Lý thuyết trọng tâm" (như hình đính kèm):
+       * Cửa sổ soạn thảo Word tiêu chuẩn nằm ở trung tâm (trang giấy trắng, font chữ chuẩn, dòng chữ chỉnh sửa trực tiếp).
+       * Thanh mốc PPT màu tím (PptMarkerRail với biểu tượng cuộn phim 🎬 và các nút dấu +) chạy dọc ở lề bên trái.
+       * Thanh công cụ Word đầy đủ trên đầu (B, I, U, kích cỡ chữ, căn lề, + Chèn, Hàm số, View: Toàn bộ...).
+       * Giáo viên có thể click chuột vào soạn thảo, sửa từng từ, chỉnh công thức Toán hoặc hình vẽ trực tiếp.
+       * Khi giáo viên chọn "View: Xem PPT" trên thanh công cụ của LopU, chính bộ máy LopU tự động chuyển các tiêu đề h1, h2, ví dụ, câu hỏi thành slide trình chiếu mượt mà (không lo bị trắng màn hình).
+       * Khi giáo viên chọn "View: In đề" hoặc "View: File HS", App LopU tự động dàn trang in phiếu học tập hoàn chỉnh.
+   - KHI CHẠY TRONG "index.html" (Master Player độc lập ngoài trình duyệt):
+     + File "index.html" tự nhúng và định dạng file nội dung này qua iframe, cung cấp thanh điều khiển Master bar, quản lý lớp, quay xúc xắc, canvas highlight chống đè mực.
+
+2. CẤU TRÚC NỘI DUNG SƯ PHẠM CHUẨN WORD (SEMANTIC HTML DỄ ĐỌC, DỄ SOẠN):
+   Toàn bộ nội dung bài học được cấu trúc bên trong một thẻ div:
+   <div class="bai-hoc-word" style="max-width: 920px; margin: 0 auto; line-height: 1.6; font-size: 14pt; color: #1e293b;">
+     <!-- TIÊU ĐỀ BÀI HỌC: h1 -->
+     <h1 style="text-align: center; color: #1d4ed8; font-size: 20pt; margin-bottom: 4px;">BÀI 8: TỔNG VÀ HIỆU CỦA HAI VECTƠ</h1>
+     <p style="text-align: center; font-style: italic; color: #64748b; margin-top: 0;">Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia</p>
+     <hr style="border: none; border-top: 1px solid #cbd5e1; margin: 16px 0 20px 0;" />
+
+     <!-- MỤC KIẾN THỨC LÝ THUYẾT: h2, h3 -->
+     <h2 style="color: #0f766e; font-size: 16pt; margin-top: 24px;">1. Tổng của hai vectơ</h2>
+     <h3 style="color: #1e3a8a; font-size: 14pt;">a) Định nghĩa và quy tắc ba điểm</h3>
+     
+     <!-- BỐ CỤC 2 CỘT CHO MỤC CÓ HÌNH MINH HỌA: 1 BÊN CÔNG THỨC / ĐỊNH NGHĨA, 1 BÊN HÌNH VẼ SVG TRỰC QUAN -->
+     <div style="display: flex; gap: 20px; align-items: flex-start; margin: 12px 0;">
+       <div style="flex: 1;">
+         <p>Cho hai vectơ $\\vec{a}$ và $\\vec{b}$. Lấy một điểm $A$ tùy ý, vẽ $\\vec{AB} = \\vec{a}$ và $\\vec{BC} = \\vec{b}$. Vectơ $\\vec{AC}$ được gọi là <b>tổng của hai vectơ</b> $\\vec{a}$ và $\\vec{b}$.</p>
+         <div style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 10px 14px; margin: 10px 0; border-radius: 4px;">
+           <b>Quy tắc ba điểm (Quy tắc tam giác):</b> Với ba điểm bất kì $A, B, C$, ta luôn có: $$\\vec{AB} + \\vec{BC} = \\vec{AC}$$
+         </div>
+       </div>
+       <div style="width: 280px; flex-shrink: 0; text-align: center;">
+         <!-- Inline SVG vẽ vector sắc nét, rõ mũi tên, tên đỉnh A, B, C -->
+         <svg viewBox="0 0 260 160" width="100%" height="auto" style="border: 1px solid #e2e8f0; border-radius: 8px; background: #fafafa;">
+           <defs>
+             <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+               <path d="M 0 1 L 10 5 L 0 9 z" fill="#2563eb" />
+             </marker>
+           </defs>
+           <line x1="30" y1="120" x2="130" y2="40" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrow)" />
+           <line x1="130" y1="40" x2="230" y2="120" stroke="#2563eb" stroke-width="2.5" marker-end="url(#arrow)" />
+           <line x1="30" y1="120" x2="230" y2="120" stroke="#dc2626" stroke-width="2.5" stroke-dasharray="4" marker-end="url(#arrow)" />
+           <text x="20" y="130" font-weight="bold" fill="#1e293b">A</text>
+           <text x="130" y="30" font-weight="bold" fill="#1e293b">B</text>
+           <text x="235" y="130" font-weight="bold" fill="#1e293b">C</text>
+         </svg>
+         <div style="font-size: 10pt; color: #64748b; margin-top: 4px;">Hình 1: Quy tắc ba điểm</div>
+       </div>
+     </div>
+
+     <!-- VÍ DỤ MINH HỌA ÁP DỤNG NGAY SAU PHẦN LÝ THUYẾT TƯƠNG ỨNG -->
+     <div class="vi-du" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin: 16px 0;">
+       <p style="margin: 0 0 8px 0; color: #b45309; font-weight: bold; font-size: 13pt;">Ví dụ 1 (Áp dụng quy tắc ba điểm):</p>
+       <p style="margin: 0 0 8px 0;">Cho hình bình hành $ABCD$. Chứng minh rằng $\\vec{AB} + \\vec{AD} = \\vec{AC}$.</p>
+       <div class="loi-giai" style="background: #ffffff; border-left: 3px solid #f59e0b; padding: 10px 14px; margin-top: 8px; border-radius: 4px;">
+         <p style="margin: 0; font-weight: 600; color: #475569;">Lời giải chi tiết:</p>
+         <p style="margin: 4px 0 0 0;">Vì $ABCD$ là hình bình hành nên $\\vec{AD} = \\vec{BC}$. Áp dụng quy tắc ba điểm, ta có: $\\vec{AB} + \\vec{AD} = \\vec{AB} + \\vec{BC} = \\vec{AC}$ (đpcm).</p>
+       </div>
+     </div>
+
+     <!-- HỆ THỐNG CÂU HỎI TRẮC NGHIỆM ĐỦ 3 DẠNG: TNLC, TNDS, TLN KÈM LỜI GIẢI CHI TIẾT -->
+     <h2 style="color: #0f766e; font-size: 16pt; margin-top: 32px;">2. Hệ thống câu hỏi luyện tập</h2>
+     
+     <!-- Trắc nghiệm nhiều lựa chọn (TNLC) -->
+     <div class="cau-hoi" style="margin: 14px 0; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+       <p><b>TNLC 1.</b> Cho ba điểm phân biệt $M, N, P$. Vectơ $\\vec{MN} + \\vec{NP}$ bằng vectơ nào sau đây?</p>
+       <p>A. $\\vec{MP}$ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; B. $\\vec{PM}$ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; C. $\\vec{PN}$ &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; D. $\\vec{NM}$</p>
+       <div class="loi-giai" style="background: #f0fdf4; border-left: 3px solid #22c55e; padding: 8px 12px; margin-top: 6px; border-radius: 4px;">
+         <b>Đáp án: A.</b> <em>Lời giải:</em> Áp dụng quy tắc ba điểm ta có $\\vec{MN} + \\vec{NP} = \\vec{MP}$.
+       </div>
+     </div>
+
+     <!-- Trắc nghiệm Đúng/Sai (TNDS) -->
+     <div class="cau-hoi" style="margin: 14px 0; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+       <p><b>TNDS 1.</b> Cho hình bình hành $ABCD$ tâm $O$. Xét tính đúng/sai của các mệnh đề sau:</p>
+       <p>a) $\\vec{AB} + \\vec{BC} = \\vec{AC}$</p>
+       <p>b) $\\vec{AB} + \\vec{AD} = \\vec{BD}$</p>
+       <p>c) $\\vec{OA} + \\vec{OC} = \\vec{0}$</p>
+       <p>d) $\\vec{AB} + \\vec{CD} = \\vec{0}$</p>
+       <div class="loi-giai" style="background: #f0fdf4; border-left: 3px solid #22c55e; padding: 8px 12px; margin-top: 6px; border-radius: 4px;">
+         <b>Đáp án:</b> a) Đúng; b) Sai; c) Đúng; d) Đúng.
+       </div>
+     </div>
+
+     <!-- Trả lời ngắn (TLN) -->
+     <div class="cau-hoi" style="margin: 14px 0; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff;">
+       <p><b>TLN 1.</b> Cho tam giác đều $ABC$ cạnh bằng $a = 6$. Tính độ dài của vectơ $\\vec{AB} + \\vec{AC}$.</p>
+       <div class="loi-giai" style="background: #f0fdf4; border-left: 3px solid #22c55e; padding: 8px 12px; margin-top: 6px; border-radius: 4px;">
+         <b>Đáp án: $6\\sqrt{3} \\approx 10.39$.</b> <em>Lời giải:</em> Gọi $H$ là trung điểm $BC$, ta có $|\\vec{AB} + \\vec{AC}| = 2|\\vec{AH}| = 2 \\cdot \\frac{6\\sqrt{3}}{2} = 6\\sqrt{3}$.
+       </div>
+     </div>
+   </div>
+
 3. QUY TẮC TOÁN HỌC TRÁNH LỖI "Math input error":
    - Đồng nhất sử dụng dấu $công thức$ cho nội dòng và $$công thức$$ cho riêng dòng. Tuyệt đối KHÔNG dùng \\( \\).
    - Tránh bẫy ký tự \\t: Tuyệt đối KHÔNG viết \\text{ cm}, \\text{ m/s}, \\text{ N}. Mọi đơn vị và chữ tiếng Việt PHẢI đưa ra ngoài dấu $.
-   - Escape 2 tầng cho JavaScript: Mọi mã LaTeX trong template string đều phải escape tối thiểu 2 đến 4 dấu gạch chéo ngược (\\\\\\\\vec, \\\\\\\\sqrt, \\\\\\\\frac, \\\\\\\\Delta...).
-4. HỆ THỐNG CÂU HỎI TRẮC NGHIỆM (QUIZ) & ĐẾM GIỜ:
-   - Gồm đủ 3 dạng: Trắc nghiệm 4 lựa chọn (MCQ), Trắc nghiệm Đúng/Sai (TNDS), Trả lời ngắn (TLN). Giữ nguyên tiền tố đánh số ("TNLC 1.", "TNDS 1.", "TLN 1."...).
-   - Bộ đếm ngược thời gian (45s, 60s, 90s). Hết giờ đổi màu "HẾT GIỜ!" và gửi tín hiệu kích hoạt quay học sinh của lớp đang chọn.
-   - Nút "Kiểm tra đáp án": Đúng (viền xanh, Confetti, âm thanh Success), Sai (viền đỏ, rung lắc, âm thanh Error) và tự động mở Lời giải chi tiết bên dưới.
-
-CDN BẮT BUỘC DÙNG CHO CÁC FILE:
-- Success Audio: https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3
-- Error Audio: https://assets.mixkit.co/active_storage/sfx/2997/2997-preview.mp3
-- Tada Audio: https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3
-- Canvas Confetti: https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js
-- MathJax 3: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
-- TikZJax: https://tikzjax.com/v1/tikzjax.js
+   - Giữ nguyên 100% nội dung gốc của bài học được cung cấp, không tự ý sáng tác kiến thức ngoài tài liệu.
 
 QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 - BƯỚC 1: TIẾP NHẬN, ĐỀ XUẤT VÀ CHỜ DUYỆT (TUYỆT ĐỐI CHƯA ĐƯỢC XUẤT CODE Ở BƯỚC NÀY):
-   + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
-   + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
+   + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ SVG dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
+   + Thống kê rõ số lượng mục và danh sách câu hỏi từng phần để tôi xem xét.
    + Xác định tên file nội dung bài học theo tên bài học viết liền không dấu (Ví dụ: "TongVaHieuCuaHaiVecto.html").
    + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, chọn file bài học, màn hình chào mừng 2 câu) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file nội dung '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
    + DỪNG LẠI và chờ tôi phản hồi duyệt tiến trình cũng như xác nhận tùy chọn xuất file.
@@ -386,7 +459,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Màn hình chào mừng 2 câu cài đặt tùy ý kèm hiệu ứng, xử lý triệt để lỗi phím Space mở hộp thoại chọn file, file nội dung đặt theo tên bài học ({TenBaiHoc}.html) và Master Player index.html linh hoạt.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: File nội dung thuần Semantic Word HTML đảm bảo giao diện App LopU giữ nguyên 100% như trang Lý thuyết trọng tâm (kèm thanh mốc PPT bên trái), Master Player index.html linh hoạt đa lớp, màn hình chào mừng 2 câu và chặn lỗi phím Space mở hộp thoại chọn file.'
       }
     ]
   },
