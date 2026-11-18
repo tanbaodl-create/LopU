@@ -237,9 +237,14 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, chuẩn hóa ký hiệu vectơ \`\\overrightarrow{...}\` trải dài đẹp mắt thay cho \`\\vec{...}\` cụt lủn, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn mã hóa UTF-8 chống lỗi font tiếng Việt, nhúng MathJax công thức Toán sắc nét kèm macro tự động, cơ chế Modal Cài đặt bánh răng [⚙️] 4 khu vực (cài đặt đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, và cài đặt bật thứ tự nội dung trình chiếu cho phép giáo viên nhập trực tiếp số thứ tự vào từng khối với quy tắc số bằng nhau hiện cùng 1 lúc), cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file bài giảng PPT** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, giải pháp triệt tiêu lỗi SecurityError (chặn lỗi Access is denied đối với localStorage trong iframe/blob khi chạy file:///), chuẩn hóa ký hiệu vectơ \`\\overrightarrow{...}\` trải dài đẹp mắt thay cho \`\\vec{...}\` cụt lủn, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn mã hóa UTF-8 chống lỗi font tiếng Việt, nhúng MathJax công thức Toán sắc nét kèm macro tự động, cơ chế Modal Cài đặt bánh răng [⚙️] 4 khu vực (cài đặt đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, và cài đặt bật thứ tự nội dung trình chiếu cho phép giáo viên nhập trực tiếp số thứ tự vào từng khối với quy tắc số bằng nhau hiện cùng 1 lúc), cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file bài giảng PPT** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
-### 1. NGUYÊN TẮC TÙY CHỌN XUẤT FILE (THEO NHU CẦU DẠY HỌC):
+### 1. NGUYÊN TẮC KỸ THUẬT QUAN TRỌNG HÀNG ĐẦU:
+* **GIẢI PHÁP TRIỆT TIÊU LỖI "SecurityError: Access is denied for this document" KHI CHẠY TRONG IFRAME:**
+  - Khi chạy qua file \`index.html\`, bài học được nhúng trong thẻ \`<iframe>\` (dưới giao thức \`file:///\` hoặc \`blob:\`). Trình duyệt (Chrome/Edge) xem iframe này có origin \`null\` và **CHẶN HOÀN TOÀN QUYỀN TRUY CẬP** \`window.localStorage\`! Nếu gọi trực tiếp \`localStorage.getItem()\` hoặc \`localStorage.setItem()\` thì trình duyệt sẽ ném lỗi: \`Uncaught SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document\`, làm chết toàn bộ script khiến bài học không có bất kỳ hiệu ứng nào!
+  - **BẮT BUỘC 100%:** Cả 2 file (\`index.html\` và \`{TenBaiHocVietLienKhongDau}.html\`) BẮT BUỘC dùng wrapper \`SafeStorage\` (có bộ đệm bộ nhớ in-memory fallback và bọc \`try...catch\`). TUYỆT ĐỐI CẤM gọi trực tiếp \`localStorage\` trần trụi!
+  - **Đồng bộ hai chiều qua postMessage:** File nội dung gửi \`postMessage({ type: 'SAVE_STEP_ORDERS', orders })\` lên cửa sổ cha \`index.html\` để lưu; khi iframe nạp bài, \`index.html\` gửi \`SYNC_STEP_ORDERS\` và \`SET_STEP_BUILD\` xuống để nạp lại thứ tự các bước.
+
 * **TÙY CHỌN 1: CÓ TẠO \`index.html\` (XUẤT ĐỦ 02 FILE RIÊNG BIỆT — DÙNG DẠY HỌC ĐỘC LẬP TRÊN WEB/MÁY CHIẾU):**
   - **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
     + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học khi trình chiếu ngoài trình duyệt độc lập.
@@ -483,31 +488,66 @@ YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
        color: #1e3a8a;
      }
      \`\`\`
-   - **Lắng nghe sự kiện bật/tắt chế độ nhập số:**
+   - **BỘ NHỚ AN TOÀN CHỐNG LỖI SecurityError & ĐỒNG BỘ postMessage (BẮT BUỘC):**
      \`\`\`javascript
+     // Bắt buộc dùng SafeStorage để KHÔNG BAO GIỜ bị crash lỗi "Access is denied for this document" khi chạy trong iframe/blob
+     const SafeStorage = (function() {
+       const mem = {};
+       return {
+         getItem: function(key) {
+           try { return window.localStorage.getItem(key); } catch (e) { return mem[key] !== undefined ? mem[key] : null; }
+         },
+         setItem: function(key, val) {
+           try { window.localStorage.setItem(key, String(val)); } catch (e) {}
+           mem[key] = String(val);
+         },
+         removeItem: function(key) {
+           try { window.localStorage.removeItem(key); } catch (e) {}
+           delete mem[key];
+         }
+       };
+     })();
+
+     let stepBuildEnabled = SafeStorage.getItem('lopu_step_build_enabled') !== 'false';
+     const storageKey = 'lopu_step_order_' + (location.pathname.split('/').pop() || 'TongVaHieuCuaHaiVecto');
+     let savedStepOrders = {};
+     try { savedStepOrders = JSON.parse(SafeStorage.getItem(storageKey) || '{}'); } catch(e) { savedStepOrders = {}; }
+
+     // Lắng nghe tín hiệu từ index.html
      window.addEventListener('message', (e) => {
-       if (e.data?.type === 'TOGGLE_STEP_ORDER_EDIT') {
-         document.body.classList.toggle('step-edit-mode', !!e.data.enabled);
-       }
+       if (e.data?.type === 'NEXT_STEP') handleNextStep();
+       if (e.data?.type === 'PREV_STEP') handlePrevStep();
        if (e.data?.type === 'SET_STEP_BUILD') {
          stepBuildEnabled = !!e.data.enabled;
          applyStepVisibility();
        }
+       if (e.data?.type === 'TOGGLE_STEP_ORDER_EDIT') {
+         document.body.classList.toggle('step-edit-mode', !!e.data.enabled);
+         applyStepVisibility();
+       }
+       if (e.data?.type === 'SYNC_STEP_ORDERS' && e.data.orders) {
+         savedStepOrders = Object.assign(savedStepOrders, e.data.orders);
+         initStepInputs();
+         applyStepVisibility();
+       }
      });
-     // Lưu và nạp thứ tự đã chỉnh từ LocalStorage
+
      function initStepInputs() {
-       const saved = JSON.parse(localStorage.getItem('lopu_step_order_' + location.pathname) || '{}');
        document.querySelectorAll('.step-node').forEach((node, idx) => {
-         const key = node.closest('.slide-item')?.getAttribute('data-slide-index') + '_' + idx;
-         if (saved[key]) node.setAttribute('data-step', saved[key]);
+         const slideIdx = node.closest('.slide-item')?.getAttribute('data-slide-index') || '0';
+         const key = \`\${slideIdx}_\${idx}\`;
+         if (savedStepOrders[key]) node.setAttribute('data-step', savedStepOrders[key]);
          const input = node.querySelector('.step-num-input');
          if (input) {
            input.value = node.getAttribute('data-step') || '1';
+           input.addEventListener('click', (ev) => ev.stopPropagation());
            input.addEventListener('change', (ev) => {
-             const val = parseInt(ev.target.value, 10) || 1;
-             node.setAttribute('data-step', val);
-             saved[key] = val;
-             localStorage.setItem('lopu_step_order_' + location.pathname, JSON.stringify(saved));
+             const val = Math.max(1, parseInt(ev.target.value, 10) || 1);
+             ev.target.value = val;
+             node.setAttribute('data-step', String(val));
+             savedStepOrders[key] = String(val);
+             SafeStorage.setItem(storageKey, JSON.stringify(savedStepOrders));
+             try { window.parent?.postMessage({ type: 'SAVE_STEP_ORDERS', orders: savedStepOrders, key: storageKey }, '*'); } catch(err) {}
              applyStepVisibility();
            });
          }
@@ -564,7 +604,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Chuẩn hóa ký hiệu vectơ \\overrightarrow trải dài đẹp mắt kèm macro MathJax, Master Player index.html có bánh răng cài đặt 4 mục (đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập trực tiếp thứ tự trình chiếu), cơ chế gom nhóm số thứ tự bằng nhau hiện cùng 1 lúc (số nhỏ trước, số lớn sau), lưu trực tiếp bằng data-step và LocalStorage, chuẩn hóa UTF-8 chống lỗi font và chặn lỗi phím Space mở hộp thoại chọn file.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Triệt tiêu hoàn toàn lỗi SecurityError (Access is denied for localStorage) khi chạy trong iframe/blob, Master Player index.html có bánh răng cài đặt 4 mục (đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập trực tiếp thứ tự trình chiếu), chuẩn hóa ký hiệu vectơ \\overrightarrow trải dài đẹp mắt kèm macro MathJax, cơ chế gom nhóm số thứ tự bằng nhau hiện cùng 1 lúc (số nhỏ trước, số lớn sau), lưu trực tiếp bằng data-step và SafeStorage/LocalStorage, chuẩn hóa UTF-8 chống lỗi font và chặn lỗi phím Space mở hộp thoại chọn file.'
       }
     ]
   },
