@@ -300,9 +300,12 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI 
      + Câu 2: "Chúc các em có một tiết học tràn đầy năng lượng, tích cực và sáng tạo!"
    - Nút lớn nổi bật [▶ Bắt đầu tiết học]: Nhấp vào sẽ ẩn màn hình chào mừng để chuyển vào khung bài giảng.
 
-2. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
-   - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị bài giảng. Thanh điều khiển dạng Pill bar nổi thanh mảnh ở góc trên, nền kính mờ (backdrop-blur):
+2. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (BẮT BUỘC HIỂN THỊ NỔI BẬT NGAY TRANG 1 CHÀO MỪNG):
+   - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị bài giảng. Thanh điều khiển dạng Pill bar nổi thanh mảnh ở góc trên bên phải, nền kính mờ (backdrop-blur):
      [🏫 Chọn Lớp ▾] [⚙️] [📂] | [🎲] [- 1 +] [✏️]
+   - **BẮT BUỘC HIỆN NGAY TRÊN TRANG 1 (MÀN HÌNH CHÀO MỪNG):**
+     Thanh điều khiển có \`z-index: 10020\` (cao hơn màn hình chào mừng \`z-index: 10000\`), giúp giáo viên có thể chuyển lớp, mở cài đặt [⚙️], đổi bài học [📂], quay xúc xắc [🎲] hoặc dùng bút vẽ [✏️] ngay từ khi đang chiếu màn hình chào mừng mở đầu.
+     Các modal đi kèm (Modal cài đặt \`z-index: 10050\`, Popup quay số \`z-index: 10030\`, Bút vẽ \`z-index: 10035\`) luôn nổi lên trên cùng.
    - Nút chọn Lớp [🏫 Tên Lớp ▾]: Dropdown bấm nhanh chọn lớp dạy. Nếu chưa có lớp nào thì hiển thị [🏫 Chưa có lớp ▾].
 
 3. BIỂU TƯỢNG BÁNH RĂNG [⚙️] MỞ MODAL CÀI ĐẶT TRUNG TÂM GỒM 4 MỤC TOÀN DIỆN:
