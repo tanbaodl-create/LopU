@@ -6,6 +6,15 @@
 import katex from 'katex';
 
 /**
+ * Cấu hình KaTeX macros dùng chung cho toàn bộ ứng dụng.
+ * Tự động chuyển đổi \vec{...} thành \overrightarrow{...} để ký hiệu vectơ phủ trọn vẹn toàn bộ chữ cái,
+ * đẹp mắt và chuẩn chỉnh theo chương trình GDPT 2018 (thay vì mũi tên accent ngắn cụt lủn).
+ */
+export const KATEX_MACROS: Record<string, string> = {
+  '\\vec': '\\overrightarrow',
+};
+
+/**
  * Trợ giúp chuyển đổi các chuỗi công thức Toán dạng $ mã latex $ hoặc $$ mã latex $$ trong văn bản thuần thành KaTeX rendered HTML.
  * Chú ý: Dấu $ được nhập dạng \$ sẽ được xử lý thành dấu $ thuần túy và KHÔNG kích hoạt render công thức.
  */
@@ -24,6 +33,7 @@ export function renderLatexInText(text: string): string {
       const renderedHtml = katex.renderToString(code, {
         displayMode: true,
         throwOnError: false,
+        macros: KATEX_MACROS,
       });
       const encoded = encodeURIComponent(`$$ ${code} $$`);
       return `<span class="math-rendered my-1 block text-center bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all cursor-pointer" data-latex="${encoded}" contenteditable="false" title="Công thức toán (Kích để sửa)">${renderedHtml}</span>`;
@@ -40,6 +50,7 @@ export function renderLatexInText(text: string): string {
       const renderedHtml = katex.renderToString(code, {
         displayMode: false,
         throwOnError: false,
+        macros: KATEX_MACROS,
       });
       const encoded = encodeURIComponent(`$ ${code} $`);
       return `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="${encoded}" contenteditable="false" title="Công thức toán (Kích để sửa)">${renderedHtml}</span>`;

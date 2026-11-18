@@ -175,6 +175,9 @@ export const MathTypeEditorModal: React.FC<MathTypeEditorModalProps> = ({
       renderedKaTeX = katex.renderToString(trimmed, {
         displayMode: false,
         throwOnError: false,
+        macros: {
+          '\\vec': '\\overrightarrow',
+        },
       });
     } catch {
       renderedKaTeX = trimmed;
@@ -254,6 +257,9 @@ export const MathTypeEditorModal: React.FC<MathTypeEditorModalProps> = ({
                     const html = katex.renderToString(latexCode.trim(), {
                       displayMode: true,
                       throwOnError: false,
+                      macros: {
+                        '\\vec': '\\overrightarrow',
+                      },
                     });
                     return (
                       <div

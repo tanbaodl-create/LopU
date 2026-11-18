@@ -140,6 +140,9 @@ export const MathFormulaRenderer: React.FC<MathFormulaRendererProps> = ({
         displayMode: isDisplay,
         throwOnError: false,
         output: 'html',
+        macros: {
+          '\\vec': '\\overrightarrow',
+        },
       });
     } catch {
       return formula;

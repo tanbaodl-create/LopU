@@ -141,16 +141,31 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
       }
     }
 
+    let innerSlideEls = slideEls;
+    if (slideEls.length === 1 && slideEls[0].children.length > 0) {
+      innerSlideEls = Array.from(slideEls[0].children) as HTMLElement[];
+    }
+
     const steps: string[] = [];
     const stepItems: PptSlideStepItem[] = [];
     let currentStepBuffer: string[] = [];
-    const firstElEffect = slideEls[0]?.getAttribute('data-effect-type') as PptEffectType;
+    const firstElEffect = innerSlideEls[0]?.getAttribute('data-effect-type') as PptEffectType;
     let currentStepEffect: PptEffectType = firstElEffect || 'fade';
 
-    for (let k = 0; k < slideEls.length; k++) {
-      const el = slideEls[k];
+    for (let k = 0; k < innerSlideEls.length; k++) {
+      const el = innerSlideEls[k];
+      const prevEl = innerSlideEls[k - 1];
+
+      // Nếu cả hai phần tử liên tiếp đều có data-step và cùng một giá trị (số thứ tự bằng nhau)
+      // thì chúng thuộc CÙNG 1 BƯỚC (hiển thị cùng 1 lúc), không ngắt bước hiệu ứng!
+      const currentStepVal = el.getAttribute('data-step');
+      const prevStepVal = prevEl?.getAttribute('data-step');
+      const isSameStepGroup = !!(currentStepVal && prevStepVal && currentStepVal === prevStepVal);
+
       const isEffectBreak =
-        k > 0 && (
+        k > 0 &&
+        !isSameStepGroup &&
+        (
           el.getAttribute('data-effect-break') === 'true' ||
           el.classList.contains('effect-break-point') ||
           el.classList.contains('step') ||
@@ -185,7 +200,7 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
     }
 
     if (steps.length === 0) {
-      const defaultHtml = slideEls.map(e => getCleanOuterHtml(e)).join('');
+      const defaultHtml = innerSlideEls.map(e => getCleanOuterHtml(e)).join('');
       steps.push(defaultHtml);
       stepItems.push({
         html: defaultHtml,
