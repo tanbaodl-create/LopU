@@ -25,7 +25,8 @@ export function renderLatexInText(text: string): string {
         displayMode: true,
         throwOnError: false,
       });
-      return `<span class="math-rendered my-1 block text-center bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all cursor-pointer" data-latex="$$ ${code} $$" contenteditable="false" title="Công thức toán: $$ ${code} $$ (Kích để sửa)">${renderedHtml}</span>`;
+      const encoded = encodeURIComponent(`$$ ${code} $$`);
+      return `<span class="math-rendered my-1 block text-center bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all cursor-pointer" data-latex="${encoded}" contenteditable="false" title="Công thức toán (Kích để sửa)">${renderedHtml}</span>`;
     } catch {
       return fullMatch;
     }
@@ -40,7 +41,8 @@ export function renderLatexInText(text: string): string {
         displayMode: false,
         throwOnError: false,
       });
-      return `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="$ ${code} $" contenteditable="false" title="Công thức toán: $ ${code} $ (Kích để sửa)">${renderedHtml}</span>`;
+      const encoded = encodeURIComponent(`$ ${code} $`);
+      return `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="${encoded}" contenteditable="false" title="Công thức toán (Kích để sửa)">${renderedHtml}</span>`;
     } catch {
       return fullMatch;
     }
@@ -53,34 +55,20 @@ export function renderLatexInText(text: string): string {
 }
 
 /**
- * Render công thức Toán trong chuỗi HTML bằng cách phân tách các thẻ HTML và nội dung văn bản.
- * Đảm bảo các thuộc tính trong thẻ HTML (như title, data-latex, src...) không bị ảnh hưởng.
+ * Render công thức Toán trong chuỗi HTML an toàn tuyệt đối.
+ * Sử dụng DOM TreeWalker để chỉ biến đổi các text node thực sự, không chạm vào thuộc tính thẻ hoặc các khối đã render.
  */
 export function renderLatexInHtml(html: string): string {
   if (!html || !html.includes('$')) return html;
 
-  // Tách HTML thành các phần: thẻ HTML và văn bản thuần
-  const parts = html.split(/(<[^>]+>)/g);
-  let inMathRenderedSpan = false;
+  if (typeof document !== 'undefined') {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    autoRenderLatexInDom(div);
+    return div.innerHTML;
+  }
 
-  const processedParts = parts.map((part) => {
-    if (part.startsWith('<') && part.endsWith('>')) {
-      if (part.includes('class="math-rendered') || part.includes('class=\'math-rendered')) {
-        inMathRenderedSpan = true;
-      } else if (inMathRenderedSpan && (part.startsWith('</span') || part.startsWith('</SPAN'))) {
-        inMathRenderedSpan = false;
-      }
-      return part;
-    }
-
-    if (inMathRenderedSpan) {
-      return part;
-    }
-
-    return renderLatexInText(part);
-  });
-
-  return processedParts.join('');
+  return renderLatexInText(html);
 }
 
 /**
@@ -142,7 +130,7 @@ export function autoRenderLatexInDom(container: HTMLElement): boolean {
         parent.removeChild(textNode);
         renderedAny = true;
 
-        if (sel && lastInsertedNode) {
+        if (container.isConnected && sel && lastInsertedNode) {
           try {
             const range = document.createRange();
             range.setStartAfter(lastInsertedNode);

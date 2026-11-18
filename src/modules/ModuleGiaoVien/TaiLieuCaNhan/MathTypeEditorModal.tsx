@@ -181,7 +181,8 @@ export const MathTypeEditorModal: React.FC<MathTypeEditorModalProps> = ({
     }
 
     // Render công thức toán học trực quan (Visual Math) đã được render thay vì hiển thị mã thô, bắt buộc dùng $ mã latex $
-    const renderedHtml = `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="$ ${trimmed} $" contenteditable="false" title="Công thức toán: $ ${trimmed} $ (Kích để sửa)">${renderedKaTeX}</span>&nbsp;`;
+    const encoded = encodeURIComponent(`$ ${trimmed} $`);
+    const renderedHtml = `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="${encoded}" contenteditable="false" title="Công thức toán (Kích để sửa)">${renderedKaTeX}</span>&nbsp;`;
 
     onInsert(trimmed, renderedHtml);
     onClose();

@@ -54,7 +54,18 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
 
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = cleanHtml;
-  const children = Array.from(tempDiv.children) as HTMLElement[];
+  let children = Array.from(tempDiv.children) as HTMLElement[];
+
+  // Nếu nội dung được bọc trong 1 container duy nhất (ví dụ: .bai-hoc-word, .slide-container, div), mở rộng ra các phần tử con bên trong
+  while (
+    children.length === 1 &&
+    children[0].children.length > 0 &&
+    !children[0].classList.contains('lesson-template-box') &&
+    children[0].tagName !== 'H1' &&
+    children[0].tagName !== 'SECTION'
+  ) {
+    children = Array.from(children[0].children) as HTMLElement[];
+  }
 
   if (children.length === 0) {
     return [
@@ -94,6 +105,9 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
       isSlideStart =
         i > 0 && (
           el.classList.contains('lesson-template-box') ||
+          el.classList.contains('slide-item') ||
+          el.hasAttribute('data-slide-index') ||
+          el.tagName === 'SECTION' ||
           el.tagName === 'H1' ||
           el.tagName === 'H2' ||
           el.tagName === 'H3' ||
@@ -138,7 +152,15 @@ export const parseDocumentToSlides = (html: string, docTitle?: string): PptSlide
       const isEffectBreak =
         k > 0 && (
           el.getAttribute('data-effect-break') === 'true' ||
-          el.classList.contains('effect-break-point')
+          el.classList.contains('effect-break-point') ||
+          el.classList.contains('step') ||
+          el.hasAttribute('data-step') ||
+          el.classList.contains('vi-du') ||
+          el.classList.contains('loi-giai') ||
+          el.classList.contains('cau-hoi') ||
+          el.classList.contains('theory-box') ||
+          el.classList.contains('svg-diagram') ||
+          el.classList.contains('formula-highlight')
         );
 
       if (isEffectBreak && currentStepBuffer.length > 0) {

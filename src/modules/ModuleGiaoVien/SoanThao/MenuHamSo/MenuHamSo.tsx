@@ -179,8 +179,9 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
       if (mathSpan) {
         e.preventDefault();
         e.stopPropagation();
-        const raw = mathSpan.getAttribute('data-latex') || mathSpan.textContent || '';
-        const cleaned = raw.replace(/^\$\s*|\s*\$$/g, '').replace(/^\\\(\s*|\s*\\\)$/g, '').trim();
+        let raw = mathSpan.getAttribute('data-latex') || mathSpan.textContent || '';
+        try { raw = decodeURIComponent(raw); } catch {}
+        const cleaned = raw.replace(/^\${1,2}\s*|\s*\${1,2}$/g, '').replace(/^\\\(\s*|\s*\\\)$/g, '').trim();
         setMathModalFormula(cleaned);
         editingMathSpanRef.current = mathSpan;
         setShowMathModal(true);
@@ -215,7 +216,8 @@ export const MenuHamSo: React.FC<MenuHamSoProps> = ({
       } catch {
         renderedKaTeX = trimmed;
       }
-      return `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="$ ${trimmed} $" contenteditable="false" title="Công thức toán: $ ${trimmed} $ (Kích để sửa)">${renderedKaTeX}</span>&nbsp;`;
+      const encoded = encodeURIComponent(`$ ${trimmed} $`);
+      return `<span class="math-rendered inline-block align-middle my-0.5 px-1.5 py-0.5 rounded bg-transparent hover:bg-indigo-50/70 border border-transparent hover:border-indigo-200 transition-all select-all cursor-pointer" data-latex="${encoded}" contenteditable="false" title="Công thức toán (Kích để sửa)">${renderedKaTeX}</span>&nbsp;`;
     })();
 
     if (editingMathSpanRef.current && editingMathSpanRef.current.parentNode) {

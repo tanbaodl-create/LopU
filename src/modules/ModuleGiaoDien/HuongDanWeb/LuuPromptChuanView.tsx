@@ -237,31 +237,35 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn mã hóa UTF-8 chống lỗi font tiếng Việt, nhúng MathJax công thức Toán sắc nét, kiến trúc bài giảng PPT với **HIỆU ỨNG HIỆN RA LẦN LƯỢT TỪNG BƯỚC (STEP-BY-STEP BUILD)** chuẩn trình chiếu PowerPoint, cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file bài giảng PPT** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn mã hóa UTF-8 chống lỗi font tiếng Việt, nhúng MathJax công thức Toán sắc nét, cơ chế Modal Cài đặt bánh răng [⚙️] 4 khu vực (cài đặt đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, và nút bật thứ tự nội dung trình chiếu trong mỗi slide lưu bằng data-step), cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file bài giảng PPT** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
 ### 1. NGUYÊN TẮC TÙY CHỌN XUẤT FILE (THEO NHU CẦU DẠY HỌC):
 * **TÙY CHỌN 1: CÓ TẠO \`index.html\` (XUẤT ĐỦ 02 FILE RIÊNG BIỆT — DÙNG DẠY HỌC ĐỘC LẬP TRÊN WEB/MÁY CHIẾU):**
   - **File 1: \`index.html\` (DÙNG CHUNG MỌI BÀI — MỌI BÀI ĐỀU XUẤT GIỐNG HỆT NHAU):**
     + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học khi trình chiếu ngoài trình duyệt độc lập.
-    + **Màn hình chào mừng mở đầu:** Khi file \`index.html\` vừa mở lên, hiển thị Lời chào mừng + hiệu ứng chào mừng rực rỡ (Confetti, chuyển động fade-up). Cho phép giáo viên cài đặt 02 câu chào mừng tùy ý (lưu LocalStorage, chỉnh sửa dễ dàng trong Modal Cài đặt \`[⚙️]\`). Có nút lớn \`[▶ Bắt đầu tiết học]\` để vào bài giảng.
-    + Thanh công cụ siêu tinh gọn ([🏫 Lớp ▾] [⚙️] [📂] | [🎲 - 1 +] [✏️]) ưu tiên 98% diện tích màn hình.
-    + Quản lý **ĐA LỚP**: Thêm / Xóa / Đổi tên Lớp (10A1, 10A2, 11B1...); với mỗi lớp cho phép Thêm / Xóa / Sửa danh sách học sinh (dán từ Excel, lưu LocalStorage). Chọn lớp để quay ngẫu nhiên (tối đa 80% sĩ số, quay 4s async/await, nổ Confetti/Heart, âm thanh Tada).
-    + Tích hợp Canvas vẽ & Highlight chống đè mực (\`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`, 6 màu Pen + 5 màu Highlight + ô chọn màu tự do, 3 nấc độ dày).
-    + **Cơ chế chọn bài học linh hoạt mỗi khi chạy:** Có nút [📂 Mở bài học] tích hợp hộp thoại chọn file HTML từ máy tính (qua \`<input type="file" accept=".html,.htm">\` và gán \`iframe.src = URL.createObjectURL(file)\`), cho phép mở bất kỳ bài dạy nào. Khởi chạy mặc định nạp file \`{TenBaiHocVietLienKhongDau}.html\` nếu ở cùng thư mục, kèm ghi nhớ bài học gần nhất vào LocalStorage.
-    + **XỬ LÝ TRIỆT ĐỂ LỖI PHÍM SPACE MỞ HỘP THOẠI CHỌN FILE:** Sau khi chọn file hoặc bấm [📂], bắt buộc gỡ tiêu điểm (\`blur()\`). Trong sự kiện \`keydown\`, khi nhấn phím Space (\`e.code === 'Space'\`), gọi \`e.preventDefault()\` và \`document.activeElement?.blur()\` nếu không ở trong ô nhập liệu. Đảm bảo phím Space CHỈ chuyển hiệu ứng/slide sang iframe qua \`postMessage({ type: 'NEXT_STEP' })\`, TUYỆT ĐỐI KHÔNG mở lại hộp thoại chọn tệp!
-    + **LƯU Ý:** File này KHÔNG CHỨA bất kỳ nội dung bài học cụ thể nào.
-  - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (BÀI GIẢNG E-LEARNING PPT CÓ HIỆU ỨNG HIỆN RA LẦN LƯỢT TỪNG BƯỚC):**
-    + **Quy tắc đặt tên:** Tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase, ví dụ: Bài 8 "Tổng và hiệu của hai vectơ" $\\rightarrow$ tên file là \`TongVaHieuCuaHaiVecto.html\`; bài "Hàm số bậc hai" $\\rightarrow$ \`HamSoBacHai.html\`). Tuyệt đối KHÔNG dùng tên chung chung \`NoiDungBaiHoc.html\`.
-    + **CHUẨN TRÌNH CHIẾU PPT & HIỆU ỨNG HIỆN RA LẦN LƯỢT (STEP-BY-STEP BUILD):**
-      * Có thẻ \`<meta charset="UTF-8" />\` chống triệt để lỗi font tiếng Việt.
-      * Nhúng MathJax 3 hiển thị công thức Toán sắc nét.
-      * Tổ chức thành từng Slide riêng biệt (\`<section class="slide-item">\`), mỗi thời điểm chỉ hiển thị duy nhất 1 slide.
-      * Các phần tử trên slide được gán class \`.step\` (định nghĩa, hình vẽ SVG 2 cột, công thức, ví dụ, lời giải).
-      * Bấm phím **Space**, **Mũi tên phải (→)**, hoặc **Click chuột** $\\rightarrow$ Hiện lần lượt từng bước của slide hiện tại; khi hết bước trên slide hiện tại sẽ chuyển sang slide kế tiếp! Bấm **Mũi tên trái (←)** $\\rightarrow$ Lùi bước/lùi slide.
-    + **Tương thích hoàn hảo với App LopU:** Cấu trúc Semantic HTML rõ ràng trong \`<body>\`, khi nạp lên App LopU hệ thống tự động đưa nội dung vào khung soạn thảo Word chuẩn và hiển thị thanh mốc PPT bên trái (như trang 'Lý thuyết trọng tâm').
+    + **Thanh công cụ siêu tinh gọn (Floating Pill bar):** [🏫 Chọn Lớp ▾] [⚙️ Cài đặt] [📂 Mở bài học] | [🎲 Quay số] [- 1 +] [✏️ Bút vẽ] (chiếm < 3% diện tích, ưu tiên 97% cho bài giảng).
+    + **BIỂU TƯỢNG BÁNH RĂNG [⚙️] MỞ MODAL CÀI ĐẶT TRUNG TÂM GỒM 4 MỤC QUAN TRỌNG:**
+      1. *Cài đặt đường dẫn file nội dung bài học:* Ô nhập tên hoặc đường dẫn file bài học (mặc định \`{TenBaiHocVietLienKhongDau}.html\`) kèm nút chọn tệp từ máy tính; lưu vào LocalStorage và nạp ngay vào thẻ iframe.
+      2. *Cài đặt lời chào mở đầu:* 2 ô nhập cho Lời chào dòng 1 & dòng 2 hiển thị trên màn hình chào mừng mở đầu.
+      3. *Cài đặt danh sách lớp và học sinh từng lớp:* **MẶC ĐỊNH BAN ĐẦU RỖNG 100% (KHÔNG CÓ LỚP NÀO, HỌC SINH NÀO)**. Cho phép bấm [➕ Thêm lớp], [Đổi tên], [Xóa lớp]; với mỗi lớp cho phép dán danh sách học sinh từ Excel vào khung Textarea. Tự động cập nhật giới hạn quay 80% sĩ số và lưu vĩnh viễn vào LocalStorage.
+      4. *Nút cài đặt BẬT THỨ TỰ NỘI DUNG TRÌNH CHIẾU TRONG MỖI SLIDE:* Công tắc bật/tắt (Toggle Switch) hiệu ứng trình chiếu hiện ra lần lượt từng bước. Khi BẬT: Các phần tử trong slide xuất hiện lần lượt theo thứ tự \`data-step="1"\`, \`data-step="2"\`... khi bấm Space, phím mũi tên phải (→) hoặc click chuột. Khi TẮT: Slide hiển thị đầy đủ ngay lập tức. Trạng thái lưu vào LocalStorage và gửi \`postMessage\` sang iframe.
+    + **Màn hình chào mừng mở đầu:** Lời chào mừng 2 câu + hiệu ứng Confetti rực rỡ và nút [▶ Bắt đầu tiết học].
+    + **Bút vẽ Canvas & Dạ quang Highlight chống đè mực:** \`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`.
+    + **Xử lý triệt để lỗi phím Space mở hộp thoại chọn file (Spacebar Focus Guard):** Tự động \`blur()\` mọi nút bấm, phím Space chỉ chuyển bước trình chiếu.
+  - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (BÀI GIẢNG E-LEARNING PPT LƯU THỨ TỰ TRÌNH CHIẾU BẰNG data-step):**
+    + **Quy tắc đặt tên:** Tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase, ví dụ: \`TongVaHieuCuaHaiVecto.html\`).
+    + **Chuẩn UTF-8 & MathJax 3:** Bắt buộc có \`<meta charset="UTF-8" />\` chống lỗi font tiếng Việt và MathJax 3 hiển thị công thức Toán sắc nét.
+    + **THỨ TỰ NỘI DUNG TRÌNH CHIẾU ĐƯỢC LƯU TRỰC TIẾP TRÊN TỪNG THẺ BẰNG THUỘC TÍNH \`data-step\`:**
+      Trong mỗi slide (\`<section class="slide-item">\`), từng khối nội dung được đánh số thứ tự rõ ràng:
+      * \`data-step="1"\`: Tiêu đề mục & Định nghĩa kiến thức
+      * \`data-step="2"\`: Hình vẽ SVG trực quan 2 cột
+      * \`data-step="3"\`: Công thức đóng khung nổi bật
+      * \`data-step="4"\`: Đề bài ví dụ minh họa
+      * \`data-step="5"\`: Lời giải chi tiết của ví dụ
+    + Khi chạy trên Web: Hỗ trợ chuyển bước qua phím Space, phím Mũi tên phải (→), click chuột hoặc nhận tín hiệu \`postMessage\` từ \`index.html\`.
+    + Khi nạp lên App LopU: Cấu trúc Semantic HTML chuẩn trong \`<body>\` giúp App LopU tự động nạp nội dung vào cửa sổ soạn thảo Word chuẩn, hiển thị thanh mốc PPT bên trái (như trang 'Lý thuyết trọng tâm') và tự động nhận diện các thẻ \`data-step\` thành các bước hiệu ứng trong chế độ 'Xem PPT'.
 * **TÙY CHỌN 2: KHÔNG TẠO \`index.html\` (CHỈ XUẤT DUY NHẤT 01 FILE BÀI GIẢNG PPT \`{TenBaiHocVietLienKhongDau}.html\`):**
-  - Áp dụng khi bạn đã có sẵn file \`index.html\` dùng chung từ trước, hoặc muốn mở bài giảng trực tiếp trên trình duyệt hay nạp vào App LopU.
-  - Gemini chỉ tạo và xuất duy nhất 01 file **\`{TenBaiHocVietLienKhongDau}.html\`** có đầy đủ UTF-8, MathJax, hình vẽ SVG, câu hỏi trắc nghiệm và hiệu ứng hiện ra lần lượt từng bước (Step-by-step Build).
+  - Gemini chỉ tạo và xuất duy nhất 01 file **\`{TenBaiHocVietLienKhongDau}.html\`** có đầy đủ UTF-8, MathJax, hình vẽ SVG, câu hỏi trắc nghiệm và thứ tự trình chiếu lưu trực tiếp bằng thuộc tính \`data-step\`.
 
 ---
 
@@ -271,45 +275,65 @@ QUY TẮC ĐẦU RA:
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn sẽ thiết kế bài giảng E-learning HTML theo TÙY CHỌN XUẤT FILE của tôi:
 - TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập trên Web/Máy chiếu): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
-  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; có màn hình chào mừng 2 câu cài đặt tùy ý, thanh công cụ pill siêu tinh gọn [🏫 10A1 ▾] [⚙️] [📂] | [🎲] [- 1 +] [✏️], canvas highlight chống đè mực, chọn file bài học cụ thể để chạy và chặn triệt để lỗi phím Space mở hộp thoại chọn file).
-  + File 2: "{TenBaiHocVietLienKhongDau}.html" (File bài giảng PPT với HIỆU ỨNG HIỆN RA LẦN LƯỢT TỪNG BƯỚC, tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc nạp trực tiếp lên App LopU).
+  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; có biểu tượng bánh răng [⚙️] mở Modal cài đặt đường dẫn file bài học, lời chào, danh sách lớp & học sinh mặc định rỗng, và nút bật thứ tự nội dung trình chiếu trong mỗi slide; thanh công cụ pill tinh gọn, canvas highlight chống đè mực, chặn triệt để lỗi phím Space mở hộp thoại chọn file).
+  + File 2: "{TenBaiHocVietLienKhongDau}.html" (File bài giảng PPT với THỨ TỰ NỘI DUNG TRÌNH CHIẾU LƯU TRỰC TIẾP TRÊN TỪNG THẺ BẰNG data-step="1", data-step="2"..., tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc nạp trực tiếp lên App LopU).
 - TÙY CHỌN 2 — KHÔNG TẠO "index.html" (Khi chỉ cần nạp trực tiếp lên App LopU hoặc đã có sẵn index.html): CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG:
-  + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ bài giảng PPT với hiệu ứng hiện từng bước, vừa chạy độc lập ngoài trình duyệt vừa nạp trực tiếp lên App LopU giữ nguyên giao diện cửa sổ Word và thanh mốc PPT bên trái như trang "Lý thuyết trọng tâm").
+  + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ bài giảng PPT với thứ tự trình chiếu lưu bằng data-step, vừa chạy độc lập ngoài trình duyệt vừa nạp trực tiếp lên App LopU giữ nguyên giao diện cửa sổ Word và thanh mốc PPT bên trái như trang "Lý thuyết trọng tâm").
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI BÀI)
 =========================================================================
 1. MÀN HÌNH CHÀO MỪNG MỞ ĐẦU (WELCOME SCREEN & HIỆU ỨNG RỰC RỠ):
-   - Khi vừa mở file "index.html", hiển thị ngay một màn hình chào mừng (Welcome Overlay) sang trọng với hoạt ảnh mềm mại và hiệu ứng pháo hoa Confetti/bung nở rực rỡ đón chào tiết học.
-   - Cho phép giáo viên cài đặt 02 câu chào mừng tùy chỉnh:
-     + Câu 1 (mặc định): "Chào mừng quý thầy cô và các em học sinh đến với tiết học!"
-     + Câu 2 (mặc định): "Chúc các em có một tiết học tràn đầy năng lượng, tích cực và sáng tạo!"
-     + Trong Modal Cài đặt [⚙️], bổ sung 2 ô nhập liệu để giáo viên sửa 2 câu chào mừng này (lưu vĩnh viễn vào LocalStorage: lopu_welcome_line1, lopu_welcome_line2).
-   - Nút lớn nổi bật [▶ Bắt đầu tiết học]: Nhấp vào sẽ ẩn màn hình chào mừng (hiệu ứng fade out) để chuyển vào khung bài giảng.
+   - Khi vừa mở file "index.html", hiển thị ngay màn hình chào mừng (Welcome Overlay) sang trọng với hoạt ảnh mềm mại và hiệu ứng pháo hoa Confetti bung nở rực rỡ.
+   - Hiển thị 02 câu chào mừng (lấy từ LocalStorage hoặc mặc định):
+     + Câu 1: "Chào mừng quý thầy cô và các em học sinh đến với tiết học!"
+     + Câu 2: "Chúc các em có một tiết học tràn đầy năng lượng, tích cực và sáng tạo!"
+   - Nút lớn nổi bật [▶ Bắt đầu tiết học]: Nhấp vào sẽ ẩn màn hình chào mừng để chuyển vào khung bài giảng.
+
 2. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (ULTRA-COMPACT FLOATING PILL):
-   - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị nội dung bài học. Toàn bộ thanh điều khiển chỉ là một thanh nổi thanh mảnh ở góc trên (Pill bar), dùng biểu tượng trực quan, nền kính mờ hiện đại (backdrop-blur):
-     [🏫 10A1 ▾] [⚙️] [📂] | [🎲] [- 1 +] [✏️]
-   - Nút chọn Lớp [🏫 Tên Lớp ▾]: Dropdown bấm nhanh chuyển lớp dạy (10A1, 10A2, 11B1...). Tự động cập nhật sĩ số và nạp danh sách lớp đó ngay lập tức.
-   - Nút Cài đặt [⚙️]: Mở Modal Quản Lý Đa Lớp & Học Sinh & Lời Chào Mừng toàn diện:
-     + Quản lý Lớp: Thêm lớp mới, Xóa lớp, Đổi tên lớp (Lưu LocalStorage).
-     + Quản lý Học sinh theo từng lớp: Với mỗi lớp đang chọn, cho phép Thêm / Xóa / Sửa danh sách học sinh (có khung Textarea dán danh sách nhiều dòng từ Excel hoặc gõ trực tiếp). Tự động cập nhật giới hạn quay 80% sĩ số ngay khi lưu.
-     + Cài đặt 2 câu chào mừng: 2 ô input để sửa Lời chào dòng 1 & dòng 2.
-     + Nút "Xuất file HS" (📄): In PDF phiếu học tập gồm Tóm tắt lý thuyết và Đề bài (không kèm lời giải).
-   - Nút Mở bài học [📂]: Kèm thẻ input ẩn (<input type="file" id="lessonFileInput" accept=".html,.htm" style="display:none;" />). Khi bấm [📂], kích hoạt chọn tệp HTML từ máy tính; sau khi chọn file sẽ tự động nạp vào iframe qua URL.createObjectURL(file) và lưu tên file gần nhất vào LocalStorage.
-   - BẮT BUỘC GỠ FOCUS: Ngay khi bấm [📂] hoặc sau khi chọn xong file trong sự kiện change, BẮT BUỘC gọi ngay:
-     btnOpenFile.blur(); lessonFileInput.blur(); if (document.activeElement) document.activeElement.blur();
-3. KHUNG NHÚNG BÀI HỌC VÀ CƠ CHẾ CHỌN BÀI MỖI KHI CHẠY:
+   - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị bài giảng. Thanh điều khiển dạng Pill bar nổi thanh mảnh ở góc trên, nền kính mờ (backdrop-blur):
+     [🏫 Chọn Lớp ▾] [⚙️] [📂] | [🎲] [- 1 +] [✏️]
+   - Nút chọn Lớp [🏫 Tên Lớp ▾]: Dropdown bấm nhanh chọn lớp dạy. Nếu chưa có lớp nào thì hiển thị [🏫 Chưa có lớp ▾].
+
+3. BIỂU TƯỢNG BÁNH RĂNG [⚙️] MỞ MODAL CÀI ĐẶT TRUNG TÂM GỒM 4 MỤC TOÀN DIỆN:
+   Bấm vào [⚙️] sẽ mở một Modal Cài đặt hiện đại, chia thành 4 khu vực rõ ràng:
+   * Mục 1: 📂 Cài đặt đường dẫn file bài học:
+     - Ô nhập tên/đường dẫn tệp nội dung: <input type="text" id="settingLessonPath" placeholder="Ví dụ: TongVaHieuCuaHaiVecto.html" />
+     - Kèm nút [📂 Duyệt file từ máy]: Cho phép chọn tệp HTML từ máy tính.
+     - Khi lưu hoặc chọn file: Tự động gán cho thẻ iframe (iframe.src = path) và lưu vào LocalStorage (key: 'lopu_lesson_file').
+   * Mục 2: 💬 Cài đặt 2 câu lời chào mở đầu:
+     - Ô nhập Lời chào dòng 1: <input type="text" id="settingWelcomeLine1" />
+     - Ô nhập Lời chào dòng 2: <input type="text" id="settingWelcomeLine2" />
+     - Lưu vĩnh viễn vào LocalStorage (key: 'lopu_welcome_line1', 'lopu_welcome_line2').
+   * Mục 3: 🏫 Quản lý Đa Lớp & Học Sinh (MẶC ĐỊNH RỖNG):
+     - **MẶC ĐỊNH BAN ĐẦU: RỖNG 100% (KHÔNG CÓ LỚP NÀO, KHÔNG CÓ HỌC SINH NÀO).**
+     - Nút [➕ Thêm lớp mới]: Nhập tên lớp (10A1, 10A2, 11B1...) và thêm vào danh sách.
+     - Nút [✏️ Đổi tên lớp], [🗑️ Xóa lớp].
+     - Với mỗi lớp đang chọn:
+       + Khung Textarea dán danh sách học sinh từ Excel (mỗi học sinh một dòng).
+       + Nút [💾 Lưu danh sách học sinh]: Lưu vào LocalStorage (key: 'lopu_classes_data').
+       + Tự động đếm sĩ số và cập nhật trần quay ngẫu nhiên (tối đa 80% sĩ số lớp).
+   * Mục 4: 🎬 Cài đặt thứ tự nội dung trình chiếu trong mỗi slide (Step-by-step Build):
+     - Công tắc gạt (Toggle Switch): <input type="checkbox" id="settingStepBuildToggle" checked /> **"Bật thứ tự nội dung trình chiếu trong mỗi slide"**
+     - Chú thích: *"Khi bật: Nội dung trong từng slide sẽ xuất hiện lần lượt theo thứ tự data-step="1", data-step="2"... khi bấm phím Space, phím mũi tên hoặc click chuột. Khi tắt: Slide hiển thị đầy đủ toàn bộ nội dung ngay lập tức."*
+     - Trạng thái lưu vào LocalStorage (key: 'lopu_step_build_enabled') và đồng thời gửi tín hiệu qua iframe:
+       iframe.contentWindow.postMessage({ type: 'SET_STEP_BUILD', enabled: isChecked }, '*');
+
+4. KHUNG NHÚNG BÀI HỌC VÀ CƠ CHẾ NẠP FILE TỰ ĐỘNG:
    - Thẻ iframe chiếm trọn màn hình:
      <iframe id="lessonFrame" src="{TenBaiHocVietLienKhongDau}.html" style="width:100%; height:100vh; border:none; display:block;"></iframe>
-   - Cơ chế chọn bài: Mỗi khi chạy, nếu đã có bài học lưu trong LocalStorage hoặc có file cùng thư mục thì nạp trực tiếp; nếu file chưa tìm thấy hoặc người dùng muốn đổi bài chỉ cần nhấp nút [📂] để chọn file bài học cụ thể dạng "{TenBaiHoc}.html" từ máy tính để chạy ngay lập tức mà không cần tải lại trang.
-4. CỤM GỌI HỌC SINH NỔI (TOP-RIGHT QUICK CALL):
-   - Nút quay xúc xắc [🎲], bộ chọn số lượng học sinh [-] [+] (giới hạn tối đa 4/5 tức 80% sĩ số lớp đang chọn).
-   - Chu trình quay tuần tự từng học sinh bằng async/await Promise: Mỗi em quay trong đúng 4 giây (2.5s đầu chạy cực nhanh, 1.5s cuối giảm tốc), khi dừng phát âm thanh Tada, nổ pháo hoa Confetti hoặc bung nở hình trái tim đúng vị trí hàng tên.
-5. BỘ CÔNG CỤ VẼ & DẠ QUANG HIGHLIGHT CHỐNG ĐÈ MỰC (CANVAS):
+   - Khi khởi chạy: Ưu tiên nạp file được lưu trong LocalStorage ('lopu_lesson_file'), nếu chưa có thì nạp '{TenBaiHocVietLienKhongDau}.html'.
+
+5. CỤM GỌI HỌC SINH NỔI (TOP-RIGHT QUICK CALL):
+   - Nút quay xúc xắc [🎲], bộ chọn số lượng học sinh [-] [+] (giới hạn tối đa 80% sĩ số lớp đang chọn).
+   - Chu trình quay tuần tự từng học sinh bằng async/await Promise: Mỗi em quay đúng 4 giây (2.5s đầu chạy cực nhanh, 1.5s cuối giảm tốc), khi dừng phát âm thanh Tada, nổ pháo hoa Confetti hoặc bung nở hình trái tim đúng vị trí hàng tên.
+
+6. BỘ CÔNG CỤ VẼ & DẠ QUANG HIGHLIGHT CHỐNG ĐÈ MỰC (CANVAS):
    - Thẻ Canvas phủ toàn màn hình (position: fixed; inset: 0; z-index: 9000; pointer-events: none; mix-blend-mode: multiply;).
    - Kỹ thuật chống đè đậm mực Highlight: Khi vẽ bút dạ quang, thiết lập ctx.globalCompositeOperation = 'multiply' (hoặc dùng Offscreen Canvas đệm) để các điểm trùng lặp trong 1 nét vẽ KHÔNG BỊ CỘNG DỒN ALPHA, luôn trong suốt 100% thấy rõ chữ và công thức Toán bên dưới.
    - Bảng màu: Bút viết (✏️: Đỏ, Xanh dương, Xanh lá, Đen, Vàng cam, Tím + ô chọn màu); Highlight (🖍️: Vàng dạ quang, Xanh lá neon, Cam pastel, Hồng neon, Xanh ngọc dạ quang + ô chọn màu). 3 nấc nét (Mảnh / Vừa / Dày). Nút Xóa nét vẽ (🗑️) và Đóng vẽ (❌).
-6. ĐIỀU HƯỚNG SLIDE & XỬ LÝ TRIỆT ĐỂ LỖI PHÍM SPACE MỞ HỘP THOẠI CHỌN FILE (SPACEBAR FOCUS GUARD):
+
+7. ĐIỀU HƯỚNG SLIDE & XỬ LÝ TRIỆT ĐỂ LỖI PHÍM SPACE MỞ HỘP THOẠI CHỌN FILE (SPACEBAR FOCUS GUARD):
    - Lắng nghe sự kiện keydown toàn cục trên window:
      \`\`\`javascript
      window.addEventListener('keydown', function(e) {
@@ -334,7 +358,7 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI 
 
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
-(BÀI GIẢNG PPT — HIỆU ỨNG HIỆN RA LẦN LƯỢT TỪNG BƯỚC)
+(BÀI GIẢNG PPT — LƯU THỨ TỰ TRÌNH CHIẾU BẰNG data-step)
 =========================================================================
 1. ĐỊNH DẠNG & THƯ VIỆN BẮT BUỘC (CHỐNG LỖI FONT & CÔNG THỨC TOÁN):
    - QUY TẮC ĐẶT TÊN FILE: BẮT BUỘC đặt tên file là Tên bài học viết liền không dấu, viết hoa các chữ cái đầu (PascalCase), ví dụ:
@@ -358,103 +382,74 @@ YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
      + Error Audio: https://assets.mixkit.co/active_storage/sfx/2997/2997-preview.mp3
      + Tada Audio: https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3
 
-2. KIẾN TRÚC TRÌNH CHIẾU PPT & HIỆU ỨNG HIỆN RA LẦN LƯỢT TỪNG BƯỚC (STEP-BY-STEP BUILD):
-   - Toàn bộ bài học được tổ chức thành các SLIDE riêng biệt (<section class="slide-item">), mỗi thời điểm CHỈ HIỂN THỊ DUY NHẤT 1 SLIDE (display: none; slide đang chiếu có class="active" display: block;). Tuyệt đối không hiển thị dồn tất cả các mục thành 1 trang cuộn dài như phiếu bài tập.
-   - Slide 1 (Bìa): Tiêu đề bài học nổi bật, ghi đầy đủ thông tin: "Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia".
-   - Các Slide Kiến thức & Bài tập:
-     + Trong mỗi slide, các khối kiến thức được gắn class="step" (CSS: opacity: 0; transform: translateY(14px); transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none;). Khi kích hoạt có thêm class="visible" (opacity: 1; transform: translateY(0); pointer-events: auto;).
-       * Bước 1: Tiêu đề mục & Định nghĩa kiến thức
-       * Bước 2: Hình vẽ minh họa SVG trực quan (chia bố cục 2 cột)
-       * Bước 3: Công thức đóng khung nổi bật (Quy tắc ba điểm, Quy tắc hình bình hành...)
-       * Bước 4: Đề bài ví dụ minh họa áp dụng
-       * Bước 5: Lời giải chi tiết của ví dụ
-     + CƠ CHẾ ĐIỀU KHIỂN BƯỚC (NEXT / PREV):
-       \`\`\`javascript
-       let currentSlide = 0;
-       let currentStep = 0;
-       const slides = document.querySelectorAll('.slide-item');
+2. THỨ TỰ NỘI DUNG TRÌNH CHIẾU ĐƯỢC LƯU TRỰC TIẾP TRÊN TỪNG THẺ BẰNG data-step:
+   - Toàn bộ bài học được tổ chức thành các SLIDE riêng biệt (<section class="slide-item">), mỗi thời điểm CHỈ HIỂN THỊ DUY NHẤT 1 SLIDE (display: none; slide đang chiếu có class="active" display: block;).
+   - Slide 1 (Bìa): Tiêu đề bài học, ghi đầy đủ thông tin: "Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia".
+   - Trong mỗi slide kiến thức & bài tập, TẤT CẢ các khối thông tin BẮT BUỘC được đánh số thứ tự trình chiếu trực tiếp bằng thuộc tính data-step:
+     \`\`\`html
+     <section class="slide-item" data-slide-index="1">
+       <!-- Bước 1: Tiêu đề & Định nghĩa -->
+       <div data-step="1" class="step-node">
+         <h2 style="color: #0f766e; font-size: 18pt;">1. Quy tắc ba điểm</h2>
+         <p>Cho hai vectơ $\\vec{a}$ và $\\vec{b}$. Lấy điểm $A$ tùy ý, vẽ $\\vec{AB} = \\vec{a}$ và $\\vec{BC} = \\vec{b}$...</p>
+       </div>
 
-       function showSlide(index) {
-         if (index < 0 || index >= slides.length) return;
-         currentSlide = index;
-         slides.forEach((s, idx) => s.classList.toggle('active', idx === currentSlide));
-         const steps = slides[currentSlide].querySelectorAll('.step');
-         currentStep = 0;
-         steps.forEach(st => st.classList.remove('visible'));
-         updateFooter();
+       <!-- Bước 2: Hình vẽ minh họa SVG (Bố cục 2 cột) -->
+       <div data-step="2" class="step-node" style="display: flex; gap: 20px; align-items: center; margin: 12px 0;">
+         <div style="flex: 1;">
+           <p>Vectơ $\\vec{AC}$ được gọi là <b>tổng của hai vectơ</b> $\\vec{a}$ và $\\vec{b}$, kí hiệu $\\vec{a} + \\vec{b}$.</p>
+         </div>
+         <div style="width: 280px; flex-shrink: 0; text-align: center;">
+           <svg viewBox="0 0 260 160" width="100%" height="auto">...</svg>
+           <div style="font-size: 10pt; color: #64748b;">Hình 1: Quy tắc ba điểm</div>
+         </div>
+       </div>
+
+       <!-- Bước 3: Công thức đóng khung nổi bật -->
+       <div data-step="3" class="step-node" style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; margin: 10px 0; border-radius: 6px;">
+         <b>Quy tắc ba điểm:</b> Với ba điểm bất kì $A, B, C$, ta luôn có: $$\\vec{AB} + \\vec{BC} = \\vec{AC}$$
+       </div>
+
+       <!-- Bước 4: Đề bài ví dụ minh họa -->
+       <div data-step="4" class="step-node vi-du" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin: 12px 0;">
+         <p style="color: #b45309; font-weight: bold;">Ví dụ 1:</p>
+         <p>Cho hình bình hành $ABCD$. Chứng minh rằng $\\vec{AB} + \\vec{AD} = \\vec{AC}$.</p>
+       </div>
+
+       <!-- Bước 5: Lời giải chi tiết -->
+       <div data-step="5" class="step-node loi-giai" style="background: #ffffff; border-left: 3px solid #f59e0b; padding: 10px 14px; margin-top: 6px; border-radius: 4px;">
+         <p><b>Lời giải:</b> Vì $ABCD$ là hình bình hành nên $\\vec{AD} = \\vec{BC}$. Áp dụng quy tắc ba điểm: $\\vec{AB} + \\vec{AD} = \\vec{AB} + \\vec{BC} = \\vec{AC}$ (đpcm).</p>
+       </div>
+     </section>
+     \`\`\`
+
+3. CƠ CHẾ ĐIỀU KHIỂN THỨ TỰ TRÌNH CHIẾU THEO CÀI ĐẶT:
+   - Trạng thái hiệu ứng: Kiểm tra cấu hình \`stepBuildEnabled\` (lấy từ LocalStorage 'lopu_step_build_enabled' hoặc mặc định \`true\`). Nhận tín hiệu cập nhật tức thì từ \`index.html\` qua:
+     \`\`\`javascript
+     window.addEventListener('message', (e) => {
+       if (e.data?.type === 'SET_STEP_BUILD') {
+         stepBuildEnabled = !!e.data.enabled;
+         applyStepVisibility();
        }
-
-       function next() {
-         const steps = slides[currentSlide].querySelectorAll('.step');
-         if (currentStep < steps.length) {
-           // Hiện bước tiếp theo trên slide hiện tại
-           steps[currentStep].classList.add('visible');
-           currentStep++;
-         } else {
-           // Đã hiện hết bước trên slide hiện tại -> Sang slide tiếp theo
-           if (currentSlide < slides.length - 1) {
-             showSlide(currentSlide + 1);
-           }
-         }
-       }
-
-       function prev() {
-         const steps = slides[currentSlide].querySelectorAll('.step');
-         if (currentStep > 0) {
-           currentStep--;
-           steps[currentStep].classList.remove('visible');
-         } else {
-           if (currentSlide > 0) {
-             showSlide(currentSlide - 1);
-             const prevSteps = slides[currentSlide].querySelectorAll('.step');
-             prevSteps.forEach(st => st.classList.add('visible'));
-             currentStep = prevSteps.length;
-           }
-         }
-       }
-
-       // Lắng nghe phím Space, Mũi tên phải/trái trên window
-       window.addEventListener('keydown', (e) => {
-         const isInput = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
-         if (isInput) return;
-         if (e.code === 'Space' || e.key === ' ' || e.key === 'ArrowRight' || e.key === 'PageDown') {
-           e.preventDefault();
-           next();
-         } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
-           e.preventDefault();
-           prev();
-         }
-       });
-
-       // Click chuột vào slide để hiện bước tiếp theo
-       document.addEventListener('click', (e) => {
-         if (e.target.closest('button, input, select, textarea, a, .quiz-opt')) return;
-         next();
-       });
-
-       // Nhận tín hiệu postMessage từ index.html (Master Player)
-       window.addEventListener('message', (e) => {
-         if (e.data?.type === 'NEXT_STEP' || e.data?.type === 'NEXT_STEP_OR_SLIDE' || e.data?.type === 'NEXT_SLIDE') {
-           next();
-         } else if (e.data?.type === 'PREV_STEP' || e.data?.type === 'PREV_SLIDE') {
-           prev();
-         }
-       });
-       \`\`\`
-
-3. HÌNH VẼ MINH HỌA VECTOR SVG & BỐ CỤC 2 CỘT:
-   - Mọi định nghĩa, định lý, tính chất hình học BẮT BUỘC có hình vẽ minh họa SVG vector sắc nét (rõ mũi tên marker-end, màu sắc phân biệt các vectơ, tọa độ đỉnh rõ ràng).
-   - Chia bố cục 2 cột linh hoạt: 1 bên là định nghĩa/công thức toán, 1 bên là khung hình vẽ SVG.
+     });
+     \`\`\`
+   - Khi \`stepBuildEnabled === true\`:
+     + Các phần tử \`[data-step]\` có CSS: \`opacity: 0; transform: translateY(12px); transition: all 0.4s ease;\`.
+     + Khi kích hoạt có thêm class \`.is-visible\` (\`opacity: 1; transform: translateY(0);\`).
+     + Mỗi lần bấm **phím Space**, **Mũi tên phải (→)**, hoặc **Click chuột**: Hiện phần tử \`data-step\` tiếp theo! Khi đã hiện hết tất cả các bước trên slide hiện tại $\rightarrow$ Chuyển sang Slide tiếp theo!
+     + Bấm **phím Mũi tên trái (←)** hoặc **PageUp**: Lùi về bước trước hoặc slide trước!
+   - Khi \`stepBuildEnabled === false\`:
+     + Tất cả phần tử \`[data-step]\` đều hiển thị đầy đủ ngay lập tức (\`opacity: 1; transform: none;\`). Bấm Space / Mũi tên chuyển slide trực tiếp.
 
 4. HỆ THỐNG CÂU HỎI TRẮC NGHIỆM (QUIZ) & ĐẾM GIỜ:
    - Gồm đủ 3 dạng: Trắc nghiệm 4 lựa chọn (MCQ), Trắc nghiệm Đúng/Sai (TNDS), Trả lời ngắn (TLN). Giữ nguyên tiền tố đánh số ("TNLC 1.", "TNDS 1.", "TLN 1."...).
    - Có bộ đếm ngược thời gian (45s, 60s, 90s).
    - Nút "Kiểm tra đáp án": Đúng (viền xanh, Confetti, âm thanh Success), Sai (viền đỏ, rung lắc, âm thanh Error).
-   - Bấm tiếp (phím Space / Click) thì Lời giải chi tiết của câu hỏi sẽ hiện ra (class="step").
+   - Lời giải chi tiết của câu hỏi được gán thẻ \`data-step\` sau cùng, chỉ xuất hiện khi bấm kiểm tra hoặc bấm chuyển bước tiếp theo.
 
 5. TƯƠNG THÍCH KÉP HOÀN HẢO VỚI CẢ INDEX.HTML VÀ APP LOPU:
-   - Khi chạy với "index.html" hoặc chạy trực tiếp: Hoạt động như một bài thuyết trình PowerPoint mượt mà, đầy đủ hiệu ứng hiện từng bước, âm thanh, nổ pháo hoa, công thức Toán đẹp và không lỗi font tiếng Việt.
-   - Khi nạp vào App LopU: Các thẻ tiêu đề (h1, h2, h3), hình vẽ SVG, ví dụ (.vi-du), câu hỏi (.cau-hoi), lời giải (.loi-giai) được cấu trúc rõ ràng trong <body>, giúp App LopU tự động nạp thẳng vào cửa sổ Word chuẩn kèm thanh mốc PPT màu tím bên lề trái (như trang "Lý thuyết trọng tâm").
+   - Khi chạy với "index.html" hoặc mở trực tiếp trên trình duyệt: Hoạt động như một bài thuyết trình PowerPoint mượt mà, đầy đủ hiệu ứng hiện từng bước theo thuộc tính \`data-step\`, không lỗi font tiếng Việt và công thức Toán đẹp.
+   - Khi nạp vào App LopU: Các thẻ tiêu đề (h1, h2, h3), hình vẽ SVG, ví dụ (.vi-du), câu hỏi (.cau-hoi), lời giải (.loi-giai) được cấu trúc rõ ràng trong <body>, giúp App LopU tự động nạp thẳng vào cửa sổ Word chuẩn kèm thanh mốc PPT màu tím bên lề trái (như trang "Lý thuyết trọng tâm"), đồng thời chế độ "Xem PPT" của LopU tự động nhận diện các thẻ \`data-step\` thành các bước hiệu ứng trình chiếu.
 
 6. QUY TẮC TOÁN HỌC TRÁNH LỖI "Math input error":
    - Đồng nhất sử dụng dấu $công thức$ cho nội dòng và $$công thức$$ cho riêng dòng. Tuyệt đối KHÔNG dùng \\( \\).
@@ -466,7 +461,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
    + Tóm tắt chi tiết cấu trúc tiến trình bài giảng theo đúng trật tự: Mục lý thuyết nào -> Hình vẽ SVG dự kiến đi kèm -> Các ví dụ minh họa -> Phần bài tập rèn luyện cuối bài.
    + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
    + Xác định tên file nội dung bài học theo tên bài học viết liền không dấu (Ví dụ: "TongVaHieuCuaHaiVecto.html").
-   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, chọn file bài học, màn hình chào mừng 2 câu) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file bài giảng PPT '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
+   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, cài đặt đường dẫn file, lời chào, danh sách lớp & học sinh mặc định rỗng, nút bật thứ tự trình chiếu) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file bài giảng PPT '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
    + DỪNG LẠI và chờ tôi phản hồi duyệt tiến trình cũng như xác nhận tùy chọn xuất file.
 - BƯỚC 2: XUẤT FILE HOÀN CHỈNH THEO TÙY CHỌN ĐÃ DUYỆT:
    + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận ở Bước 1, bạn mới bắt đầu tạo và xuất file:
@@ -478,7 +473,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Chuẩn hóa UTF-8 chống lỗi font, MathJax công thức toán sắc nét, Slide trình chiếu PPT với hiệu ứng hiện ra lần lượt từng bước (Step-by-step Build) khi bấm Space/Click, Master Player index.html linh hoạt đa lớp, màn hình chào mừng 2 câu và chặn lỗi phím Space mở hộp thoại chọn file.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Master Player index.html có bánh răng cài đặt 4 mục (đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, nút bật thứ tự nội dung trình chiếu trong mỗi slide), file nội dung bài học lưu thứ tự trình chiếu trực tiếp bằng data-step, chuẩn hóa UTF-8 chống lỗi font, MathJax công thức Toán sắc nét và chặn lỗi phím Space mở hộp thoại chọn file.'
       }
     ]
   },
