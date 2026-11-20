@@ -87,7 +87,7 @@ import { WordTextColorPicker, WordHighlightColorPicker } from './WordColorPicker
 import { WordStyleMenu } from './WordStyleMenu';
 import { MenuHamSo } from './MenuHamSo';
 import { MenuChen } from './MenuChen';
-import { isFullHtmlDocument, prepareHtmlForWordViewer } from './htmlDocUtils';
+import { isFullHtmlDocument, prepareHtmlForWordViewer, cleanAndStructureHtmlForWord } from './htmlDocUtils';
 import { renderLatexInHtml } from './latexUtils';
 import { DongBoDriveButton } from './DongBoDrive';
 import {
@@ -255,24 +255,9 @@ export const WordSoanThaoView: React.FC<{ currentRole?: UserRole }> = ({ current
   const htmlContainerRef = useRef<HTMLDivElement>(null);
   const htmlIframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Helper làm sạch tài liệu HTML thành nội dung Word thuần túy (giữ nguyên giao diện chuẩn như trang Lý thuyết trọng tâm)
+  // Helper làm sạch tài liệu HTML thành nội dung Word thuần túy (loại bỏ phần tử thừa, bóc tách slide và tự động gắn mốc Slide & mốc Hiệu ứng FadeIn)
   const sanitizeHtmlToWordContent = (html: string): string => {
-    if (!html || typeof html !== 'string') return '<p><br></p>';
-    let clean = html;
-    const bodyMatch = clean.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-    if (bodyMatch) clean = bodyMatch[1];
-    clean = clean
-      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-      .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-      .replace(/<audio\b[^<]*(?:(?!<\/audio>)<[^<]*)*<\/audio>/gi, '')
-      .replace(/<canvas\b[^<]*(?:(?!<\/canvas>)<[^<]*)*<\/canvas>/gi, '')
-      .replace(/<meta\b[^>]*>/gi, '')
-      .replace(/<link\b[^>]*>/gi, '')
-      .replace(/<div[^>]*class="[^"]*(?:viewport-wrapper|slide-stage|slide-card)[^"]*"[^>]*>/gi, '')
-      .replace(/<div[^>]*id="slideCard"[^>]*>/gi, '')
-      .replace(/<div[^>]*id="topRightCluster"[^>]*>[\s\S]*?<\/div>\s*<\/div>/gi, '')
-      .replace(/<div[^>]*class="nav-pill"[^>]*>[\s\S]*?<\/div>/gi, '');
-    return renderLatexInHtml(clean.trim() || '<p><br></p>');
+    return cleanAndStructureHtmlForWord(html);
   };
 
   // Helper đặt nội dung văn bản luôn ưu tiên chế độ soạn thảo Word với thanh mốc PPT bên trái (như trang Lý thuyết trọng tâm)
@@ -5155,16 +5140,20 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
         !isSlide &&
         (/^(?:Lời giải|Hướng dẫn|Hướng dẫn giải|Giải|Đáp án|Nhận xét|Bước \d|Chú ý|Kết luận|Ta có|Suy ra|•|-)\s*[:\.]?/i.test(text) ||
           child.classList.contains('word-graph-wrapper') ||
+          child.classList.contains('loi-giai') ||
+          child.hasAttribute('data-step') ||
           tag === 'TABLE');
 
       if (isSlide) {
         child.setAttribute('data-slide-break', 'true');
         child.removeAttribute('data-effect-break');
+        child.removeAttribute('data-effect-type');
         child.classList.add('slide-break-point');
         child.classList.remove('effect-break-point');
         slideCount++;
       } else if (isEffect) {
         child.setAttribute('data-effect-break', 'true');
+        child.setAttribute('data-effect-type', 'fade');
         child.removeAttribute('data-slide-break');
         child.classList.add('effect-break-point');
         child.classList.remove('slide-break-point');
@@ -8960,15 +8949,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                             type="button"
                             onClick={() => {
                               setIsHtmlDocMode(false);
-                              let cleanContent = htmlDocContent || '';
-                              const bodyMatch = cleanContent.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
-                              if (bodyMatch) cleanContent = bodyMatch[1];
-                              cleanContent = cleanContent
-                                .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-                                .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
-                                .replace(/<audio\b[^<]*(?:(?!<\/audio>)<[^<]*)*<\/audio>/gi, '')
-                                .replace(/<canvas\b[^<]*(?:(?!<\/canvas>)<[^<]*)*<\/canvas>/gi, '');
-                              const finalHtml = cleanContent.trim() || '<p><br></p>';
+                              const finalHtml = sanitizeHtmlToWordContent(htmlDocContent);
                               setWordDocumentHtml(finalHtml);
                               if (editorRef.current) {
                                 editorRef.current.innerHTML = finalHtml;

@@ -277,7 +277,7 @@ QUY TẮC ĐẦU RA:
       - Các khối có số thứ tự bằng nhau (ví dụ cùng là \`1\`) sẽ xuất hiện CÙNG 1 LÚC (đồng thời).
       - Số nhỏ hiện trước, số lớn hiện sau.
     + Khi chạy trên Web: Hỗ trợ chuyển bước qua phím Space, phím Mũi tên phải (→), click chuột hoặc nhận tín hiệu \`postMessage\` từ \`index.html\`.
-    + Khi nạp lên App LopU: Cấu trúc Semantic HTML chuẩn trong \`<body>\` giúp App LopU tự động nạp nội dung vào cửa sổ soạn thảo Word chuẩn, hiển thị thanh mốc PPT bên trái (như trang 'Lý thuyết trọng tâm') và tự động nhận diện các thẻ \`data-step\` thành các bước hiệu ứng trong chế độ 'Xem PPT'.
+    + Khi nạp lên App LopU: Tự động loại bỏ toàn bộ các phần tử thừa khi chiếu (như thanh "◀ Slide 1 / 15 ▶", ô "Nhập đáp số...", nút "✔ Kiểm tra đáp án", đồng hồ "⏱01:30 ▶ ↻"), chuẩn hóa tiêu đề lời giải thành "Lời giải:" (không lộ trước đáp số), đồng thời tự động dựa vào phân chia slide và thứ tự bước để đặt Mốc Slide (\`data-slide-break="true"\`) cùng Mốc Hiệu ứng FadeIn-Mờ dần (\`data-effect-break="true" data-effect-type="fade"\`) trên Thanh mốc PPT bên lề trái (giữ nguyên giao diện cửa sổ Word chuẩn như trang "Lý thuyết trọng tâm").
 * **TÙY CHỌN 2: KHÔNG TẠO \`index.html\` (CHỈ XUẤT DUY NHẤT 01 FILE BÀI GIẢNG PPT \`{TenBaiHocVietLienKhongDau}.html\`):**
   - Gemini chỉ tạo và xuất duy nhất 01 file **\`{TenBaiHocVietLienKhongDau}.html\`** có đầy đủ UTF-8, MathJax kèm macro vectơ \`\\overrightarrow\`, hình vẽ SVG, câu hỏi trắc nghiệm và thứ tự trình chiếu lưu trực tiếp bằng thuộc tính \`data-step\` cho phép giáo viên nhập số trực tiếp.
 
@@ -423,20 +423,24 @@ YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
      + Error Audio: https://assets.mixkit.co/active_storage/sfx/2997/2997-preview.mp3
      + Tada Audio: https://assets.mixkit.co/active_storage/sfx/2013/2013-preview.mp3
 
-2. THỨ TỰ NỘI DUNG TRÌNH CHIẾU LƯU BẰNG data-step & CHO PHÉP GIÁO VIÊN NHẬP SỐ TRỰC TIẾP:
+2. THỨ TỰ NỘI DUNG TRÌNH CHIẾU LƯU BẰNG data-step & GẮN SẴN MỐC SLIDE / HIỆU ỨNG CHUẨN LOPU:
    - Toàn bộ bài học được tổ chức thành các SLIDE riêng biệt (<section class="slide-item">), mỗi thời điểm CHỈ HIỂN THỊ DUY NHẤT 1 SLIDE (display: none; slide đang chiếu có class="active" display: block;).
    - Slide 1 (Bìa): Tiêu đề bài học, ghi đầy đủ thông tin: "Giáo viên: Đỗ Tấn Bảo – Tổ Toán – Trường THPT Ba Gia".
+   - **GẮN SẴN MỐC SLIDE & MỐC HIỆU ỨNG FADEIN (MỜ DẦN) CHUẨN LOPU:**
+     + Khối đầu tiên của mỗi Slide BẮT BUỘC gắn: \`data-slide-break="true" class="slide-break-point"\`.
+     + Các khối chuyển bước hiệu ứng tiếp theo (bước 2, bước 3... hoặc khối Lời giải, Ví dụ xuất hiện sau) BẮT BUỘC gắn: \`data-effect-break="true" data-effect-type="fade" class="effect-break-point"\`.
+     + Các khối có cùng số thứ tự bước (số bằng nhau) xuất hiện cùng 1 lúc, chỉ khối đầu tiên gắn mốc hiệu ứng.
    - Trong mỗi slide kiến thức & bài tập, TẤT CẢ các khối thông tin BẮT BUỘC được đánh số thứ tự trình chiếu trực tiếp bằng thuộc tính \`data-step\`:
      \`\`\`html
      <section class="slide-item" data-slide-index="1">
-       <!-- Bước 1: Tiêu đề & Định nghĩa -->
-       <div data-step="1" class="step-node">
+       <!-- Bước 1: Tiêu đề & Định nghĩa (Khối đầu tiên của Slide -> Mốc Slide!) -->
+       <div data-step="1" data-slide-break="true" class="step-node slide-break-point">
          <div class="step-order-badge"><span class="badge-tag">⚡ Bước:</span><input type="number" class="step-num-input" value="1" min="1" max="99" /></div>
          <h2 style="color: #0f766e; font-size: 18pt;">1. Quy tắc ba điểm</h2>
          <p>Cho hai vectơ $\\overrightarrow{a}$ và $\\overrightarrow{b}$. Lấy điểm $A$ tùy ý, vẽ $\\overrightarrow{AB} = \\overrightarrow{a}$ và $\\overrightarrow{BC} = \\overrightarrow{b}$...</p>
        </div>
 
-       <!-- Bước 1: Hình vẽ minh họa SVG (Cùng số 1 -> Xuất hiện CÙNG 1 LÚC với định nghĩa!) -->
+       <!-- Bước 1: Hình vẽ minh họa SVG (Cùng số 1 -> Xuất hiện CÙNG 1 LÚC với định nghĩa, không ngắt hiệu ứng!) -->
        <div data-step="1" class="step-node" style="display: flex; gap: 20px; align-items: center; margin: 12px 0;">
          <div class="step-order-badge"><span class="badge-tag">⚡ Bước:</span><input type="number" class="step-num-input" value="1" min="1" max="99" /></div>
          <div style="flex: 1;">
@@ -448,23 +452,23 @@ YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
          </div>
        </div>
 
-       <!-- Bước 2: Công thức đóng khung nổi bật (Số 2 -> Bấm Space lần sau mới hiện!) -->
-       <div data-step="2" class="step-node" style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; margin: 10px 0; border-radius: 6px;">
+       <!-- Bước 2: Công thức đóng khung nổi bật (Số 2 -> Mốc Hiệu ứng FadeIn-Mờ dần!) -->
+       <div data-step="2" data-effect-break="true" data-effect-type="fade" class="step-node effect-break-point" style="background: #f0fdf4; border-left: 4px solid #16a34a; padding: 12px; margin: 10px 0; border-radius: 6px;">
          <div class="step-order-badge"><span class="badge-tag">⚡ Bước:</span><input type="number" class="step-num-input" value="2" min="1" max="99" /></div>
          <b>Quy tắc ba điểm:</b> Với ba điểm bất kì $A, B, C$, ta luôn có: $$\\overrightarrow{AB} + \\overrightarrow{BC} = \\overrightarrow{AC}$$
        </div>
 
-       <!-- Bước 3: Đề bài ví dụ minh họa -->
-       <div data-step="3" class="step-node vi-du" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin: 12px 0;">
+       <!-- Bước 3: Đề bài ví dụ minh họa (Số 3 -> Mốc Hiệu ứng FadeIn-Mờ dần!) -->
+       <div data-step="3" data-effect-break="true" data-effect-type="fade" class="step-node vi-du effect-break-point" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin: 12px 0;">
          <div class="step-order-badge"><span class="badge-tag">⚡ Bước:</span><input type="number" class="step-num-input" value="3" min="1" max="99" /></div>
          <p style="color: #b45309; font-weight: bold;">Ví dụ 1:</p>
          <p>Cho hình bình hành $ABCD$. Chứng minh rằng $\\overrightarrow{AB} + \\overrightarrow{AD} = \\overrightarrow{AC}$.</p>
        </div>
 
-       <!-- Bước 4: Lời giải chi tiết -->
-       <div data-step="4" class="step-node loi-giai" style="background: #ffffff; border-left: 3px solid #f59e0b; padding: 10px 14px; margin-top: 6px; border-radius: 4px;">
+       <!-- Bước 4: Lời giải chi tiết (Số 4 -> Mốc Hiệu ứng FadeIn-Mờ dần!) -->
+       <div data-step="4" data-effect-break="true" data-effect-type="fade" class="step-node loi-giai effect-break-point" style="background: #ffffff; border-left: 3px solid #f59e0b; padding: 10px 14px; margin-top: 6px; border-radius: 4px;">
          <div class="step-order-badge"><span class="badge-tag">⚡ Bước:</span><input type="number" class="step-num-input" value="4" min="1" max="99" /></div>
-         <p><b>Lời giải:</b> Vì $ABCD$ là hình bình hành nên $\\overrightarrow{AD} = \\overrightarrow{BC}$. Áp dụng quy tắc ba điểm: $\\overrightarrow{AB} + \\overrightarrow{AD} = \\overrightarrow{AB} + \\overrightarrow{BC} = \\overrightarrow{AC}$ (đpcm).</p>
+         <p><b>**\Lời giải:\**</b> Vì $ABCD$ là hình bình hành nên $\\overrightarrow{AD} = \\overrightarrow{BC}$. Áp dụng quy tắc ba điểm: $\\overrightarrow{AB} + \\overrightarrow{AD} = \\overrightarrow{AB} + \\overrightarrow{BC} = \\overrightarrow{AC}$ (đpcm).</p>
        </div>
      </section>
      \`\`\`
@@ -587,15 +591,21 @@ YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
      + Khi \`stepBuildEnabled === false\`:
        - Tất cả phần tử \`[data-step]\` đều hiển thị đầy đủ ngay lập tức (\`opacity: 1; transform: none;\`). Bấm Space / Mũi tên chuyển slide trực tiếp.
 
-4. HỆ THỐNG CÂU HỎI TRẮC NGHIỆM (QUIZ) & ĐẾM GIỜ:
+4. HỆ THỐNG CÂU HỎI TRẮC NGHIỆM (QUIZ) & QUY TẮC BỎ PHẦN THỪA KHI CHIẾU:
    - Gồm đủ 3 dạng: Trắc nghiệm 4 lựa chọn (MCQ), Trắc nghiệm Đúng/Sai (TNDS), Trả lời ngắn (TLN). Giữ nguyên tiền tố đánh số ("TNLC 1.", "TNDS 1.", "TLN 1."...).
-   - Có bộ đếm ngược thời gian (45s, 60s, 90s).
-   - Nút "Kiểm tra đáp án": Đúng (viền xanh, Confetti, âm thanh Success), Sai (viền đỏ, rung lắc, âm thanh Error).
-   - Lời giải chi tiết của câu hỏi được gán thẻ \`data-step\` sau cùng, chỉ xuất hiện khi bấm kiểm tra hoặc bấm chuyển bước tiếp theo.
+   - **QUY CHUẨN TIÊU ĐỀ LỜI GIẢI:**
+     + BẮT BUỘC chỉ ghi gọn gàng là **"Lời giải:"** (hoặc "Lời giải").
+     + **TUYỆT ĐỐI KHÔNG GHI:** "Lời giải TLN 1 (Đáp số: 10)" hay để lộ trước đáp án/đáp số trên tiêu đề! Đáp án/đáp số chỉ nằm bên trong nội dung chi tiết.
+   - **KHI CHIẾU TRÊN LOPU HOẶC SOẠN THẢO WORD:**
+     + Tự động loại bỏ hoàn toàn các nút/ô thừa: "◀ Slide 1 / 15 ▶", ô "Nhập đáp số...", nút "✔ Kiểm tra đáp án", đồng hồ "⏱01:30 ▶ ↻".
+     + Lời giải chi tiết của câu hỏi được gán thẻ \`data-step\` sau cùng (kèm \`data-effect-break="true" data-effect-type="fade"\`), chỉ xuất hiện khi bấm chuyển bước tiếp theo.
 
 5. TƯƠNG THÍCH KÉP HOÀN HẢO VỚI CẢ INDEX.HTML VÀ APP LOPU:
    - Khi chạy với "index.html" hoặc mở trực tiếp trên trình duyệt: Hoạt động như một bài thuyết trình PowerPoint mượt mà, đầy đủ hiệu ứng hiện từng bước theo thuộc tính \`data-step\`, không lỗi font tiếng Việt và công thức Toán đẹp.
-   - Khi nạp vào App LopU: Các thẻ tiêu đề (h1, h2, h3), hình vẽ SVG, ví dụ (.vi-du), câu hỏi (.cau-hoi), lời giải (.loi-giai) được cấu trúc rõ ràng trong <body>, giúp App LopU tự động nạp thẳng vào cửa sổ Word chuẩn kèm thanh mốc PPT màu tím bên lề trái (như trang "Lý thuyết trọng tâm"), đồng thời chế độ "Xem PPT" của LopU tự động nhận diện các thẻ \`data-step\` thành các bước hiệu ứng trình chiếu (các thẻ cùng số bước xuất hiện cùng 1 lúc).
+   - Khi nạp vào App LopU:
+     + Tự động loại bỏ mọi phần thừa khi chiếu (thanh điều hướng slide, ô nhập đáp số, nút kiểm tra đáp án, đồng hồ đếm ngược).
+     + Tự động nhận diện phân chia Slide và thứ tự Hiệu ứng để đặt **Mốc Slide** (\`data-slide-break="true"\`) và **Mốc Hiệu ứng FadeIn-Mờ dần** (\`data-effect-break="true" data-effect-type="fade"\`) trên Thanh Mốc PPT bên lề trái.
+     + Cửa sổ Word chuẩn hiển thị trọn vẹn văn bản dọc (như trang "Lý thuyết trọng tâm"), đồng thời chế độ "Xem PPT" của LopU tự động chuyển slide và kích hoạt hiệu ứng mờ dần từng bước cực kỳ mượt mà.
 
 6. QUY TẮC TOÁN HỌC TRÁNH LỖI "Math input error":
    - Đồng nhất sử dụng dấu $công thức$ cho nội dòng và $$công thức$$ cho riêng dòng. Tuyệt đối KHÔNG dùng \\( \\).
@@ -620,7 +630,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Triệt tiêu hoàn toàn lỗi SecurityError (Access is denied for localStorage) khi chạy trong iframe/blob, Master Player index.html hiển thị tên giáo viên ("Giáo viên: Đỗ Tấn Bảo") & trường ("Trường THPT Ba Gia"), tự động mở tệp bài học khi bấm "Bắt đầu tiết học", bánh răng cài đặt 4 mục (thư mục chứa nội dung bài học, thông tin giáo viên & lời chào, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập trực tiếp thứ tự trình chiếu), chuẩn hóa ký hiệu vectơ \\overrightarrow trải dài đẹp mắt kèm macro MathJax, cơ chế gom nhóm số thứ tự bằng nhau hiện cùng 1 lúc (số nhỏ trước, số lớn sau), lưu trực tiếp bằng data-step và SafeStorage/LocalStorage, chuẩn hóa UTF-8 chống lỗi font và chặn lỗi phím Space mở hộp thoại chọn file.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Triệt tiêu hoàn toàn lỗi SecurityError (Access is denied for localStorage) khi chạy trong iframe/blob, Master Player index.html hiển thị tên giáo viên ("Giáo viên: Đỗ Tấn Bảo") & trường ("Trường THPT Ba Gia"), tự động mở tệp bài học khi bấm "Bắt đầu tiết học", bánh răng cài đặt 4 mục, chuẩn hóa ký hiệu vectơ \\overrightarrow trải dài đẹp mắt kèm macro MathJax, cơ chế gom nhóm số thứ tự bằng nhau hiện cùng 1 lúc (số nhỏ trước, số lớn sau), lưu trực tiếp bằng data-step và SafeStorage, tự động loại bỏ các phần thừa khi chiếu (thanh điều hướng \◀ Slide 1 / 15 ▶\, ô Nhập đáp số, nút Kiểm tra đáp án, đồng hồ ⏱01:30), chuẩn hóa tiêu đề Lời giải không lộ trước đáp số và tự động đặt Mốc Slide cùng Mốc Hiệu ứng FadeIn-Mờ dần chuẩn trên Thanh mốc PPT lề trái LopU.'
       }
     ]
   },
