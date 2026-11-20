@@ -313,8 +313,8 @@ export function prepareHtmlForWordViewer(html: string): string {
         padding: 24px 20px 20px 20px !important;
       }
     }
-    /* Khi xem trên App LopU: Tự động ẩn thanh công cụ riêng của file HTML cũ để tránh đè hình vẽ hoặc trùng lặp menu */
-    #topRightCluster, #drawToolbar, .draw-toolbar, #activeStrokeCanvas, #drawCanvas {
+    /* Khi xem trên App LopU: Tự động ẩn thanh công cụ riêng và chữ kiểu ◀ Slide 1 / 15 ▶ để tiết kiệm tối đa không gian trình chiếu */
+    #topRightCluster, #drawToolbar, .draw-toolbar, #activeStrokeCanvas, #drawCanvas, .bottom-nav-bar, #btnPrevSlide, #btnNextSlide, #slideIndicator, .slide-counter, .nav-arrow-btn, .slide-nav {
       display: none !important;
     }
   </style>

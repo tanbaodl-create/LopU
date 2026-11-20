@@ -597,8 +597,10 @@ YÊU CẦU CHI TIẾT FILE 2: "{TenBaiHocVietLienKhongDau}.html"
      + BẮT BUỘC chỉ ghi gọn gàng là **"Lời giải:"** (hoặc "Lời giải").
      + **TUYỆT ĐỐI KHÔNG GHI:** "Lời giải TLN 1 (Đáp số: 10)" hay để lộ trước đáp án/đáp số trên tiêu đề! Đáp án/đáp số chỉ nằm bên trong nội dung chi tiết.
    - **KHI CHIẾU TRÊN LOPU HOẶC SOẠN THẢO WORD:**
+     + Tiết kiệm tối đa không gian trình chiếu: Khi chiếu tuyệt đối KHÔNG hiển thị chữ hoặc thanh kiểu "◀ Slide 1 / 15 ▶", "Slide 1 / 8" để dành trọn vẹn màn hình cho bài giảng. Chuyển bước/slide bằng phím Space, phím mũi tên hoặc click chuột.
      + Tự động loại bỏ hoàn toàn các nút/ô thừa: "◀ Slide 1 / 15 ▶", ô "Nhập đáp số...", nút "✔ Kiểm tra đáp án", đồng hồ "⏱01:30 ▶ ↻".
      + Lời giải chi tiết của câu hỏi được gán thẻ \`data-step\` sau cùng (kèm \`data-effect-break="true" data-effect-type="fade"\`), chỉ xuất hiện khi bấm chuyển bước tiếp theo.
+     + Hỗ trợ Xuất file học sinh (PDF): Tự động loại bỏ toàn bộ lời giải các câu, giữ trọn vẹn lý thuyết, đề bài ví dụ, TNKQ, TNDS, TLN và tự động kết xuất Bảng đáp án ở cuối file nếu giáo viên chọn.
 
 5. TƯƠNG THÍCH KÉP HOÀN HẢO VỚI CẢ INDEX.HTML VÀ APP LOPU:
    - Khi chạy với "index.html" hoặc mở trực tiếp trên trình duyệt: Hoạt động như một bài thuyết trình PowerPoint mượt mà, đầy đủ hiệu ứng hiện từng bước theo thuộc tính \`data-step\`, không lỗi font tiếng Việt và công thức Toán đẹp.

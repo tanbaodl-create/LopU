@@ -8247,7 +8247,7 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                   {wordViewMode === 'inde'
                     ? 'In đề'
                     : wordViewMode === 'filehs'
-                    ? 'File HS'
+                    ? 'File học sinh'
                     : tienTrinhChuyenDe === 'Kiến thức'
                     ? wordViewMode === 'ppt'
                       ? 'Xem PPT'
@@ -8380,17 +8380,39 @@ ${extremaTikzLines ? extremaTikzLines + '\n' : ''}  % Giới hạn đồ thị n
                     <FileSpreadsheet className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
                       <div className="font-bold flex items-center gap-1.5">
-                        <span>File HS</span>
+                        <span>Xuất file học sinh (PDF)</span>
                         {wordViewMode === 'filehs' && (
                           <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-200 text-emerald-800 font-semibold">Đang xem</span>
                         )}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-normal">Đổi phần lời giải bằng dòng chấm chấm cho học sinh làm bài</div>
+                      <div className="text-[10px] text-slate-400 font-normal">Bỏ hết lời giải các câu, có tùy chọn bảng đáp án cuối file</div>
                     </div>
                   </button>
                 </div>
               )}
             </div>
+
+            {/* NÚT XUẤT FILE HỌC SINH (PDF) NGAY CẠNH NÚT VIEW */}
+            {isTeacherOrHigher(currentRole) && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (editorRef.current) {
+                    setWordDocumentHtml(editorRef.current.innerHTML);
+                  }
+                  setWordViewMode('filehs');
+                }}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs transition-all cursor-pointer shrink-0 border ${
+                  wordViewMode === 'filehs'
+                    ? 'bg-emerald-700 text-white border-emerald-800 ring-2 ring-emerald-300'
+                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border-emerald-300'
+                }`}
+                title="Xuất file học sinh (PDF): Bỏ toàn bộ lời giải các câu, giữ nguyên lý thuyết, ví dụ và đề bài các câu; có tùy chọn bảng đáp án ở cuối tài liệu"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Xuất file học sinh</span>
+              </button>
+            )}
 
             {/* NÚT CHÈN KHOẢNG TRỐNG (BIỂU TƯỢNG HÌNH ▭↓▭) NGAY SAU NÚT VIEW: XEM PPT */}
             {wordViewMode === 'ppt' && (

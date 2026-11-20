@@ -510,7 +510,7 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
         onPointerLeave={handleSlidePointerLeave}
         onPointerDown={handleSlidePointerDown}
         onClick={handleSlideClick}
-        className={`bg-white w-full min-h-screen flex-1 flex flex-col justify-between p-6 sm:p-12 pt-24 sm:pt-28 pb-8 select-none transition-all relative border-none rounded-none shadow-none ${
+        className={`bg-white w-full min-h-screen flex-1 flex flex-col justify-start p-6 sm:p-10 pt-16 sm:pt-20 pb-8 select-none transition-all relative border-none rounded-none shadow-none ${
           isInsertSpaceMode ? 'cursor-ns-resize ring-2 ring-indigo-400/40' : 'cursor-pointer'
         }`}
         title={
@@ -802,18 +802,6 @@ export const PptSlideViewer: React.FC<PptSlideViewerProps> = ({
                 </span>
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Chân Slide */}
-        <div className="pt-6 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
-          <div className="flex items-center gap-1.5 italic text-slate-500">
-            <span>💡 Nhấp chuột trái, phím Space hoặc mũi tên → để chuyển hiệu ứng / slide</span>
-          </div>
-          <div className="flex items-center gap-2 font-bold text-slate-600">
-            <span className="bg-slate-100 px-3 py-1 rounded-lg">
-              Trang {activeSlideIndex + 1} / {slides.length}
-            </span>
           </div>
         </div>
       </div>
