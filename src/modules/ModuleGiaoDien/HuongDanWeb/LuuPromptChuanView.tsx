@@ -237,7 +237,7 @@ QUY TẮC ĐẦU RA:
       {
         id: 'math-elearning-ppt',
         name: 'KHBD_Web',
-        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, giải pháp triệt tiêu lỗi SecurityError (chặn lỗi Access is denied đối với localStorage trong iframe/blob khi chạy file:///), chuẩn hóa ký hiệu vectơ \`\\overrightarrow{...}\` trải dài đẹp mắt thay cho \`\\vec{...}\` cụt lủn, cơ chế màn hình chào mừng 2 câu tùy chỉnh, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn mã hóa UTF-8 chống lỗi font tiếng Việt, nhúng MathJax công thức Toán sắc nét kèm macro tự động, cơ chế Modal Cài đặt bánh răng [⚙️] 4 khu vực (cài đặt đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, và cài đặt bật thứ tự nội dung trình chiếu cho phép giáo viên nhập trực tiếp số thứ tự vào từng khối với quy tắc số bằng nhau hiện cùng 1 lúc), cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file bài giảng PPT** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
+        prompt: `Dưới đây là nguyên lý kỹ thuật giải quyết triệt để lỗi đè mực, giải pháp triệt tiêu lỗi SecurityError (chặn lỗi Access is denied đối với localStorage trong iframe/blob khi chạy file:///), chuẩn hóa ký hiệu vectơ \`\\overrightarrow{...}\` trải dài đẹp mắt thay cho \`\\vec{...}\` cụt lủn, cơ chế màn hình chào mừng tùy chỉnh thông tin giáo viên ("Giáo viên: Đỗ Tấn Bảo") và đơn vị công tác ("Trường THPT Ba Gia") (bỏ dòng chữ "Bài Giảng Điện Tử Tương Tác • LopU"), cơ chế tự động mở tệp bài học từ máy khi bấm "Bắt đầu tiết học" nếu chưa nạp bài và vào thẳng bài học, giải pháp triệt tiêu lỗi phím Space mở hộp thoại chọn file, quy chuẩn mã hóa UTF-8 chống lỗi font tiếng Việt, nhúng MathJax công thức Toán sắc nét kèm macro tự động, cơ chế Modal Cài đặt bánh răng [⚙️] 4 khu vực (cài đặt thư mục chứa nội dung bài học, thông tin giáo viên & đơn vị công tác kèm 2 câu lời chào mở đầu, danh sách lớp & học sinh mặc định rỗng, và cài đặt bật thứ tự nội dung trình chiếu cho phép giáo viên nhập trực tiếp số thứ tự vào từng khối với quy tắc số bằng nhau hiện cùng 1 lúc), cấu trúc tùy chọn linh hoạt giữa **Xuất đủ 02 file riêng biệt** (\`index.html\` Master Player + \`{TenBaiHocVietLienKhongDau}.html\`) hoặc **Chỉ xuất duy nhất 01 file bài giảng PPT** (\`{TenBaiHocVietLienKhongDau}.html\` nạp lên App LopU) và toàn bộ bản **Prompt hoàn chỉnh mới nhất** dành cho KHBD_Web:
 
 ### 1. NGUYÊN TẮC KỸ THUẬT QUAN TRỌNG HÀNG ĐẦU:
 * **GIẢI PHÁP TRIỆT TIÊU LỖI "SecurityError: Access is denied for this document" KHI CHẠY TRONG IFRAME:**
@@ -250,8 +250,8 @@ QUY TẮC ĐẦU RA:
     + Đóng vai trò là Master Player quy định toàn bộ giao diện & công cụ dạy học dùng chung cho mọi bài học khi trình chiếu ngoài trình duyệt độc lập.
     + **Thanh công cụ siêu tinh gọn (Floating Pill bar):** [🏫 Chọn Lớp ▾] [⚙️ Cài đặt] [📂 Mở bài học] | [🎲 Quay số] [- 1 +] [✏️ Bút vẽ] (chiếm < 3% diện tích, ưu tiên 97% cho bài giảng).
     + **BIỂU TƯỢNG BÁNH RĂNG [⚙️] MỞ MODAL CÀI ĐẶT TRUNG TÂM GỒM 4 MỤC QUAN TRỌNG:**
-      1. *Cài đặt đường dẫn file nội dung bài học:* Ô nhập tên hoặc đường dẫn file bài học (mặc định \`{TenBaiHocVietLienKhongDau}.html\`) kèm nút chọn tệp từ máy tính; lưu vào LocalStorage và nạp ngay vào thẻ iframe.
-      2. *Cài đặt lời chào mở đầu:* 2 ô nhập cho Lời chào dòng 1 & dòng 2 hiển thị trên màn hình chào mừng mở đầu.
+      1. *Cài đặt thư mục chứa nội dung bài học:* Ô nhập tên tệp bài học hoặc đường dẫn thư mục bài học kèm nút [📂 Mở tệp bài học từ máy]; lưu vào SafeStorage/LocalStorage và nạp ngay vào thẻ iframe.
+      2. *Cài đặt thông tin giáo viên & Lời chào mở đầu:* Các ô nhập Đơn vị công tác (mặc định: "Trường THPT Ba Gia"), Tên giáo viên (mặc định: "Giáo viên: Đỗ Tấn Bảo") và 2 ô nhập cho Lời chào dòng 1 & dòng 2 hiển thị trên màn hình chào mừng mở đầu; lưu vào SafeStorage và tự động cập nhật ngay lập tức lên màn hình chào mừng.
       3. *Cài đặt danh sách lớp và học sinh từng lớp:* **MẶC ĐỊNH BAN ĐẦU RỖNG 100% (KHÔNG CÓ LỚP NÀO, HỌC SINH NÀO)**. Cho phép bấm [➕ Thêm lớp], [Đổi tên], [Xóa lớp]; với mỗi lớp cho phép dán danh sách học sinh từ Excel vào khung Textarea. Tự động cập nhật giới hạn quay 80% sĩ số và lưu vĩnh viễn vào LocalStorage.
       4. *Cài đặt BẬT THỨ TỰ NỘI DUNG TRÌNH CHIẾU TRONG MỖI SLIDE:*
          - Công tắc gạt (Toggle Switch): Bật/Tắt hiệu ứng trình chiếu hiện ra lần lượt theo thứ tự bước.
@@ -261,7 +261,11 @@ QUY TẮC ĐẦU RA:
            * **Số thứ tự lớn:** Xuất hiện SAU.
            * **Số thứ tự BẰNG NHAU:** Xuất hiện CÙNG 1 LÚC (đồng thời).
          - Khi giáo viên gõ số vào ô, giá trị cập nhật vào \`data-step\` của khối đó và lưu vào LocalStorage. Khi TẮT: Slide hiển thị đầy đủ ngay lập tức. Trạng thái lưu vào LocalStorage và gửi \`postMessage\` sang iframe.
-    + **Màn hình chào mừng mở đầu:** Lời chào mừng 2 câu + hiệu ứng Confetti rực rỡ và nút [▶ Bắt đầu tiết học].
+    + **Màn hình chào mừng mở đầu (Trang 1):**
+      - Hiển thị nổi bật Đơn vị công tác (mặc định: "Trường THPT Ba Gia") và Tên giáo viên (mặc định: "Giáo viên: Đỗ Tấn Bảo") (cho phép sửa đổi trong Bánh răng cài đặt [⚙️]).
+      - **BỎ HOÀN TOÀN dòng chữ "Bài Giảng Điện Tử Tương Tác • LopU".**
+      - Hiển thị 02 câu chào mừng mở đầu + hiệu ứng pháo hoa Confetti rực rỡ.
+      - Nút lớn nổi bật [▶ Bắt đầu tiết học]: Nhấp vào nút này (hoặc ấn phím Space/Enter) nếu chưa chọn file nội dung bài học thì sẽ TỰ ĐỘNG GỌI SỰ KIỆN CLICK vào nút mở tệp bài học từ máy tính, chọn file xong sẽ nạp bài và vào luôn bài học (ẩn màn hình chào mừng).
     + **Bút vẽ Canvas & Dạ quang Highlight chống đè mực:** \`mix-blend-mode: multiply\` & \`ctx.globalCompositeOperation = 'multiply'\`.
     + **Xử lý triệt để lỗi phím Space mở hộp thoại chọn file (Spacebar Focus Guard):** Tự động \`blur()\` mọi nút bấm, phím Space chỉ chuyển bước trình chiếu.
   - **File 2: \`{TenBaiHocVietLienKhongDau}.html\` (BÀI GIẢNG E-LEARNING PPT LƯU THỨ TỰ TRÌNH CHIẾU BẰNG data-step):**
@@ -285,7 +289,7 @@ QUY TẮC ĐẦU RA:
 Đóng vai: Bạn là một chuyên gia lập trình Web Front-end và một giáo viên Toán THPT tại Việt Nam.
 Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạn sẽ thiết kế bài giảng E-learning HTML theo TÙY CHỌN XUẤT FILE của tôi:
 - TÙY CHỌN 1 — CÓ TẠO "index.html" (Mặc định khi cần công cụ dạy học độc lập trên Web/Máy chiếu): XUẤT ĐỦ 02 FILE HTML RIÊNG BIỆT (TUYỆT ĐỐI CẤM GỘP CHUNG VÀO 1 FILE):
-  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; có biểu tượng bánh răng [⚙️] mở Modal cài đặt 4 mục: đường dẫn file bài học, lời chào, danh sách lớp & học sinh mặc định rỗng, và cài đặt bật thứ tự nội dung trình chiếu cho phép giáo viên nhập trực tiếp số thứ tự vào từng khối; thanh công cụ pill tinh gọn, canvas highlight chống đè mực, chặn triệt để lỗi phím Space mở hộp thoại chọn file).
+  + File 1: "index.html" (File master quy định giao diện & công cụ dạy học đa lớp dùng chung cho mọi bài học; hiển thị thông tin giáo viên mặc định "Giáo viên: Đỗ Tấn Bảo" và đơn vị "Trường THPT Ba Gia" trên trang chào mừng, bỏ dòng chữ "Bài Giảng Điện Tử Tương Tác • LopU", ấn "Bắt đầu tiết học" khi chưa chọn file sẽ tự động kích hoạt mở tệp bài học từ máy tính và chọn xong vào thẳng bài học; có biểu tượng bánh răng [⚙️] mở Modal cài đặt 4 mục: thư mục chứa nội dung bài học, thông tin giáo viên & lời chào, danh sách lớp & học sinh mặc định rỗng, và cài đặt bật thứ tự nội dung trình chiếu cho phép giáo viên nhập trực tiếp số thứ tự vào từng khối; thanh công cụ pill tinh gọn nổi ngay trang 1, canvas highlight chống đè mực, chặn triệt để lỗi phím Space mở hộp thoại chọn file).
   + File 2: "{TenBaiHocVietLienKhongDau}.html" (File bài giảng PPT với ký hiệu vectơ chuẩn \\overrightarrow{AB} mũi tên dài đẹp, THỨ TỰ NỘI DUNG TRÌNH CHIẾU LƯU TRỰC TIẾP TRÊN TỪNG THẺ BẰNG data-step="1", data-step="2"... cho phép giáo viên nhập số trực tiếp: số nhỏ hiện trước, số lớn hiện sau, số bằng nhau hiện CÙNG 1 LÚC; tên file BẮT BUỘC là Tên bài học viết liền không dấu viết hoa chữ cái đầu, ví dụ: TongVaHieuCuaHaiVecto.html; dùng để chọn chạy trong index.html hoặc nạp trực tiếp lên App LopU).
 - TÙY CHỌN 2 — KHÔNG TẠO "index.html" (Khi chỉ cần nạp trực tiếp lên App LopU hoặc đã có sẵn index.html): CHỈ XUẤT DUY NHẤT 01 FILE NỘI DUNG:
   + File duy nhất: "{TenBaiHocVietLienKhongDau}.html" (Chứa toàn bộ bài giảng PPT với vectơ chuẩn \\overrightarrow, thứ tự trình chiếu lưu bằng data-step cho phép nhập trực tiếp số thứ tự, vừa chạy độc lập ngoài trình duyệt vừa nạp trực tiếp lên App LopU giữ nguyên giao diện cửa sổ Word và thanh mốc PPT bên trái như trang "Lý thuyết trọng tâm").
@@ -293,12 +297,19 @@ Nhiệm vụ: Dựa trên nội dung bài học tôi cung cấp ở cuối, bạ
 =========================================================================
 YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI BÀI)
 =========================================================================
-1. MÀN HÌNH CHÀO MỪNG MỞ ĐẦU (WELCOME SCREEN & HIỆU ỨNG RỰC RỠ):
+1. MÀN HÌNH CHÀO MỪNG MỞ ĐẦU (WELCOME SCREEN & THÔNG TIN GIÁO VIÊN):
    - Khi vừa mở file "index.html", hiển thị ngay màn hình chào mừng (Welcome Overlay) sang trọng với hoạt ảnh mềm mại và hiệu ứng pháo hoa Confetti bung nở rực rỡ.
+   - **BỎ HOÀN TOÀN dòng chữ "Bài Giảng Điện Tử Tương Tác • LopU".**
+   - **Hiển thị Đơn vị công tác & Tên giáo viên:**
+     + Đơn vị công tác (mặc định: "Trường THPT Ba Gia", class="welcome-school-badge").
+     + Tên giáo viên (mặc định: "Giáo viên: Đỗ Tấn Bảo", class="welcome-teacher-title").
+     + Hai thông tin này lưu trong LocalStorage/SafeStorage (keys: 'lopu_school_name', 'lopu_teacher_name') và có thể chỉnh sửa trực tiếp trong Modal Cài đặt [⚙️], cập nhật tức thì lên màn hình chào mừng.
    - Hiển thị 02 câu chào mừng (lấy từ LocalStorage hoặc mặc định):
      + Câu 1: "Chào mừng quý thầy cô và các em học sinh đến với tiết học!"
      + Câu 2: "Chúc các em có một tiết học tràn đầy năng lượng, tích cực và sáng tạo!"
-   - Nút lớn nổi bật [▶ Bắt đầu tiết học]: Nhấp vào sẽ ẩn màn hình chào mừng để chuyển vào khung bài giảng.
+   - **Nút lớn nổi bật [▶ Bắt đầu tiết học]:**
+     + Khi người dùng ấn nút này (hoặc bấm phím Space / Enter): Nếu CHƯA chọn file nội dung bài học thì TỰ ĐỘNG GỌI SỰ KIỆN KÍCH CHUỘT vào nút "Mở tệp bài học từ máy" (hiddenFileInput.click()).
+     + Sau khi giáo viên chọn xong tệp bài học từ hộp thoại máy tính, hệ thống tự động nạp bài vào iframe và VÀO LUÔN BÀI HỌC (tự động ẩn màn hình chào mừng).
 
 2. THANH ĐIỀU KHIỂN SIÊU TINH GỌN (BẮT BUỘC HIỂN THỊ NỔI BẬT NGAY TRANG 1 CHÀO MỪNG):
    - Ưu tiên tuyệt đối 98% diện tích màn hình để hiển thị bài giảng. Thanh điều khiển dạng Pill bar nổi thanh mảnh ở góc trên bên phải, nền kính mờ (backdrop-blur):
@@ -310,14 +321,16 @@ YÊU CẦU CHI TIẾT FILE 1: "index.html" (MASTER PLAYER — DÙNG CHUNG MỌI 
 
 3. BIỂU TƯỢNG BÁNH RĂNG [⚙️] MỞ MODAL CÀI ĐẶT TRUNG TÂM GỒM 4 MỤC TOÀN DIỆN:
    Bấm vào [⚙️] sẽ mở một Modal Cài đặt hiện đại, chia thành 4 khu vực rõ ràng:
-   * Mục 1: 📂 Cài đặt đường dẫn file bài học:
-     - Ô nhập tên/đường dẫn tệp nội dung: <input type="text" id="settingLessonPath" placeholder="Ví dụ: TongVaHieuCuaHaiVecto.html" />
-     - Kèm nút [📂 Duyệt file từ máy]: Cho phép chọn tệp HTML từ máy tính.
-     - Khi lưu hoặc chọn file: Tự động gán cho thẻ iframe (iframe.src = path) và lưu vào LocalStorage (key: 'lopu_lesson_file').
-   * Mục 2: 💬 Cài đặt 2 câu lời chào mở đầu:
-     - Ô nhập Lời chào dòng 1: <input type="text" id="settingWelcomeLine1" />
-     - Ô nhập Lời chào dòng 2: <input type="text" id="settingWelcomeLine2" />
-     - Lưu vĩnh viễn vào LocalStorage (key: 'lopu_welcome_line1', 'lopu_welcome_line2').
+   * Mục 1: 📂 1. Cài đặt thư mục chứa nội dung bài học:
+     - Ô nhập tên tệp bài học hoặc đường dẫn thư mục: <input type="text" id="settingLessonPath" placeholder="Tên tệp bài học hoặc đường dẫn thư mục..." />
+     - Kèm nút [📂 Mở tệp bài học từ máy]: Cho phép chọn tệp HTML từ máy tính.
+     - Khi lưu hoặc chọn file: Tự động gán cho thẻ iframe (iframe.src = path/blobUrl), đánh dấu đã nạp bài và lưu vào SafeStorage/LocalStorage (key: 'lopu_lesson_file').
+   * Mục 2: 💬 2. Cài đặt thông tin giáo viên & Lời chào mở đầu:
+     - Ô nhập Đơn vị công tác: <input type="text" id="settingSchoolName" placeholder="Đơn vị công tác (mặc định: Trường THPT Ba Gia)" />
+     - Ô nhập Tên giáo viên: <input type="text" id="settingTeacherName" placeholder="Tên giáo viên (mặc định: Giáo viên: Đỗ Tấn Bảo)" />
+     - Ô nhập Lời chào dòng 1: <input type="text" id="settingWelcomeLine1" placeholder="Lời chào dòng 1..." />
+     - Ô nhập Lời chào dòng 2: <input type="text" id="settingWelcomeLine2" placeholder="Lời chào dòng 2..." />
+     - Nút [💾 Lưu thông tin & Lời chào]: Lưu vĩnh viễn vào SafeStorage/LocalStorage (keys: 'lopu_school_name', 'lopu_teacher_name', 'lopu_welcome_line1', 'lopu_welcome_line2') và cập nhật ngay lên màn hình chào mừng.
    * Mục 3: 🏫 Quản lý Đa Lớp & Học Sinh (MẶC ĐỊNH RỖNG):
      - **MẶC ĐỊNH BAN ĐẦU: RỖNG 100% (KHÔNG CÓ LỚP NÀO, KHÔNG CÓ HỌC SINH NÀO).**
      - Nút [➕ Thêm lớp mới]: Nhập tên lớp (10A1, 10A2, 11B1...) và thêm vào danh sách.
@@ -595,7 +608,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
    + Thống kê rõ số lượng slide và danh sách câu hỏi từng phần để tôi xem xét.
    + Xác định tên file nội dung bài học theo tên bài học viết liền không dấu (Ví dụ: "TongVaHieuCuaHaiVecto.html").
    + Bắt buộc khẳng định tuân thủ quy chuẩn ký hiệu vectơ \`\\overrightarrow{...}\` trải dài đẹp mắt và cơ chế nhập số thứ tự trình chiếu từng khối (số bằng nhau hiện cùng lúc).
-   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, cài đặt đường dẫn file, lời chào, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập thứ tự trình chiếu) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file bài giảng PPT '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
+   + Hỏi rõ lựa chọn của tôi: "Thầy/Cô có cần tạo file giao diện 'index.html' (Master Player đa lớp, quay số, bút vẽ, hiển thị thông tin giáo viên & trường, cài đặt thư mục bài học, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập thứ tự trình chiếu) để dạy học độc lập trên Web không, hay chỉ cần tạo duy nhất 1 file bài giảng PPT '{TenBaiHocVietLienKhongDau}.html' để nạp vào App LopU?"
    + DỪNG LẠI và chờ tôi phản hồi duyệt tiến trình cũng như xác nhận tùy chọn xuất file.
 - BƯỚC 2: XUẤT FILE HOÀN CHỈNH THEO TÙY CHỌN ĐÃ DUYỆT:
    + CHỈ KHI tôi phản hồi đã đồng ý/xác nhận ở Bước 1, bạn mới bắt đầu tạo và xuất file:
@@ -607,7 +620,7 @@ QUY TRÌNH THỰC HIỆN 2 BƯỚC BẮT BUỘC:
 NỘI DUNG BÀI HỌC CẦN SOẠN DƯỚI ĐÂY:
 [Nội dung lấy từ file đính kèm]
 \`\`\``,
-        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Triệt tiêu hoàn toàn lỗi SecurityError (Access is denied for localStorage) khi chạy trong iframe/blob, Master Player index.html có bánh răng cài đặt 4 mục (đường dẫn file nội dung, lời chào, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập trực tiếp thứ tự trình chiếu), chuẩn hóa ký hiệu vectơ \\overrightarrow trải dài đẹp mắt kèm macro MathJax, cơ chế gom nhóm số thứ tự bằng nhau hiện cùng 1 lúc (số nhỏ trước, số lớn sau), lưu trực tiếp bằng data-step và SafeStorage/LocalStorage, chuẩn hóa UTF-8 chống lỗi font và chặn lỗi phím Space mở hộp thoại chọn file.'
+        description: 'Bản Prompt tối ưu hoàn chỉnh mới nhất tạo KHBD_Web E-learning Toán THPT: Triệt tiêu hoàn toàn lỗi SecurityError (Access is denied for localStorage) khi chạy trong iframe/blob, Master Player index.html hiển thị tên giáo viên ("Giáo viên: Đỗ Tấn Bảo") & trường ("Trường THPT Ba Gia"), tự động mở tệp bài học khi bấm "Bắt đầu tiết học", bánh răng cài đặt 4 mục (thư mục chứa nội dung bài học, thông tin giáo viên & lời chào, danh sách lớp & học sinh mặc định rỗng, cài đặt bật và nhập trực tiếp thứ tự trình chiếu), chuẩn hóa ký hiệu vectơ \\overrightarrow trải dài đẹp mắt kèm macro MathJax, cơ chế gom nhóm số thứ tự bằng nhau hiện cùng 1 lúc (số nhỏ trước, số lớn sau), lưu trực tiếp bằng data-step và SafeStorage/LocalStorage, chuẩn hóa UTF-8 chống lỗi font và chặn lỗi phím Space mở hộp thoại chọn file.'
       }
     ]
   },
